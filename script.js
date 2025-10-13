@@ -134,6 +134,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        // Bereken de minimale y-as waarde. Dit is de referentie voor onze labels.
+        const yAxisMin = Math.max(0, minLapTime - 5);
+        const labelTargetValue = yAxisMin + 2; // De doellocatie in seconden voor de labels
+
         lapData.forEach((lap, index) => {
             lapNumbers.push(`Lap ${index + 1}`);
             const lapTime = parseDurationToSeconds(lap.duration);
@@ -180,7 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             text: 'Lap Time'
                         },
                         beginAtZero: false,
-                        min: Math.max(0, minLapTime - 5),
+                        min: yAxisMin, // Gebruik de berekende minimale waarde
                         max: MAX_FAST_LAP_TIME_SECONDS + 1,
                         ticks: {
                             callback: function(value, index, ticks) {
@@ -204,15 +208,32 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                     },
+                    // --- AANGEPASTE DATALABELS CONFIGURATIE ---
                     datalabels: {
+                        // Toon alleen labels voor de te trage rondes
                         display: function(context) {
                             const value = context.dataset.data[context.dataIndex];
                             return value > MAX_FAST_LAP_TIME_SECONDS;
                         },
+                        // Veranker de labels aan de ONDERKANT van de grafiek
+                        anchor: 'end',
+                        // Lijn de labels uit aan de ONDERKANT van de grafiek
+                        align: 'start',
+                        // Bereken de verticale verschuiving (offset) in pixels
+                        offset: function(context) {
+                            // Haal de y-as schaal op uit de grafiek-instantie
+                            const scale = context.chart.scales.y;
+                            // Haal de pixelpositie van de onderkant van de grafiek op
+                            const chartBottomPixel = scale.bottom;
+                            // Haal de pixelpositie op die overeenkomt met ons doel (yMin + 2s)
+                            const targetPixel = scale.getPixelForValue(labelTargetValue);
+                            
+                            // Het verschil is de offset die we nodig hebben om het label
+                            // vanaf de onderkant omhoog te duwen naar de juiste positie.
+                            // We gebruiken Math.max om te zorgen dat de offset niet negatief is.
+                            return Math.max(0, chartBottomPixel - targetPixel);
+                        },
                         color: '#333',
-                        anchor: 'start',
-                        align: 'end',
-                        offset: 5,
                         font: {
                             weight: 'bold',
                             size: 10
@@ -226,6 +247,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // ... (rest van de fetchActivitiesBtn en andere event listeners blijven hetzelfde) ...
+    // --- ZORG ERVOOR DAT DE REST VAN JE SCRIPT.JS HIERONDER KOMT ---
 
     fetchActivitiesBtn.addEventListener('click', async () => {
         resetUI();
@@ -336,7 +360,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 lapsOutput.textContent = lapsText;
 
                 // TOON DE SLIDER/INPUT NADAT LAPS DATA ZIJN GELADEN
-                show(maxFastLapControls); 
+                show(maxFastLapControls);
                 updateLapChart(currentLapData);
 
             } else {
@@ -360,7 +384,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
-
+    
+    // ... (de rest van je script.js)
     activitySelect.addEventListener('change', () => {
         hide(lapsDataDiv);
         lapsOutput.textContent = '';
