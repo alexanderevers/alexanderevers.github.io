@@ -114,6 +114,22 @@ button:disabled {
     font-size: 0.9em;
 }
 
+.chart-container {
+    margin-top: 20px;
+    background-color: #f9f9f9;
+    border: 1px solid #ddd;
+    padding: 15px;
+    border-radius: 4px;
+    position: relative; /* Needed for Chart.js responsiveness */
+    height: 400px; /* Example height for the chart */
+}
+
+/* Ensure the canvas fills its container if it's responsive */
+#lapTimeChart {
+    width: 100% !important;
+    height: 100% !important;
+}
+
 .hidden {
     display: none !important;
 }
