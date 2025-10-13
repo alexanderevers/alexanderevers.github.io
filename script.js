@@ -12,8 +12,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const PROXY_BASE_URL = 'https://us-central1-proxyapi-475018.cloudfunctions.net/mylapsProxyFunction/api/mylaps';
 
-    let userActivities = []; // To store fetched activities
-    let lapChart = null; // Variable to hold our Chart.js instance
+    let userActivities = [];
+    let lapChart = null;
+
+    // Define the threshold for "fast" laps (e.g., 1 minute = 60 seconds)
+    const MAX_FAST_LAP_TIME_SECONDS = 60; // 1 minute
+
+    // Register the datalabels plugin globally once
+    Chart.register(ChartDataLabels);
 
     function show(element) {
         element.classList.remove('hidden');
@@ -34,14 +40,12 @@ document.addEventListener('DOMContentLoaded', () => {
         lapsOutput.textContent = '';
         userActivities = [];
 
-        // Destroy previous chart instance if it exists
         if (lapChart) {
             lapChart.destroy();
             lapChart = null;
         }
     }
 
-    // Function to format date to DD/MM/YYYY - HH:MM
     function formatDateTime(isoString) {
         const date = new Date(isoString);
         const options = {
@@ -56,17 +60,16 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${parts[0]} - ${parts[1]}`;
     }
 
-    // Function to parse duration string (e.g., "54.551" or "1:20.259") into seconds
     function parseDurationToSeconds(durationString) {
         const parts = durationString.split(':');
         let totalSeconds = 0;
-        if (parts.length === 1) { // Format: "SS.ms" (e.g., "54.551")
+        if (parts.length === 1) {
             totalSeconds = parseFloat(parts[0]);
-        } else if (parts.length === 2) { // Format: "MM:SS.ms" (e.g., "1:20.259")
+        } else if (parts.length === 2) {
             const minutes = parseInt(parts[0], 10);
             const seconds = parseFloat(parts[1]);
             totalSeconds = (minutes * 60) + seconds;
-        } else if (parts.length === 3) { // Format: "HH:MM:SS.ms" (less common for laps, but good to handle)
+        } else if (parts.length === 3) {
             const hours = parseInt(parts[0], 10);
             const minutes = parseInt(parts[1], 10);
             const seconds = parseFloat(parts[2]);
@@ -75,21 +78,21 @@ document.addEventListener('DOMContentLoaded', () => {
         return totalSeconds;
     }
 
-    // Function to format seconds back to MM:SS.ms or SS.ms for chart tooltips/labels
     function formatSecondsToDuration(totalSeconds) {
         if (isNaN(totalSeconds) || totalSeconds < 0) return '';
 
         const minutes = Math.floor(totalSeconds / 60);
         const remainingSeconds = totalSeconds % 60;
 
-        const secondsPart = remainingSeconds.toFixed(3); // Keep milliseconds
+        // Ensure milliseconds are always 3 digits
+        const secondsPart = remainingSeconds.toFixed(3);
         const [sec, ms] = secondsPart.split('.');
 
         const formattedSec = String(sec).padStart(2, '0');
-        const formattedMs = ms || '000'; // Ensure milliseconds are present
+        const formattedMs = ms || '000';
 
         if (minutes > 0) {
-            const formattedMin = String(minutes).padStart(2, '0');
+            const formattedMin = String(minutes).padStart(1, '0'); // Minutes don't need padding if < 10
             return `${formattedMin}:${formattedSec}.${formattedMs}`;
         } else {
             return `${formattedSec}.${formattedMs}`;
@@ -187,34 +190,48 @@ document.addEventListener('DOMContentLoaded', () => {
                 let lapsText = 'Lap Number - Duration\n---------------------\n';
                 const lapNumbers = [];
                 const lapTimesInSeconds = [];
+                const backgroundColors = [];
+                const borderColors = [];
 
                 specificActivityData.forEach(lap => {
                     lapsText += `${String(lap.nr).padEnd(12)} - ${lap.duration}\n`;
-                    lapNumbers.push(`Lap ${lap.nr}`); // X-axis labels
-                    lapTimesInSeconds.push(parseDurationToSeconds(lap.duration)); // Y-axis values
+                    lapNumbers.push(`Lap ${lap.nr}`);
+                    const lapTime = parseDurationToSeconds(lap.duration);
+                    lapTimesInSeconds.push(lapTime);
+
+                    // Determine color based on lap time
+                    if (lapTime <= MAX_FAST_LAP_TIME_SECONDS) {
+                        // Fast lap (e.g., <= 60 seconds) - darker blue
+                        backgroundColors.push('rgba(0, 123, 255, 0.8)');
+                        borderColors.push('rgba(0, 123, 255, 1)');
+                    } else {
+                        // Slower lap (> 60 seconds) - lighter, desaturated color
+                        backgroundColors.push('rgba(173, 216, 230, 0.6)'); // Light blue, more transparent
+                        borderColors.push('rgba(173, 216, 230, 0.8)');
+                    }
                 });
                 lapsOutput.textContent = lapsText;
 
                 // --- Chart.js Integration ---
                 if (lapChart) {
-                    lapChart.destroy(); // Destroy previous chart if it exists
+                    lapChart.destroy();
                 }
 
                 lapChart = new Chart(lapTimeChartCanvas, {
-                    type: 'bar', // Vertical bar chart
+                    type: 'bar',
                     data: {
-                        labels: lapNumbers, // Lap numbers on X-axis
+                        labels: lapNumbers,
                         datasets: [{
                             label: 'Lap Time',
-                            data: lapTimesInSeconds, // Lap times on Y-axis (in seconds)
-                            backgroundColor: 'rgba(0, 123, 255, 0.7)', // Blue bars
-                            borderColor: 'rgba(0, 123, 255, 1)',
+                            data: lapTimesInSeconds,
+                            backgroundColor: backgroundColors, // Use array of colors
+                            borderColor: borderColors,       // Use array of colors
                             borderWidth: 1
                         }]
                     },
                     options: {
                         responsive: true,
-                        maintainAspectRatio: false, // Allows chart to take specified height/width
+                        maintainAspectRatio: false,
                         scales: {
                             x: {
                                 title: {
@@ -227,9 +244,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                     display: true,
                                     text: 'Lap Time'
                                 },
-                                beginAtZero: false, // Lap times usually don't start at zero
+                                beginAtZero: false,
                                 ticks: {
-                                    // Custom formatter for Y-axis ticks
                                     callback: function(value, index, ticks) {
                                         return formatSecondsToDuration(value);
                                     }
@@ -250,6 +266,24 @@ document.addEventListener('DOMContentLoaded', () => {
                                         return label;
                                     }
                                 }
+                            },
+                            datalabels: { // Configuration for chartjs-plugin-datalabels
+                                display: true,
+                                color: function(context) {
+                                    // Make text dark for light bars, light for dark bars
+                                    const value = context.dataset.data[context.dataIndex];
+                                    return value <= MAX_FAST_LAP_TIME_SECONDS ? '#fff' : '#333';
+                                },
+                                anchor: 'center', // Position the label in the center of the bar
+                                align: 'center',
+                                font: {
+                                    weight: 'bold',
+                                    size: 10
+                                },
+                                formatter: function(value, context) {
+                                    // Format the label to MM:SS.ms or SS.ms
+                                    return formatSecondsToDuration(value);
+                                }
                             }
                         }
                     }
@@ -258,7 +292,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 lapsOutput.textContent = "No lap data found for the selected activity.";
                 if (lapChart) {
-                    lapChart.destroy(); // Destroy chart if no data
+                    lapChart.destroy();
                     lapChart = null;
                 }
             }
@@ -270,7 +304,7 @@ document.addEventListener('DOMContentLoaded', () => {
             show(errorDiv);
             hide(lapsDataDiv);
             if (lapChart) {
-                lapChart.destroy(); // Destroy chart on error
+                lapChart.destroy();
                 lapChart = null;
             }
         }
@@ -281,12 +315,11 @@ document.addEventListener('DOMContentLoaded', () => {
         lapsOutput.textContent = '';
         hide(errorDiv);
         fetchLapsBtn.disabled = !activitySelect.value;
-        if (lapChart) { // Destroy chart when activity selection changes
+        if (lapChart) {
             lapChart.destroy();
             lapChart = null;
         }
     });
 
-    // Initial state setup
     resetUI();
 });
