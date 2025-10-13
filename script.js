@@ -17,6 +17,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const maxFastLapInput = document.getElementById('maxFastLapInput');
     const maxFastLapValueError = document.getElementById('maxFastLapValueError');
 
+    // --- NIEUW: Referenties voor localStorage ---
+    const transponderDatalist = document.getElementById('transponder-list');
+    const TRANSPONDER_STORAGE_KEY = 'savedTransponders';
+
     const PROXY_BASE_URL = 'https://us-central1-proxyapi-475018.cloudfunctions.net/mylapsProxyFunction/api/mylaps';
 
     let userActivities = [];
@@ -26,6 +30,36 @@ document.addEventListener('DOMContentLoaded', () => {
     let MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
 
     Chart.register(ChartDataLabels);
+
+    // --- NIEUWE FUNCTIES: Voor het beheren van opgeslagen transponders ---
+
+    // Laadt opgeslagen transponders in de datalist
+    function loadSavedTransponders() {
+        const saved = localStorage.getItem(TRANSPONDER_STORAGE_KEY);
+        const transponders = saved ? JSON.parse(saved) : [];
+        transponderDatalist.innerHTML = ''; // Maak de lijst leeg
+        transponders.forEach(transponder => {
+            const option = document.createElement('option');
+            option.value = transponder;
+            transponderDatalist.appendChild(option);
+        });
+    }
+
+    // Slaat een nieuw, correct transpondernummer op
+    function saveTransponder(transponder) {
+        const saved = localStorage.getItem(TRANSPONDER_STORAGE_KEY);
+        let transponders = saved ? JSON.parse(saved) : [];
+        
+        // Voeg alleen toe als het nummer nog niet in de lijst staat
+        if (!transponders.includes(transponder)) {
+            transponders.push(transponder);
+            localStorage.setItem(TRANSPONDER_STORAGE_KEY, JSON.stringify(transponders));
+            // Werk de datalist direct bij
+            loadSavedTransponders();
+        }
+    }
+
+    // --- EINDE NIEUWE FUNCTIES ---
 
     function show(element) {
         element.classList.remove('hidden');
@@ -58,12 +92,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function formatDateTime(isoString) {
         const date = new Date(isoString);
         const options = {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit', hour12: false
         };
         const parts = date.toLocaleString('en-GB', options).split(', ');
         return `${parts[0]} - ${parts[1]}`;
@@ -72,13 +102,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function parseDurationToSeconds(durationString) {
         const parts = durationString.split(':');
         let totalSeconds = 0;
-
         if (parts.length === 1) {
             totalSeconds = parseFloat(parts[0]);
         } else if (parts.length === 2) {
-            const minutes = parseInt(parts[0], 10);
-            const seconds = parseFloat(parts[1]);
-            totalSeconds = (minutes * 60) + seconds;
+            totalSeconds = (parseInt(parts[0], 10) * 60) + parseFloat(parts[1]);
         } else {
             return NaN;
         }
@@ -87,27 +114,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function formatSecondsToDuration(totalSeconds) {
         if (isNaN(totalSeconds) || totalSeconds < 0) return '';
-
         const minutes = Math.floor(totalSeconds / 60);
         const remainingSeconds = totalSeconds % 60;
-
         const secondsPart = remainingSeconds.toFixed(3);
         const [sec, ms] = secondsPart.split('.');
-
         const formattedSec = String(sec).padStart(2, '0');
         const formattedMs = ms || '000';
-
         if (minutes > 0) {
-            const formattedMin = String(minutes).padStart(1, '0');
-            return `${formattedMin}:${formattedSec}.${formattedMs}`;
+            return `${String(minutes).padStart(1, '0')}:${formattedSec}.${formattedMs}`;
         } else {
             return `${formattedSec}.${formattedMs}`;
         }
     }
 
     function isValidTransponderFormat(transponder) {
-        const regex = /^[A-Z]{2}-\d{5}$/;
-        return regex.test(transponder);
+        return /^[A-Z]{2}-\d{5}$/.test(transponder);
     }
 
     function updateLapChart(lapData) {
@@ -127,9 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let minLapTime = Infinity;
         lapData.forEach(lap => {
             const lapTime = parseDurationToSeconds(lap.duration);
-            if (lapTime < minLapTime) {
-                minLapTime = lapTime;
-            }
+            if (lapTime < minLapTime) minLapTime = lapTime;
         });
     
         const yAxisMin = Math.max(0, minLapTime - 5);
@@ -148,9 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     
-        if (lapChart) {
-            lapChart.destroy();
-        }
+        if (lapChart) lapChart.destroy();
     
         lapChart = new Chart(lapTimeChartCanvas, {
             type: 'bar',
@@ -168,57 +185,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
-                    x: {
-                        title: {
-                            display: true,
-                            text: 'Lap Number'
-                        }
-                    },
+                    x: { title: { display: true, text: 'Lap Number' } },
                     y: {
-                        title: {
-                            display: true,
-                            text: 'Lap Time'
-                        },
+                        title: { display: true, text: 'Lap Time' },
                         beginAtZero: false,
                         min: yAxisMin,
                         max: MAX_FAST_LAP_TIME_SECONDS + 1,
-                        ticks: {
-                            callback: function(value) {
-                                return formatSecondsToDuration(value);
-                            }
-                        }
+                        ticks: { callback: value => formatSecondsToDuration(value) }
                     }
                 },
                 plugins: {
                     tooltip: {
                         callbacks: {
-                            label: function(context) {
+                            label: context => {
                                 let label = context.dataset.label || '';
-                                if (label) {
-                                    label += ': ';
-                                }
-                                if (context.parsed.y !== null) {
-                                    label += formatSecondsToDuration(context.parsed.y);
-                                }
+                                if (label) label += ': ';
+                                if (context.parsed.y !== null) label += formatSecondsToDuration(context.parsed.y);
                                 return label;
                             }
                         }
                     },
                     datalabels: {
-                        display: function(context) {
-                            return context.dataset.data[context.dataIndex] > MAX_FAST_LAP_TIME_SECONDS;
-                        },
+                        display: context => context.dataset.data[context.dataIndex] > MAX_FAST_LAP_TIME_SECONDS,
                         anchor: 'center',
                         align: 'bottom',
                         offset: 8,
                         color: '#333',
-                        font: {
-                            weight: 'bold',
-                            size: 10
-                        },
-                        formatter: function(value) {
-                            return formatSecondsToDuration(value);
-                        },
+                        font: { weight: 'bold', size: 10 },
+                        formatter: value => formatSecondsToDuration(value),
                         rotation: 270
                     }
                 }
@@ -247,27 +241,24 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             let url = `${PROXY_BASE_URL}/userid/${transponder}`;
             let response = await fetch(url);
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `Proxy error: ${response.status} ${response.statusText}`);
-            }
+            if (!response.ok) throw new Error((await response.json()).error || `Proxy error: ${response.status}`);
+            
             const userData = await response.json();
             const userID = userData.userId;
 
             url = `${PROXY_BASE_URL}/activities/${userID}`;
             response = await fetch(url);
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `Proxy error: ${response.status} ${response.statusText}`);
-            }
+            if (!response.ok) throw new Error((await response.json()).error || `Proxy error: ${response.status}`);
+            
             const activitiesResponse = await response.json();
             userActivities = activitiesResponse.activities || [];
 
             hide(loadingDiv);
 
             if (userActivities.length > 0) {
+                // --- AANGEPAST: Sla het correcte nummer op ---
+                saveTransponder(transponder);
+                
                 userActivities.forEach(activity => {
                     const option = document.createElement('option');
                     option.value = activity.id;
@@ -281,18 +272,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 errorDiv.textContent = "No activities found for this transponder.";
                 show(errorDiv);
             }
-
         } catch (error) {
             console.error("Error fetching activities via proxy:", error);
             hide(loadingDiv);
-            errorDiv.textContent = `Error: ${error.message}. Please check the transponder number and ensure your Cloud Function proxy is running and accessible.`;
+            errorDiv.textContent = `Error: ${error.message}. Please check the transponder number.`;
             show(errorDiv);
         }
     });
 
     fetchLapsBtn.addEventListener('click', async () => {
         hide(lapsDataDiv);
-        lapsOutput.textContent = '';
         hide(errorDiv);
         hide(maxFastLapControls);
 
@@ -308,18 +297,15 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const url = `${PROXY_BASE_URL}/laps/${selectedActivityId}`;
             const response = await fetch(url);
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `Proxy error: ${response.status} ${response.statusText}`);
-            }
+            if (!response.ok) throw new Error((await response.json()).error || `Proxy error: ${response.status}`);
+            
             const activitySessions = await response.json();
 
             currentLapData = [];
             if (activitySessions && activitySessions.sessions) {
                 activitySessions.sessions.forEach(session => {
                     if (session.laps && Array.isArray(session.laps)) {
-                        currentLapData = currentLapData.concat(session.laps);
+                        currentLapData.push(...session.laps);
                     }
                 });
             }
@@ -328,15 +314,10 @@ document.addEventListener('DOMContentLoaded', () => {
             show(lapsDataDiv);
 
             if (currentLapData.length > 0) {
-                let lapsText = 'Lap Number - Duration\n---------------------\n';
-                currentLapData.forEach(lap => {
-                    lapsText += `${String(lap.nr).padEnd(12)} - ${lap.duration}\n`;
-                });
-                lapsOutput.textContent = lapsText;
-
+                lapsOutput.textContent = 'Lap Number - Duration\n---------------------\n' +
+                    currentLapData.map(lap => `${String(lap.nr).padEnd(12)} - ${lap.duration}`).join('\n');
                 show(maxFastLapControls); 
                 updateLapChart(currentLapData);
-
             } else {
                 lapsOutput.textContent = "No lap data found for the selected activity.";
                 if (lapChart) {
@@ -344,24 +325,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     lapChart = null;
                 }
             }
-
         } catch (error) {
             console.error("Error fetching laps via proxy:", error);
             hide(loadingDiv);
             errorDiv.textContent = `Error: ${error.message}. Could not retrieve lap data.`;
             show(errorDiv);
             hide(lapsDataDiv);
-            hide(maxFastLapControls);
-            if (lapChart) {
-                lapChart.destroy();
-                lapChart = null;
-            }
         }
     });
 
     activitySelect.addEventListener('change', () => {
         hide(lapsDataDiv);
-        lapsOutput.textContent = '';
         hide(errorDiv);
         hide(maxFastLapControls);
         fetchLapsBtn.disabled = !activitySelect.value;
@@ -376,34 +350,29 @@ document.addEventListener('DOMContentLoaded', () => {
         MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
         maxFastLapInput.value = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
         hide(maxFastLapValueError);
-
-        if (currentLapData.length > 0) {
-            updateLapChart(currentLapData);
-        }
+        if (currentLapData.length > 0) updateLapChart(currentLapData);
     });
 
     maxFastLapInput.addEventListener('input', () => {
         const inputText = maxFastLapInput.value.trim();
         const parsedSeconds = parseDurationToSeconds(inputText);
-
         const sliderMin = parseFloat(maxFastLapSlider.min);
         const sliderMax = parseFloat(maxFastLapSlider.max);
 
         if (isNaN(parsedSeconds) || parsedSeconds < sliderMin || parsedSeconds > sliderMax) {
-            maxFastLapValueError.textContent = `Invalid time format or out of range (${formatSecondsToDuration(sliderMin)} - ${formatSecondsToDuration(sliderMax)})`;
+            maxFastLapValueError.textContent = `Invalid time or out of range (${formatSecondsToDuration(sliderMin)} - ${formatSecondsToDuration(sliderMax)})`;
             show(maxFastLapValueError);
         } else {
             hide(maxFastLapValueError);
             MAX_FAST_LAP_TIME_SECONDS = parsedSeconds;
             maxFastLapSlider.value = parsedSeconds;
-            if (currentLapData.length > 0) {
-                updateLapChart(currentLapData);
-            }
+            if (currentLapData.length > 0) updateLapChart(currentLapData);
         }
     });
 
+    // --- AANGEPAST: Initialisatie ---
+    loadSavedTransponders(); // Laad de opgeslagen nummers bij het starten
     maxFastLapSlider.value = parseFloat(maxFastLapSlider.value).toFixed(1);
     maxFastLapInput.value = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
-
     resetUI();
 });

@@ -15,8 +15,12 @@
         <h1>MYLAPS Activity Viewer</h1>
         <div class="input-group">
             <label for="transponderInput">Transponder Number:</label>
-            <input type="text" id="transponderInput" placeholder="Enter transponder number">
+            <!-- AANGEPAST: list attribuut toegevoegd -->
+            <input type="text" id="transponderInput" placeholder="Enter transponder number" list="transponder-list">
             <button id="fetchActivitiesBtn">Fetch Activities</button>
+            
+            <!-- NIEUW: Datalist voor suggesties -->
+            <datalist id="transponder-list"></datalist>
         </div>
 
         <div id="loading" class="hidden">Loading...</div>
@@ -24,7 +28,6 @@
 
         <div id="activitiesList" class="hidden">
             <h2>Recent Activities:</h2>
-            <!-- NIEUW: Wrapper div voor select en button -->
             <div class="activity-controls-group input-group"> 
                 <select id="activitySelect">
                     <option value="">Select an activity</option>
