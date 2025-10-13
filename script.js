@@ -19,7 +19,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let lapChart = null;
     let currentLapData = [];
 
-    // GEWIJZIGD: Gebruik parseFloat() i.p.v. parseInt() voor de slider waarde
     let MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
 
     Chart.register(ChartDataLabels);
@@ -88,18 +87,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const minutes = Math.floor(totalSeconds / 60);
         const remainingSeconds = totalSeconds % 60;
 
-        // GEWIJZIGD: Zorg dat de seconden altijd 3 decimalen hebben voor consistentie met 0.1 step
+        // Dit zorgt ervoor dat we altijd 3 decimalen hebben, zelfs als ze nul zijn (bijv. 5.000)
         const secondsPart = remainingSeconds.toFixed(3);
         const [sec, ms] = secondsPart.split('.');
 
         const formattedSec = String(sec).padStart(2, '0');
-        const formattedMs = ms || '000';
+        const formattedMs = ms || '000'; // Zorg dat er altijd 3 ms cijfers zijn
 
         if (minutes > 0) {
-            const formattedMin = String(minutes).padStart(1, '0');
+            const formattedMin = String(minutes).padStart(1, '0'); // Bijv. "1:05.123"
             return `${formattedMin}:${formattedSec}.${formattedMs}`;
         } else {
-            return `${formattedSec}.${formattedMs}`;
+            return `${formattedSec}.${formattedMs}`; // Bijv. "05.123"
         }
     }
 
@@ -176,8 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             text: 'Lap Time'
                         },
                         beginAtZero: false,
-                        min: Math.max(0, minLapTime - 5), // Houd dit om de snelste rondes goed te zien
-                        // GEWIJZIGD: Max is altijd sliderwaarde + 1 seconde
+                        min: Math.max(0, minLapTime - 5),
                         max: MAX_FAST_LAP_TIME_SECONDS + 1,
                         ticks: {
                             callback: function(value, index, ticks) {
@@ -367,8 +365,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     maxFastLapSlider.addEventListener('input', () => {
-        // GEWIJZIGD: Gebruik parseFloat() i.p.v. parseInt() voor de slider waarde
         MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
+        // De formatSecondsToDuration functie handelt nu correct de decimalen af.
         maxFastLapValueSpan.textContent = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
 
         if (currentLapData.length > 0) {
@@ -377,6 +375,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Initialiseer de tekst van de slider-waarde bij het laden van de pagina
+    // Zorg ervoor dat de initiële weergave ook de decimalen toont
     maxFastLapValueSpan.textContent = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
     resetUI();
 });
