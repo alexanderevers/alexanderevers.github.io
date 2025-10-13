@@ -9,8 +9,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const lapsDataDiv = document.getElementById('lapsData');
     const lapsOutput = document.getElementById('lapsOutput');
 
-    // Base URL for your proxy server
-    const PROXY_BASE_URL = 'https://us-central1-proxyapi-475018.cloudfunctions.net/mylapsProxyFunction/api/mylaps'; // Adjust if your proxy is on a different host/port
+    // Base URL for your proxy server (Google Cloud Function)
+    const PROXY_BASE_URL = 'https://us-central1-proxyapi-475018.cloudfunctions.net/mylapsProxyFunction/api/mylaps';
 
     let userActivities = []; // To store fetched activities
 
@@ -34,6 +34,26 @@ document.addEventListener('DOMContentLoaded', () => {
         userActivities = [];
     }
 
+    // Function to format date to DD/MM/YYYY - HH:MM
+    function formatDateTime(isoString) {
+        const date = new Date(isoString);
+        // Using toLocaleString for potentially better timezone handling and less manual formatting,
+        // but explicitly setting options to match DD/MM/YYYY - HH:MM
+        const options = {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false // Use 24-hour format
+        };
+        // For consistent output like "DD/MM/YYYY - HH:MM", we might need to do some string manipulation
+        // as toLocaleString's separator can vary by locale.
+        const parts = date.toLocaleString('en-GB', options).split(', '); // Example: "01/01/2023, 14:30"
+        return `${parts[0]} - ${parts[1]}`;
+    }
+
+
     fetchActivitiesBtn.addEventListener('click', async () => {
         resetUI();
         const transponder = transponderInput.value.trim();
@@ -52,7 +72,6 @@ document.addEventListener('DOMContentLoaded', () => {
             let response = await fetch(url);
 
             if (!response.ok) {
-                // If proxy sends an error, it should be in JSON format
                 const errorData = await response.json();
                 throw new Error(errorData.error || `Proxy error: ${response.status} ${response.statusText}`);
             }
@@ -76,13 +95,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 userActivities.forEach(activity => {
                     const option = document.createElement('option');
                     option.value = activity.id;
-                    // Format time for better readability
-                    const startTime = new Date(activity.startTime).toLocaleString();
-                    option.textContent = `ID: ${activity.id} - Time: ${startTime}, Name: ${activity.location.sport} - ${activity.location.name}`;
+                    // Format the start time using the new function
+                    const formattedTime = formatDateTime(activity.startTime);
+                    option.textContent = `${formattedTime} - ${activity.location.sport} - ${activity.location.name}`;
                     activitySelect.appendChild(option);
                 });
                 show(activitiesListDiv);
-                // Only enable fetchLapsBtn if there are activities to select
+                // Only enable fetchLapsBtn if there are activities to select AND one is selected
                 fetchLapsBtn.disabled = !activitySelect.value;
             } else {
                 errorDiv.textContent = "No activities found for this transponder.";
@@ -92,7 +111,8 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error("Error fetching activities via proxy:", error);
             hide(loadingDiv);
-            errorDiv.textContent = `Error: ${error.message}. Please check the transponder number and ensure your proxy server is running.`;
+            // Updated error message to mention the Cloud Function specifically
+            errorDiv.textContent = `Error: ${error.message}. Please check the transponder number and ensure your Cloud Function proxy is running and accessible.`;
             show(errorDiv);
         }
     });
@@ -100,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchLapsBtn.addEventListener('click', async () => {
         hide(lapsDataDiv);
         lapsOutput.textContent = '';
-        hide(errorDiv); // Clear previous errors related to laps
+        hide(errorDiv);
 
         const selectedActivityId = activitySelect.value;
         if (!selectedActivityId) {
@@ -129,8 +149,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (specificActivityData.length > 0) {
                 let lapsText = 'Lap Number - Duration\n---------------------\n';
                 specificActivityData.forEach(lap => {
-                    // Format duration if needed (e.g., from seconds to HH:MM:SS.ms)
-                    // For now, displaying as is, assuming it's already a string or number
                     lapsText += `${String(lap.nr).padEnd(12)} - ${lap.duration}\n`;
                 });
                 lapsOutput.textContent = lapsText;
@@ -143,17 +161,14 @@ document.addEventListener('DOMContentLoaded', () => {
             hide(loadingDiv);
             errorDiv.textContent = `Error: ${error.message}. Could not retrieve lap data.`;
             show(errorDiv);
-            hide(lapsDataDiv); // Hide laps data if there was an error
+            hide(lapsDataDiv);
         }
     });
 
     activitySelect.addEventListener('change', () => {
-        // Clear lap data and hide laps section when activity selection changes
         hide(lapsDataDiv);
         lapsOutput.textContent = '';
-        hide(errorDiv); // Clear any previous errors
-
-        // Enable "Fetch Laps" button only if an activity is selected
+        hide(errorDiv);
         fetchLapsBtn.disabled = !activitySelect.value;
     });
 
