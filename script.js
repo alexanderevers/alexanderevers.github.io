@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const fetchLapsBtn = document.getElementById('fetchLapsBtn');
     const lapsDataDiv = document.getElementById('lapsData');
     
-    // NIEUW: Referentie naar de container voor de slider en input
     const maxFastLapControls = document.getElementById('maxFastLapControls'); 
 
     const lapsOutput = document.getElementById('lapsOutput');
@@ -120,12 +119,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             return;
         }
-
+    
         const lapNumbers = [];
         const lapTimesInSeconds = [];
         const backgroundColors = [];
         const borderColors = [];
-
+    
         let minLapTime = Infinity;
         lapData.forEach(lap => {
             const lapTime = parseDurationToSeconds(lap.duration);
@@ -133,16 +132,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 minLapTime = lapTime;
             }
         });
-
-        // Bereken de minimale y-as waarde. Dit is de referentie voor onze labels.
+    
+        // Bepaal de minimale y-as waarde. Dit is de bodem van onze grafiek.
         const yAxisMin = Math.max(0, minLapTime - 5);
-        const labelTargetValue = yAxisMin + 2; // De doellocatie in seconden voor de labels
-
+        
+        // Bepaal de doelwaarde in seconden voor de labels van te trage rondes.
+        const labelTargetValue = yAxisMin + 1; // Minimale y-waarde + 1 seconde
+    
         lapData.forEach((lap, index) => {
             lapNumbers.push(`Lap ${index + 1}`);
             const lapTime = parseDurationToSeconds(lap.duration);
             lapTimesInSeconds.push(lapTime);
-
+    
             if (lapTime <= MAX_FAST_LAP_TIME_SECONDS) {
                 backgroundColors.push('rgba(0, 123, 255, 0.8)');
                 borderColors.push('rgba(0, 123, 255, 1)');
@@ -151,11 +152,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 borderColors.push('rgba(173, 216, 230, 0.8)');
             }
         });
-
+    
         if (lapChart) {
             lapChart.destroy();
         }
-
+    
         lapChart = new Chart(lapTimeChartCanvas, {
             type: 'bar',
             data: {
@@ -208,37 +209,25 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                     },
-                    // --- AANGEPASTE DATALABELS CONFIGURATIE ---
                     datalabels: {
-                        // Toon alleen labels voor de te trage rondes
                         display: function(context) {
-                            const value = context.dataset.data[context.dataIndex];
-                            return value > MAX_FAST_LAP_TIME_SECONDS;
+                            return context.dataset.data[context.dataIndex] > MAX_FAST_LAP_TIME_SECONDS;
                         },
-                        // Veranker de labels aan de ONDERKANT van de grafiek
                         anchor: 'end',
-                        // Lijn de labels uit aan de ONDERKANT van de grafiek
-                        align: 'start',
-                        // Bereken de verticale verschuiving (offset) in pixels
+                        align: 'end',
                         offset: function(context) {
-                            // Haal de y-as schaal op uit de grafiek-instantie
                             const scale = context.chart.scales.y;
-                            // Haal de pixelpositie van de onderkant van de grafiek op
-                            const chartBottomPixel = scale.bottom;
-                            // Haal de pixelpositie op die overeenkomt met ons doel (yMin + 2s)
+                            const chartBottomPixel = scale.getPixelForValue(yAxisMin);
                             const targetPixel = scale.getPixelForValue(labelTargetValue);
-                            
-                            // Het verschil is de offset die we nodig hebben om het label
-                            // vanaf de onderkant omhoog te duwen naar de juiste positie.
-                            // We gebruiken Math.max om te zorgen dat de offset niet negatief is.
-                            return Math.max(0, chartBottomPixel - targetPixel);
+                            const pixelDistance = chartBottomPixel - targetPixel;
+                            return -pixelDistance;
                         },
                         color: '#333',
                         font: {
                             weight: 'bold',
                             size: 10
                         },
-                        formatter: function(value, context) {
+                        formatter: function(value) {
                             return formatSecondsToDuration(value);
                         },
                         rotation: 270
@@ -247,9 +236,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-
-    // ... (rest van de fetchActivitiesBtn en andere event listeners blijven hetzelfde) ...
-    // --- ZORG ERVOOR DAT DE REST VAN JE SCRIPT.JS HIERONDER KOMT ---
 
     fetchActivitiesBtn.addEventListener('click', async () => {
         resetUI();
@@ -360,7 +346,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 lapsOutput.textContent = lapsText;
 
                 // TOON DE SLIDER/INPUT NADAT LAPS DATA ZIJN GELADEN
-                show(maxFastLapControls);
+                show(maxFastLapControls); 
                 updateLapChart(currentLapData);
 
             } else {
@@ -384,8 +370,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
-    
-    // ... (de rest van je script.js)
+
     activitySelect.addEventListener('change', () => {
         hide(lapsDataDiv);
         lapsOutput.textContent = '';
@@ -413,7 +398,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const inputText = maxFastLapInput.value.trim();
         const parsedSeconds = parseDurationToSeconds(inputText);
 
-        // Haal de min/max waarden direct van de slider voor validatie
         const sliderMin = parseFloat(maxFastLapSlider.min);
         const sliderMax = parseFloat(maxFastLapSlider.max);
 
@@ -431,7 +415,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Initialiseer de tekst van de input en slider-waarde bij het laden van de pagina
-    maxFastLapSlider.value = parseFloat(maxFastLapSlider.value).toFixed(1); // Zorg voor juiste precisie
+    maxFastLapSlider.value = parseFloat(maxFastLapSlider.value).toFixed(1);
     maxFastLapInput.value = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
 
     resetUI(); // Roep resetUI aan om de slider controls standaard te verbergen
