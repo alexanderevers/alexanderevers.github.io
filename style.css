@@ -10,14 +10,13 @@ html, body {
     line-height: 1.6;
     background-color: #f4f4f4;
     color: #333;
-    /* Zorgt ervoor dat de body de volledige breedte en hoogte van de viewport inneemt */
     width: 100%;
-    min-height: 100vh; /* Minimum hoogte van de viewport */
-    display: flex; /* Gebruik flexbox om de container te centreren */
+    min-height: 100vh;
+    display: flex;
     flex-direction: column;
-    align-items: center; /* Horizontaal centreren */
-    justify-content: flex-start; /* Bovenaan beginnen, of center als je alles wilt centreren */
-    padding: 20px; /* Wat ademruimte rondom de inhoud */
+    align-items: center;
+    justify-content: flex-start;
+    padding: 20px;
 }
 
 .container {
@@ -25,13 +24,12 @@ html, body {
     padding: 30px;
     border-radius: 8px;
     box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
-    /* Maak de container flexibel en beperk de max-breedte voor grote schermen */
     width: 100%;
-    max-width: 900px; /* Maximale breedte op grotere schermen */
-    margin: 0 auto; /* Centreer de container */
+    max-width: 900px;
+    margin: 0 auto;
     display: flex;
     flex-direction: column;
-    gap: 20px; /* Ruimte tussen de secties */
+    gap: 20px;
 }
 
 h1, h2 {
@@ -40,9 +38,10 @@ h1, h2 {
     margin-bottom: 15px;
 }
 
+/* Algemene input-group styling */
 .input-group {
     display: flex;
-    flex-direction: column; /* Standaard op elkaar */
+    flex-direction: column;
     align-items: flex-start;
     gap: 10px;
 }
@@ -50,7 +49,7 @@ h1, h2 {
 .input-group label {
     font-weight: bold;
     margin-bottom: 5px;
-    width: 100%; /* Zorgt dat label de volle breedte pakt */
+    width: 100%;
 }
 
 .input-group input[type="text"],
@@ -58,8 +57,8 @@ h1, h2 {
     padding: 10px;
     border: 1px solid #ddd;
     border-radius: 4px;
-    width: 100%; /* Maak inputvelden flexibel */
-    max-width: 300px; /* Beperk de breedte op grotere schermen */
+    width: 100%; /* Standaard 100% breedte */
+    max-width: 300px; /* Beperk de breedte op grotere schermen voor algemene inputs */
 }
 
 .input-group button {
@@ -70,7 +69,7 @@ h1, h2 {
     border-radius: 4px;
     cursor: pointer;
     transition: background-color 0.3s ease;
-    width: auto; /* Buttons kunnen variëren in breedte */
+    width: auto;
 }
 
 .input-group button:hover {
@@ -82,37 +81,100 @@ h1, h2 {
     cursor: not-allowed;
 }
 
-/* Specifieke stijlen voor de slider-groep (label, slider, text input, error) */
+/* --- SPECIFIEKE STIJLEN --- */
+
+/* Transponder Input Group (Fetch Activities) - 50% width, centered */
+/* NIEUW: Deze input-group heeft geen label, dus we stylen direct de kinderen en de groep zelf */
+.container > .input-group:first-of-type { /* Selecteer de eerste .input-group direct onder .container */
+    align-items: center; /* Centreer de items horizontaal */
+}
+
+.container > .input-group:first-of-type input[type="text"],
+.container > .input-group:first-of-type button {
+    width: 50%; /* Maak ze 50% breed */
+    max-width: 250px; /* Optionele max-breedte voor zeer grote schermen */
+}
+
+/* Activities List Group (Select Activity and Fetch Laps) */
+#activitiesList {
+    border-top: 1px solid #eee;
+    padding-top: 20px;
+    display: flex; /* Maak het een flex container */
+    flex-direction: column; /* Items onder elkaar */
+    align-items: flex-start; /* Items links uitlijnen */
+    gap: 10px; /* Ruimte tussen de elementen */
+}
+
+#activitiesList h2 {
+    width: 100%; /* Zorg dat de titel de breedte pakt */
+    text-align: left; /* Lijn titel links uit in deze sectie */
+    margin-bottom: 5px;
+}
+
+#activitySelect {
+    width: 100%; /* Selectieveld neemt 100% van de beschikbare breedte */
+    max-width: 400px; /* Optionele max-breedte */
+    margin-bottom: 5px; /* Ruimte onder de select */
+}
+
+#activitiesList #fetchLapsBtn {
+    width: auto; /* Knop breedte aanpassen aan content */
+    align-self: flex-start; /* Links uitlijnen van de knop */
+}
+
+
+/* Slider Group (Max Fast Lap Time) */
 .slider-group {
     display: flex;
     flex-direction: row; /* Standaard naast elkaar (op desktop) */
     align-items: center; /* Verticaal centreren */
     flex-wrap: wrap; /* Laat elementen wrappen op kleine schermen */
     gap: 10px; /* Ruimte tussen elementen */
-    margin-bottom: 5px; /* Wat ruimte onder de hele groep */
+    margin-bottom: 5px;
 }
 
 .slider-group label {
-    flex-basis: 100%; /* Label pakt de hele breedte bovenaan */
-    margin-bottom: 0; /* Geen extra marge onder het label binnen de groep */
+    flex-basis: 100%;
+    margin-bottom: 0;
 }
 
 .slider-group input[type="range"] {
-    flex-grow: 1; /* Slider neemt beschikbare ruimte in */
-    /* Geen margin-right hier, omdat de text input ernaast staat */
+    flex-grow: 1;
 }
 
-/* NIEUW: Stijl voor de maxFastLapInput */
 #maxFastLapInput {
-    width: 120px; /* Vaste breedte voor de tijd input (desktop) */
+    width: 120px;
     text-align: right;
-    flex-shrink: 0; /* Voorkom dat deze input kleiner wordt dan zijn content */
+    flex-shrink: 0;
 }
 
 #maxFastLapValueError {
-    flex-basis: 100%; /* Foutmelding pakt de hele breedte */
-    text-align: left; /* Lijn links uit */
-    margin-top: -5px; /* Kom iets dichter bij de input */
+    flex-basis: 100%;
+    text-align: left;
+    margin-top: -5px;
+}
+
+/* Laps Data Display */
+#lapsData {
+    border-top: 1px solid #eee;
+    padding-top: 20px;
+}
+
+#lapsOutput {
+    background-color: #f8f8f8;
+    border: 1px solid #ddd;
+    padding: 15px;
+    border-radius: 4px;
+    white-space: pre;
+    overflow-x: auto;
+    max-height: 200px;
+    margin-bottom: 20px;
+}
+
+.chart-container {
+    position: relative;
+    height: 400px;
+    width: 100%;
 }
 
 .hidden {
@@ -128,35 +190,14 @@ h1, h2 {
 .error-message {
     color: #dc3545;
     font-weight: bold;
-    text-align: center; /* Standaard gecentreerd voor algemene fouten */
+    text-align: center;
 }
 
-#activitiesList, #lapsData {
-    border-top: 1px solid #eee;
-    padding-top: 20px;
-}
 
-#lapsOutput {
-    background-color: #f8f8f8;
-    border: 1px solid #ddd;
-    padding: 15px;
-    border-radius: 4px;
-    white-space: pre; /* Behoudt opmaak */
-    overflow-x: auto; /* Horizontale scroll indien nodig */
-    max-height: 200px; /* Beperk de hoogte voor lange lijsten */
-    margin-bottom: 20px;
-}
-
-.chart-container {
-    position: relative;
-    height: 400px; /* Vaste hoogte voor de grafiek */
-    width: 100%; /* Grafiek neemt beschikbare breedte in */
-}
-
-/* Media queries for smaller screens */
+/* --- MEDIA QUERIES (RESPONSIVE STIJLEN) --- */
 @media (max-width: 768px) {
     body {
-        padding: 10px; /* Minder padding op kleine schermen */
+        padding: 10px;
     }
 
     .container {
@@ -164,36 +205,41 @@ h1, h2 {
         gap: 15px;
     }
 
-    .input-group input[type="text"],
-    .input-group select {
-        max-width: 100%; /* Op kleinere schermen nemen inputs de volle breedte */
+    /* Transponder Input Group op mobiel */
+    .container > .input-group:first-of-type input[type="text"],
+    .container > .input-group:first-of-type button {
+        width: 100%; /* Nemen volle breedte op mobiel */
+        max-width: none; /* Reset max-width */
     }
 
-    .input-group button {
-        width: 100%; /* Buttons nemen de volle breedte */
+    /* Activities List Group op mobiel */
+    #activitiesList #activitySelect,
+    #activitiesList #fetchLapsBtn {
+        width: 100%; /* Nemen volle breedte op mobiel */
+        max-width: none;
     }
 
     /* Slider groep gedrag op mobiel */
     .slider-group {
-        flex-direction: column; /* Slider, input en foutmelding onder elkaar */
-        align-items: flex-start; /* Links uitlijnen */
+        flex-direction: column;
+        align-items: flex-start;
     }
 
     .slider-group input[type="range"] {
-        max-width: 100%; /* Slider neemt volle breedte in */
-        margin-bottom: 10px; /* Ruimte onder de slider */
+        max-width: 100%;
+        margin-bottom: 10px;
     }
 
     #maxFastLapInput {
-        width: 100%; /* Tekst input neemt volle breedte in */
-        text-align: left; /* Links uitlijnen op mobiel */
+        width: 100%;
+        text-align: left;
     }
 
     #maxFastLapValueError {
-        text-align: left; /* Foutmelding links uitlijnen */
+        text-align: left;
     }
 
     .chart-container {
-        height: 300px; /* Iets lagere hoogte voor grafiek op mobiel */
+        height: 300px;
     }
 }
