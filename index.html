@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MYLAPS Activity Viewer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>MYLAPS Activity Viewer</h1>
+        <div class="input-group">
+            <label for="transponderInput">Transponder Number:</label>
+            <input type="text" id="transponderInput" placeholder="Enter transponder number">
+            <button id="fetchActivitiesBtn">Fetch Activities</button>
+        </div>
+
+        <div id="loading" class="hidden">Loading...</div>
+        <div id="error" class="hidden error-message"></div>
+
+        <div id="activitiesList" class="hidden">
+            <h2>Recent Activities:</h2>
+            <select id="activitySelect">
+                <option value="">Select an activity</option>
+            </select>
+            <button id="fetchLapsBtn" disabled>Fetch Laps</button>
+        </div>
+
+        <div id="lapsData" class="hidden">
+            <h2>Laps Data:</h2>
+            <pre id="lapsOutput"></pre>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
