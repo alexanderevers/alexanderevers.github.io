@@ -23,7 +23,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let lapChart = null;
     let currentLapData = [];
 
-    // Initialiseer met de waarde van de slider, die de 'source of truth' is bij start
     let MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
 
     Chart.register(ChartDataLabels);
@@ -42,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
         hide(activitiesListDiv);
         hide(lapsDataDiv);
         hide(maxFastLapValueError);
-        hide(maxFastLapControls); // VERBORGEN bij reset
+        hide(maxFastLapControls);
         errorDiv.textContent = '';
         activitySelect.innerHTML = '<option value="">Select an activity</option>';
         fetchLapsBtn.disabled = true;
@@ -74,14 +73,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const parts = durationString.split(':');
         let totalSeconds = 0;
 
-        if (parts.length === 1) { // SS.ms formaat
+        if (parts.length === 1) {
             totalSeconds = parseFloat(parts[0]);
-        } else if (parts.length === 2) { // MM:SS.ms formaat
+        } else if (parts.length === 2) {
             const minutes = parseInt(parts[0], 10);
             const seconds = parseFloat(parts[1]);
             totalSeconds = (minutes * 60) + seconds;
         } else {
-            return NaN; // Ongeldig formaat
+            return NaN;
         }
         return totalSeconds;
     }
@@ -133,11 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     
-        // Bepaal de minimale y-as waarde. Dit is de bodem van onze grafiek.
         const yAxisMin = Math.max(0, minLapTime - 5);
-        
-        // Bepaal de doelwaarde in seconden voor de labels van te trage rondes.
-        const labelTargetValue = yAxisMin + 1; // Minimale y-waarde + 1 seconde
     
         lapData.forEach((lap, index) => {
             lapNumbers.push(`Lap ${index + 1}`);
@@ -185,10 +180,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             text: 'Lap Time'
                         },
                         beginAtZero: false,
-                        min: yAxisMin, // Gebruik de berekende minimale waarde
+                        min: yAxisMin,
                         max: MAX_FAST_LAP_TIME_SECONDS + 1,
                         ticks: {
-                            callback: function(value, index, ticks) {
+                            callback: function(value) {
                                 return formatSecondsToDuration(value);
                             }
                         }
@@ -213,15 +208,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         display: function(context) {
                             return context.dataset.data[context.dataIndex] > MAX_FAST_LAP_TIME_SECONDS;
                         },
-                        anchor: 'end',
-                        align: 'end',
-                        offset: function(context) {
-                            const scale = context.chart.scales.y;
-                            const chartBottomPixel = scale.getPixelForValue(yAxisMin);
-                            const targetPixel = scale.getPixelForValue(labelTargetValue);
-                            const pixelDistance = chartBottomPixel - targetPixel;
-                            return -pixelDistance;
-                        },
+                        anchor: 'center',
+                        align: 'bottom',
+                        offset: 8,
                         color: '#333',
                         font: {
                             weight: 'bold',
@@ -305,7 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
         hide(lapsDataDiv);
         lapsOutput.textContent = '';
         hide(errorDiv);
-        hide(maxFastLapControls); // VERBORGEN totdat laps geladen zijn
+        hide(maxFastLapControls);
 
         const selectedActivityId = activitySelect.value;
         if (!selectedActivityId) {
@@ -345,7 +334,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 lapsOutput.textContent = lapsText;
 
-                // TOON DE SLIDER/INPUT NADAT LAPS DATA ZIJN GELADEN
                 show(maxFastLapControls); 
                 updateLapChart(currentLapData);
 
@@ -363,7 +351,7 @@ document.addEventListener('DOMContentLoaded', () => {
             errorDiv.textContent = `Error: ${error.message}. Could not retrieve lap data.`;
             show(errorDiv);
             hide(lapsDataDiv);
-            hide(maxFastLapControls); // VERBORGEN bij fout
+            hide(maxFastLapControls);
             if (lapChart) {
                 lapChart.destroy();
                 lapChart = null;
@@ -375,7 +363,7 @@ document.addEventListener('DOMContentLoaded', () => {
         hide(lapsDataDiv);
         lapsOutput.textContent = '';
         hide(errorDiv);
-        hide(maxFastLapControls); // VERBORGEN als activiteit verandert
+        hide(maxFastLapControls);
         fetchLapsBtn.disabled = !activitySelect.value;
         if (lapChart) {
             lapChart.destroy();
@@ -407,16 +395,15 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             hide(maxFastLapValueError);
             MAX_FAST_LAP_TIME_SECONDS = parsedSeconds;
-            maxFastLapSlider.value = parsedSeconds; // Synchroniseer de slider
+            maxFastLapSlider.value = parsedSeconds;
             if (currentLapData.length > 0) {
                 updateLapChart(currentLapData);
             }
         }
     });
 
-    // Initialiseer de tekst van de input en slider-waarde bij het laden van de pagina
     maxFastLapSlider.value = parseFloat(maxFastLapSlider.value).toFixed(1);
     maxFastLapInput.value = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
 
-    resetUI(); // Roep resetUI aan om de slider controls standaard te verbergen
+    resetUI();
 });
