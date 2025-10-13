@@ -27,7 +27,7 @@ html, body {
     box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
     /* Maak de container flexibel en beperk de max-breedte voor grote schermen */
     width: 100%;
-    max-width: 900px; /* Maximale breedte op grotere schermen */
+    max-width: 9000px; /* Maximale breedte op grotere schermen */
     margin: 0 auto; /* Centreer de container */
     display: flex;
     flex-direction: column;
