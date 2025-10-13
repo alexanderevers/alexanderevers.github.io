@@ -196,27 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                     },
-
-                    datalabels: {
-                        display: function(context) {
-                            return context.dataset.data[context.dataIndex] > MAX_FAST_LAP_TIME_SECONDS;
-                        },
-                        anchor: 'center',
-                        align: 'bottom',
-                        offset: 8,
-                        color: '#333',
-                        font: {
-                            weight: 'bold',
-                            size: 10
-                        },
-                        formatter: function(value) {
-                            return formatSecondsToDuration(value);
-                        },
-                        rotation: 270
-                    }
-                    */
-
-                    // Deze regel zorgt ervoor dat de datalabels nu uitgeschakeld zijn.
+                    // --- AANGEPAST: Datalabels volledig uitschakelen ---
                     datalabels: {
                         display: false
                     }
