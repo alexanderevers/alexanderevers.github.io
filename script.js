@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const fetchActivitiesBtn = document.getElementById('fetchActivitiesBtn');
     const loadingDiv = document.getElementById('loading');
     const errorDiv = document.getElementById('error');
-    const activitiesListDiv = document.getElementById('activitiesList');
+    const activitiesListDiv = document = document.getElementById('activitiesList');
     const activitySelect = document.getElementById('activitySelect');
     const fetchLapsBtn = document.getElementById('fetchLapsBtn');
     const lapsDataDiv = document.getElementById('lapsData');
@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let userActivities = [];
     let lapChart = null;
-    let currentLapData = [];
+    let currentLapData = []; // Zal nu alle laps van alle sessies bevatten
 
     let MAX_FAST_LAP_TIME_SECONDS = parseInt(maxFastLapSlider.value, 10);
 
@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const backgroundColors = [];
         const borderColors = [];
 
-        let minLapTime = Infinity; // Om de snelste ronde te vinden voor de 'min' van de Y-as
+        let minLapTime = Infinity;
         lapData.forEach(lap => {
             const lapTime = parseDurationToSeconds(lap.duration);
             if (lapTime < minLapTime) {
@@ -128,13 +128,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-
-        lapData.forEach(lap => {
-            lapNumbers.push(`Lap ${lap.nr}`);
+        lapData.forEach((lap, index) => { // Gebruik index voor Lap 1, Lap 2, etc. over alle sessies heen
+            lapNumbers.push(`Lap ${index + 1}`); // Lap nummering over alle gecombineerde laps
             const lapTime = parseDurationToSeconds(lap.duration);
             lapTimesInSeconds.push(lapTime);
 
-            // Kleuring: Snel (onder of gelijk aan slider) is donkerblauw, Traag (boven slider) is lichtblauw
             if (lapTime <= MAX_FAST_LAP_TIME_SECONDS) {
                 backgroundColors.push('rgba(0, 123, 255, 0.8)'); // Donkerblauw
                 borderColors.push('rgba(0, 123, 255, 1)');
@@ -176,9 +174,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             text: 'Lap Time'
                         },
                         beginAtZero: false,
-                        // Houd minLapTime in gedachten voor een goede weergave van de onderkant
-                        min: Math.max(0, minLapTime - 5), // 5 seconden onder de snelste ronde, maar niet onder 0
-                        max: MAX_FAST_LAP_TIME_SECONDS + (MAX_FAST_LAP_TIME_SECONDS * 0.1), // Y-as gaat tot 110% van de sliderwaarde om ook afgekorte balken nog wat bereik te geven.
+                        min: Math.max(0, minLapTime - 5),
+                        max: MAX_FAST_LAP_TIME_SECONDS + (MAX_FAST_LAP_TIME_SECONDS * 0.1),
                         ticks: {
                             callback: function(value, index, ticks) {
                                 return formatSecondsToDuration(value);
@@ -202,22 +199,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     },
                     datalabels: {
-                        // Display datalabel ALLEEN als de lapTime > MAX_FAST_LAP_TIME_SECONDS
-                        // Dit is voor de LANGZAMERE rondes (boven de drempel)
                         display: function(context) {
                             const value = context.dataset.data[context.dataIndex];
                             return value > MAX_FAST_LAP_TIME_SECONDS;
                         },
-                        color: '#333', // Tekstkleur voor deze labels is ZWART
+                        color: '#333',
                         anchor: 'start',
                         align: 'end',
-                        offset: 5, // Aantal pixels offset van de anchor (5 pixels boven de X-as)
+                        offset: 5,
                         font: {
                             weight: 'bold',
                             size: 10
                         },
                         formatter: function(value, context) {
-                            // Alleen de echte laptime tonen, niet de afgekorte
                             return formatSecondsToDuration(value);
                         },
                         rotation: 270
@@ -313,14 +307,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 const errorData = await response.json();
                 throw new Error(errorData.error || `Proxy error: ${response.status} ${response.statusText}`);
             }
-            const activitySessions = await response.json();
-            currentLapData = activitySessions.sessions[0]?.laps || [];
+            const activitySessions = await response.json(); // Dit is het hele JSON-object
+
+            // *** BELANGRIJKE WIJZIGING HIER: Combineer laps van alle sessies ***
+            currentLapData = [];
+            if (activitySessions && activitySessions.sessions) {
+                activitySessions.sessions.forEach(session => {
+                    if (session.laps && Array.isArray(session.laps)) {
+                        currentLapData = currentLapData.concat(session.laps);
+                    }
+                });
+            }
+            // *** EINDE BELANGRIJKE WIJZIGING ***
 
             hide(loadingDiv);
             show(lapsDataDiv);
 
             if (currentLapData.length > 0) {
                 let lapsText = 'Lap Number - Duration\n---------------------\n';
+                // De originele 'nr' property van de lap kan nu herhalen als er meerdere sessies zijn.
+                // We printen voor de leesbaarheid hier nog steeds de originele 'nr'
                 currentLapData.forEach(lap => {
                     lapsText += `${String(lap.nr).padEnd(12)} - ${lap.duration}\n`;
                 });
