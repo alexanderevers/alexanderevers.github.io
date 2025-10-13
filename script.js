@@ -17,7 +17,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const maxFastLapInput = document.getElementById('maxFastLapInput');
     const maxFastLapValueError = document.getElementById('maxFastLapValueError');
 
-    // --- NIEUW: Referenties voor localStorage ---
     const transponderDatalist = document.getElementById('transponder-list');
     const TRANSPONDER_STORAGE_KEY = 'savedTransponders';
 
@@ -31,13 +30,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     Chart.register(ChartDataLabels);
 
-    // --- NIEUWE FUNCTIES: Voor het beheren van opgeslagen transponders ---
-
-    // Laadt opgeslagen transponders in de datalist
     function loadSavedTransponders() {
         const saved = localStorage.getItem(TRANSPONDER_STORAGE_KEY);
         const transponders = saved ? JSON.parse(saved) : [];
-        transponderDatalist.innerHTML = ''; // Maak de lijst leeg
+        transponderDatalist.innerHTML = '';
         transponders.forEach(transponder => {
             const option = document.createElement('option');
             option.value = transponder;
@@ -45,21 +41,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Slaat een nieuw, correct transpondernummer op
     function saveTransponder(transponder) {
         const saved = localStorage.getItem(TRANSPONDER_STORAGE_KEY);
         let transponders = saved ? JSON.parse(saved) : [];
         
-        // Voeg alleen toe als het nummer nog niet in de lijst staat
         if (!transponders.includes(transponder)) {
             transponders.push(transponder);
             localStorage.setItem(TRANSPONDER_STORAGE_KEY, JSON.stringify(transponders));
-            // Werk de datalist direct bij
             loadSavedTransponders();
         }
     }
-
-    // --- EINDE NIEUWE FUNCTIES ---
 
     function show(element) {
         element.classList.remove('hidden');
@@ -205,11 +196,33 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                     },
+                    // --- DATALABELS CONFIGURATIE MET VASTE Y-WAARDE ---
                     datalabels: {
                         display: context => context.dataset.data[context.dataIndex] > MAX_FAST_LAP_TIME_SECONDS,
-                        anchor: 'center',
+                        
+                        // Plaats het label op de bodem van het grafiek-gebied.
                         align: 'bottom',
-                        offset: 8,
+                        anchor: 'center',
+
+                        // Bereken de offset om het label naar de vaste y-waarde van 40 te verplaatsen.
+                        offset: function(context) {
+                            const scale = context.chart.scales.y;
+                            const yAxisMin = scale.min; // De actuele min-waarde van de y-as
+                            const fixedLabelValue = 40; // De vaste y-waarde waar we het label willen hebben
+
+                            // Bepaal de definitieve doelwaarde.
+                            // Als 40 buiten de grafiek valt, gebruik dan een veilige fallback-waarde.
+                            const finalTargetValue = Math.max(fixedLabelValue, yAxisMin + 1);
+
+                            // Bereken de pixelposities
+                            const chartBottomPixel = scale.getPixelForValue(yAxisMin);
+                            const targetPixel = scale.getPixelForValue(finalTargetValue);
+
+                            // Het verschil in pixels is de afstand die we omhoog moeten.
+                            // Een positieve offset met 'align: bottom' duwt het label omhoog.
+                            return chartBottomPixel - targetPixel;
+                        },
+
                         color: '#333',
                         font: { weight: 'bold', size: 10 },
                         formatter: value => formatSecondsToDuration(value),
@@ -244,8 +257,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!response.ok) throw new Error((await response.json()).error || `Proxy error: ${response.status}`);
             
             const userData = await response.json();
-            const userID = userData.userId;
+            
+            // Sla het nummer op *na* een succesvolle userid-lookup
+            saveTransponder(transponder);
 
+            const userID = userData.userId;
             url = `${PROXY_BASE_URL}/activities/${userID}`;
             response = await fetch(url);
             if (!response.ok) throw new Error((await response.json()).error || `Proxy error: ${response.status}`);
@@ -256,9 +272,6 @@ document.addEventListener('DOMContentLoaded', () => {
             hide(loadingDiv);
 
             if (userActivities.length > 0) {
-                // --- AANGEPAST: Sla het correcte nummer op ---
-                saveTransponder(transponder);
-                
                 userActivities.forEach(activity => {
                     const option = document.createElement('option');
                     option.value = activity.id;
@@ -370,8 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- AANGEPAST: Initialisatie ---
-    loadSavedTransponders(); // Laad de opgeslagen nummers bij het starten
+    loadSavedTransponders();
     maxFastLapSlider.value = parseFloat(maxFastLapSlider.value).toFixed(1);
     maxFastLapInput.value = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
     resetUI();
