@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const fetchActivitiesBtn = document.getElementById('fetchActivitiesBtn');
     const loadingDiv = document.getElementById('loading');
     const errorDiv = document.getElementById('error');
-    const activitiesListDiv = document = document.getElementById('activitiesList');
+    const activitiesListDiv = document.getElementById('activitiesList');
     const activitySelect = document.getElementById('activitySelect');
     const fetchLapsBtn = document.getElementById('fetchLapsBtn');
     const lapsDataDiv = document.getElementById('lapsData');
@@ -17,9 +17,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let userActivities = [];
     let lapChart = null;
-    let currentLapData = []; // Zal nu alle laps van alle sessies bevatten
+    let currentLapData = [];
 
-    let MAX_FAST_LAP_TIME_SECONDS = parseInt(maxFastLapSlider.value, 10);
+    // GEWIJZIGD: Gebruik parseFloat() i.p.v. parseInt() voor de slider waarde
+    let MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
 
     Chart.register(ChartDataLabels);
 
@@ -87,6 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const minutes = Math.floor(totalSeconds / 60);
         const remainingSeconds = totalSeconds % 60;
 
+        // GEWIJZIGD: Zorg dat de seconden altijd 3 decimalen hebben voor consistentie met 0.1 step
         const secondsPart = remainingSeconds.toFixed(3);
         const [sec, ms] = secondsPart.split('.');
 
@@ -128,16 +130,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        lapData.forEach((lap, index) => { // Gebruik index voor Lap 1, Lap 2, etc. over alle sessies heen
-            lapNumbers.push(`Lap ${index + 1}`); // Lap nummering over alle gecombineerde laps
+        lapData.forEach((lap, index) => {
+            lapNumbers.push(`Lap ${index + 1}`);
             const lapTime = parseDurationToSeconds(lap.duration);
             lapTimesInSeconds.push(lapTime);
 
             if (lapTime <= MAX_FAST_LAP_TIME_SECONDS) {
-                backgroundColors.push('rgba(0, 123, 255, 0.8)'); // Donkerblauw
+                backgroundColors.push('rgba(0, 123, 255, 0.8)');
                 borderColors.push('rgba(0, 123, 255, 1)');
             } else {
-                backgroundColors.push('rgba(173, 216, 230, 0.6)'); // Lichtblauw (trage tijden)
+                backgroundColors.push('rgba(173, 216, 230, 0.6)');
                 borderColors.push('rgba(173, 216, 230, 0.8)');
             }
         });
@@ -174,8 +176,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             text: 'Lap Time'
                         },
                         beginAtZero: false,
-                        min: Math.max(0, minLapTime - 5),
-                        max: MAX_FAST_LAP_TIME_SECONDS + (MAX_FAST_LAP_TIME_SECONDS * 0.1),
+                        min: Math.max(0, minLapTime - 5), // Houd dit om de snelste rondes goed te zien
+                        // GEWIJZIGD: Max is altijd sliderwaarde + 1 seconde
+                        max: MAX_FAST_LAP_TIME_SECONDS + 1,
                         ticks: {
                             callback: function(value, index, ticks) {
                                 return formatSecondsToDuration(value);
@@ -307,9 +310,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const errorData = await response.json();
                 throw new Error(errorData.error || `Proxy error: ${response.status} ${response.statusText}`);
             }
-            const activitySessions = await response.json(); // Dit is het hele JSON-object
+            const activitySessions = await response.json();
 
-            // *** BELANGRIJKE WIJZIGING HIER: Combineer laps van alle sessies ***
             currentLapData = [];
             if (activitySessions && activitySessions.sessions) {
                 activitySessions.sessions.forEach(session => {
@@ -318,15 +320,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
             }
-            // *** EINDE BELANGRIJKE WIJZIGING ***
 
             hide(loadingDiv);
             show(lapsDataDiv);
 
             if (currentLapData.length > 0) {
                 let lapsText = 'Lap Number - Duration\n---------------------\n';
-                // De originele 'nr' property van de lap kan nu herhalen als er meerdere sessies zijn.
-                // We printen voor de leesbaarheid hier nog steeds de originele 'nr'
                 currentLapData.forEach(lap => {
                     lapsText += `${String(lap.nr).padEnd(12)} - ${lap.duration}\n`;
                 });
@@ -368,7 +367,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     maxFastLapSlider.addEventListener('input', () => {
-        MAX_FAST_LAP_TIME_SECONDS = parseInt(maxFastLapSlider.value, 10);
+        // GEWIJZIGD: Gebruik parseFloat() i.p.v. parseInt() voor de slider waarde
+        MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
         maxFastLapValueSpan.textContent = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
 
         if (currentLapData.length > 0) {
@@ -376,6 +376,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Initialiseer de tekst van de slider-waarde bij het laden van de pagina
     maxFastLapValueSpan.textContent = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
     resetUI();
 });
