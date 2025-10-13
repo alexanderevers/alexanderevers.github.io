@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MYLAPS Activity Viewer</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Include Chart.js library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="container">
@@ -29,6 +31,9 @@
         <div id="lapsData" class="hidden">
             <h2>Laps Data:</h2>
             <pre id="lapsOutput"></pre>
+            <div class="chart-container">
+                <canvas id="lapTimeChart"></canvas>
+            </div>
         </div>
     </div>
 
