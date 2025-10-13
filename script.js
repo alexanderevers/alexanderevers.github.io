@@ -7,11 +7,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const activitySelect = document.getElementById('activitySelect');
     const fetchLapsBtn = document.getElementById('fetchLapsBtn');
     const lapsDataDiv = document.getElementById('lapsData');
+    
+    // NIEUW: Referentie naar de container voor de slider en input
+    const maxFastLapControls = document.getElementById('maxFastLapControls'); 
+
     const lapsOutput = document.getElementById('lapsOutput');
     const lapTimeChartCanvas = document.getElementById('lapTimeChart');
 
     const maxFastLapSlider = document.getElementById('maxFastLapSlider');
-    const maxFastLapValueSpan = document.getElementById('maxFastLapValue');
+    const maxFastLapInput = document.getElementById('maxFastLapInput');
+    const maxFastLapValueError = document.getElementById('maxFastLapValueError');
 
     const PROXY_BASE_URL = 'https://us-central1-proxyapi-475018.cloudfunctions.net/mylapsProxyFunction/api/mylaps';
 
@@ -19,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let lapChart = null;
     let currentLapData = [];
 
+    // Initialiseer met de waarde van de slider, die de 'source of truth' is bij start
     let MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
 
     Chart.register(ChartDataLabels);
@@ -36,6 +42,8 @@ document.addEventListener('DOMContentLoaded', () => {
         hide(errorDiv);
         hide(activitiesListDiv);
         hide(lapsDataDiv);
+        hide(maxFastLapValueError);
+        hide(maxFastLapControls); // VERBORGEN bij reset
         errorDiv.textContent = '';
         activitySelect.innerHTML = '<option value="">Select an activity</option>';
         fetchLapsBtn.disabled = true;
@@ -66,17 +74,15 @@ document.addEventListener('DOMContentLoaded', () => {
     function parseDurationToSeconds(durationString) {
         const parts = durationString.split(':');
         let totalSeconds = 0;
-        if (parts.length === 1) {
+
+        if (parts.length === 1) { // SS.ms formaat
             totalSeconds = parseFloat(parts[0]);
-        } else if (parts.length === 2) {
+        } else if (parts.length === 2) { // MM:SS.ms formaat
             const minutes = parseInt(parts[0], 10);
             const seconds = parseFloat(parts[1]);
             totalSeconds = (minutes * 60) + seconds;
-        } else if (parts.length === 3) {
-            const hours = parseInt(parts[0], 10);
-            const minutes = parseInt(parts[1], 10);
-            const seconds = parseFloat(parts[2]);
-            totalSeconds = (hours * 3600) + (minutes * 60) + seconds;
+        } else {
+            return NaN; // Ongeldig formaat
         }
         return totalSeconds;
     }
@@ -87,18 +93,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const minutes = Math.floor(totalSeconds / 60);
         const remainingSeconds = totalSeconds % 60;
 
-        // Dit zorgt ervoor dat we altijd 3 decimalen hebben, zelfs als ze nul zijn (bijv. 5.000)
         const secondsPart = remainingSeconds.toFixed(3);
         const [sec, ms] = secondsPart.split('.');
 
         const formattedSec = String(sec).padStart(2, '0');
-        const formattedMs = ms || '000'; // Zorg dat er altijd 3 ms cijfers zijn
+        const formattedMs = ms || '000';
 
         if (minutes > 0) {
-            const formattedMin = String(minutes).padStart(1, '0'); // Bijv. "1:05.123"
+            const formattedMin = String(minutes).padStart(1, '0');
             return `${formattedMin}:${formattedSec}.${formattedMs}`;
         } else {
-            return `${formattedSec}.${formattedMs}`; // Bijv. "05.123"
+            return `${formattedSec}.${formattedMs}`;
         }
     }
 
@@ -290,6 +295,7 @@ document.addEventListener('DOMContentLoaded', () => {
         hide(lapsDataDiv);
         lapsOutput.textContent = '';
         hide(errorDiv);
+        hide(maxFastLapControls); // VERBORGEN totdat laps geladen zijn
 
         const selectedActivityId = activitySelect.value;
         if (!selectedActivityId) {
@@ -329,6 +335,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 lapsOutput.textContent = lapsText;
 
+                // TOON DE SLIDER/INPUT NADAT LAPS DATA ZIJN GELADEN
+                show(maxFastLapControls); 
                 updateLapChart(currentLapData);
 
             } else {
@@ -345,6 +353,7 @@ document.addEventListener('DOMContentLoaded', () => {
             errorDiv.textContent = `Error: ${error.message}. Could not retrieve lap data.`;
             show(errorDiv);
             hide(lapsDataDiv);
+            hide(maxFastLapControls); // VERBORGEN bij fout
             if (lapChart) {
                 lapChart.destroy();
                 lapChart = null;
@@ -356,6 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
         hide(lapsDataDiv);
         lapsOutput.textContent = '';
         hide(errorDiv);
+        hide(maxFastLapControls); // VERBORGEN als activiteit verandert
         fetchLapsBtn.disabled = !activitySelect.value;
         if (lapChart) {
             lapChart.destroy();
@@ -366,16 +376,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
     maxFastLapSlider.addEventListener('input', () => {
         MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
-        // De formatSecondsToDuration functie handelt nu correct de decimalen af.
-        maxFastLapValueSpan.textContent = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
+        maxFastLapInput.value = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
+        hide(maxFastLapValueError);
 
         if (currentLapData.length > 0) {
             updateLapChart(currentLapData);
         }
     });
 
-    // Initialiseer de tekst van de slider-waarde bij het laden van de pagina
-    // Zorg ervoor dat de initiële weergave ook de decimalen toont
-    maxFastLapValueSpan.textContent = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
-    resetUI();
+    maxFastLapInput.addEventListener('input', () => {
+        const inputText = maxFastLapInput.value.trim();
+        const parsedSeconds = parseDurationToSeconds(inputText);
+
+        // Haal de min/max waarden direct van de slider voor validatie
+        const sliderMin = parseFloat(maxFastLapSlider.min);
+        const sliderMax = parseFloat(maxFastLapSlider.max);
+
+        if (isNaN(parsedSeconds) || parsedSeconds < sliderMin || parsedSeconds > sliderMax) {
+            maxFastLapValueError.textContent = `Invalid time format or out of range (${formatSecondsToDuration(sliderMin)} - ${formatSecondsToDuration(sliderMax)})`;
+            show(maxFastLapValueError);
+        } else {
+            hide(maxFastLapValueError);
+            MAX_FAST_LAP_TIME_SECONDS = parsedSeconds;
+            maxFastLapSlider.value = parsedSeconds; // Synchroniseer de slider
+            if (currentLapData.length > 0) {
+                updateLapChart(currentLapData);
+            }
+        }
+    });
+
+    // Initialiseer de tekst van de input en slider-waarde bij het laden van de pagina
+    maxFastLapSlider.value = parseFloat(maxFastLapSlider.value).toFixed(1); // Zorg voor juiste precisie
+    maxFastLapInput.value = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
+
+    resetUI(); // Roep resetUI aan om de slider controls standaard te verbergen
 });

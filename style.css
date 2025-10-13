@@ -27,7 +27,7 @@ html, body {
     box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
     /* Maak de container flexibel en beperk de max-breedte voor grote schermen */
     width: 100%;
-    max-width: 9000px; /* Maximale breedte op grotere schermen */
+    max-width: 900px; /* Maximale breedte op grotere schermen */
     margin: 0 auto; /* Centreer de container */
     display: flex;
     flex-direction: column;
@@ -40,14 +40,14 @@ h1, h2 {
     margin-bottom: 15px;
 }
 
-.input-group, .slider-group {
+.input-group {
     display: flex;
     flex-direction: column; /* Standaard op elkaar */
     align-items: flex-start;
     gap: 10px;
 }
 
-.input-group label, .slider-group label {
+.input-group label {
     font-weight: bold;
     margin-bottom: 5px;
     width: 100%; /* Zorgt dat label de volle breedte pakt */
@@ -82,28 +82,37 @@ h1, h2 {
     cursor: not-allowed;
 }
 
+/* Specifieke stijlen voor de slider-groep (label, slider, text input, error) */
 .slider-group {
-    flex-direction: row; /* Slider en waarde naast elkaar */
-    align-items: center;
-    justify-content: space-between;
+    display: flex;
+    flex-direction: row; /* Standaard naast elkaar (op desktop) */
+    align-items: center; /* Verticaal centreren */
     flex-wrap: wrap; /* Laat elementen wrappen op kleine schermen */
+    gap: 10px; /* Ruimte tussen elementen */
+    margin-bottom: 5px; /* Wat ruimte onder de hele groep */
 }
 
 .slider-group label {
     flex-basis: 100%; /* Label pakt de hele breedte bovenaan */
-    margin-bottom: 0;
+    margin-bottom: 0; /* Geen extra marge onder het label binnen de groep */
 }
 
 .slider-group input[type="range"] {
     flex-grow: 1; /* Slider neemt beschikbare ruimte in */
-    margin-right: 15px;
-    max-width: calc(100% - 100px); /* Ruimte voor de waarde */
+    /* Geen margin-right hier, omdat de text input ernaast staat */
 }
 
-#maxFastLapValue {
-    font-weight: bold;
-    min-width: 80px; /* Vaste breedte zodat het niet verspringt */
+/* NIEUW: Stijl voor de maxFastLapInput */
+#maxFastLapInput {
+    width: 120px; /* Vaste breedte voor de tijd input (desktop) */
     text-align: right;
+    flex-shrink: 0; /* Voorkom dat deze input kleiner wordt dan zijn content */
+}
+
+#maxFastLapValueError {
+    flex-basis: 100%; /* Foutmelding pakt de hele breedte */
+    text-align: left; /* Lijn links uit */
+    margin-top: -5px; /* Kom iets dichter bij de input */
 }
 
 .hidden {
@@ -119,7 +128,7 @@ h1, h2 {
 .error-message {
     color: #dc3545;
     font-weight: bold;
-    text-align: center;
+    text-align: center; /* Standaard gecentreerd voor algemene fouten */
 }
 
 #activitiesList, #lapsData {
@@ -146,6 +155,10 @@ h1, h2 {
 
 /* Media queries for smaller screens */
 @media (max-width: 768px) {
+    body {
+        padding: 10px; /* Minder padding op kleine schermen */
+    }
+
     .container {
         padding: 20px;
         gap: 15px;
@@ -160,20 +173,24 @@ h1, h2 {
         width: 100%; /* Buttons nemen de volle breedte */
     }
 
+    /* Slider groep gedrag op mobiel */
     .slider-group {
-        flex-direction: column; /* Slider en waarde weer op elkaar */
-        align-items: flex-start;
+        flex-direction: column; /* Slider, input en foutmelding onder elkaar */
+        align-items: flex-start; /* Links uitlijnen */
     }
 
     .slider-group input[type="range"] {
-        max-width: 100%;
-        margin-right: 0;
-        margin-bottom: 10px;
+        max-width: 100%; /* Slider neemt volle breedte in */
+        margin-bottom: 10px; /* Ruimte onder de slider */
     }
 
-    #maxFastLapValue {
-        text-align: left;
-        width: 100%;
+    #maxFastLapInput {
+        width: 100%; /* Tekst input neemt volle breedte in */
+        text-align: left; /* Links uitlijnen op mobiel */
+    }
+
+    #maxFastLapValueError {
+        text-align: left; /* Foutmelding links uitlijnen */
     }
 
     .chart-container {
