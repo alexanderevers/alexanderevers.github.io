@@ -14,7 +14,7 @@ html, body {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    /* align-items: center; */ /* VERWIJDERD: Om alles links uit te lijnen */
     justify-content: flex-start;
     padding: 20px;
 }
@@ -25,16 +25,22 @@ html, body {
     border-radius: 8px;
     box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
     width: 100%;
-    max-width: 900px;
-    margin: 0 auto;
+    max-width: 900px; /* Maximale breedte op grotere schermen */
+    margin: 0 auto; /* Centreert de container zelf, maar de inhoud is links uitgelijnd */
     display: flex;
     flex-direction: column;
     gap: 20px;
 }
 
-h1, h2 {
+h1 {
     color: #0056b3;
-    text-align: center;
+    text-align: center; /* H1 blijft gecentreerd */
+    margin-bottom: 15px;
+}
+
+h2 {
+    color: #0056b3;
+    text-align: left; /* H2 links uitgelijnd */
     margin-bottom: 15px;
 }
 
@@ -42,7 +48,7 @@ h1, h2 {
 .input-group {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: flex-start; /* ALTIJD LINKS UITLIJNEN */
     gap: 10px;
 }
 
@@ -58,7 +64,7 @@ h1, h2 {
     border: 1px solid #ddd;
     border-radius: 4px;
     width: 100%; /* Standaard 100% breedte */
-    max-width: 300px; /* Beperk de breedte op grotere schermen voor algemene inputs */
+    max-width: 300px; /* Beperk de breedte op grotere schermen voor alle inputs/selects */
 }
 
 .input-group button {
@@ -69,7 +75,8 @@ h1, h2 {
     border-radius: 4px;
     cursor: pointer;
     transition: background-color 0.3s ease;
-    width: auto;
+    width: auto; /* Buttons kunnen variëren in breedte */
+    /* align-self: flex-start; */ /* VERWIJDERD: Niet nodig als de parent al links uitlijnt */
 }
 
 .input-group button:hover {
@@ -83,62 +90,61 @@ h1, h2 {
 
 /* --- SPECIFIEKE STIJLEN --- */
 
-/* Transponder Input Group (Fetch Activities) - 50% width, centered */
-/* NIEUW: Deze input-group heeft geen label, dus we stylen direct de kinderen en de groep zelf */
-.container > .input-group:first-of-type { /* Selecteer de eerste .input-group direct onder .container */
-    align-items: center; /* Centreer de items horizontaal */
-}
-
-.container > .input-group:first-of-type input[type="text"],
-.container > .input-group:first-of-type button {
-    width: 50%; /* Maak ze 50% breed */
-    max-width: 250px; /* Optionele max-breedte voor zeer grote schermen */
+/* Transponder Input Group (Fetch Activities) */
+/* Deze groep is nu ook gewoon links uitgelijnd en de input/button krijgen hun algemene styling */
+.container > .input-group:first-of-type {
+    /* align-items: flex-start; */ /* Redundant, want .input-group doet dit al */
 }
 
 /* Activities List Group (Select Activity and Fetch Laps) */
 #activitiesList {
     border-top: 1px solid #eee;
     padding-top: 20px;
-    display: flex; /* Maak het een flex container */
-    flex-direction: column; /* Items onder elkaar */
-    align-items: flex-start; /* Items links uitlijnen */
-    gap: 10px; /* Ruimte tussen de elementen */
+    display: flex; /* Zorg dat het een flex container blijft */
+    flex-direction: column;
+    align-items: flex-start; /* ALTIJD LINKS UITLIJNEN */
+    gap: 10px;
 }
 
 #activitiesList h2 {
-    width: 100%; /* Zorg dat de titel de breedte pakt */
-    text-align: left; /* Lijn titel links uit in deze sectie */
+    width: 100%;
+    text-align: left;
     margin-bottom: 5px;
 }
 
+/* HERSTELD: Styling voor de Select box (Fetch Laps balk) */
 #activitySelect {
-    width: 100%; /* Selectieveld neemt 100% van de beschikbare breedte */
-    max-width: 400px; /* Optionele max-breedte */
-    margin-bottom: 5px; /* Ruimte onder de select */
+    width: 100%; /* Neem de volle breedte */
+    max-width: 300px; /* Consistent met andere inputs */
+    margin-bottom: 5px;
+    /* De algemene .input-group input[type="text"], .input-group select stijlen gelden hierdoor weer */
 }
 
+/* HERSTELD: Styling voor de Fetch Laps knop */
 #activitiesList #fetchLapsBtn {
-    width: auto; /* Knop breedte aanpassen aan content */
-    align-self: flex-start; /* Links uitlijnen van de knop */
+    width: auto; /* Auto breedte */
+    /* De algemene .input-group button stijlen gelden hierdoor weer */
 }
 
 
 /* Slider Group (Max Fast Lap Time) */
-.slider-group {
+#maxFastLapControls { /* Gebruik de ID om deze specifieke groep aan te spreken */
+    border-top: 1px solid #eee; /* Optionele lijn boven de slider controls */
+    padding-top: 20px;
     display: flex;
     flex-direction: row; /* Standaard naast elkaar (op desktop) */
     align-items: center; /* Verticaal centreren */
     flex-wrap: wrap; /* Laat elementen wrappen op kleine schermen */
-    gap: 10px; /* Ruimte tussen elementen */
+    gap: 10px;
     margin-bottom: 5px;
 }
 
-.slider-group label {
+#maxFastLapControls label {
     flex-basis: 100%;
     margin-bottom: 0;
 }
 
-.slider-group input[type="range"] {
+#maxFastLapControls input[type="range"] {
     flex-grow: 1;
 }
 
@@ -156,8 +162,8 @@ h1, h2 {
 
 /* Laps Data Display */
 #lapsData {
-    border-top: 1px solid #eee;
-    padding-top: 20px;
+    /* border-top: 1px solid #eee; */ /* Lijn is al boven maxFastLapControls, dus hier niet nodig */
+    padding-top: 0; /* Geen extra padding hier */
 }
 
 #lapsOutput {
@@ -190,7 +196,7 @@ h1, h2 {
 .error-message {
     color: #dc3545;
     font-weight: bold;
-    text-align: center;
+    text-align: left; /* Foutmeldingen links uitlijnen */
 }
 
 
@@ -205,11 +211,12 @@ h1, h2 {
         gap: 15px;
     }
 
-    /* Transponder Input Group op mobiel */
-    .container > .input-group:first-of-type input[type="text"],
-    .container > .input-group:first-of-type button {
-        width: 100%; /* Nemen volle breedte op mobiel */
-        max-width: none; /* Reset max-width */
+    /* Alle input-velden en buttons op mobiel volle breedte */
+    .input-group input[type="text"],
+    .input-group select,
+    .input-group button {
+        width: 100%;
+        max-width: none; /* Reset max-width voor mobiel */
     }
 
     /* Activities List Group op mobiel */
@@ -220,12 +227,12 @@ h1, h2 {
     }
 
     /* Slider groep gedrag op mobiel */
-    .slider-group {
+    #maxFastLapControls {
         flex-direction: column;
         align-items: flex-start;
     }
 
-    .slider-group input[type="range"] {
+    #maxFastLapControls input[type="range"] {
         max-width: 100%;
         margin-bottom: 10px;
     }
@@ -242,4 +249,4 @@ h1, h2 {
     .chart-container {
         height: 300px;
     }
-}
+}v
