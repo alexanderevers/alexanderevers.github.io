@@ -24,18 +24,19 @@
 
         <div id="activitiesList" class="hidden">
             <h2>Recent Activities:</h2>
-            <select id="activitySelect">
-                <option value="">Select an activity</option>
-            </select>
-            <button id="fetchLapsBtn" disabled>Fetch Laps</button>
+            <!-- NIEUW: Wrapper div voor select en button -->
+            <div class="activity-controls-group input-group"> 
+                <select id="activitySelect">
+                    <option value="">Select an activity</option>
+                </select>
+                <button id="fetchLapsBtn" disabled>Fetch Laps</button>
+            </div>
         </div>
 
         <div id="lapsData" class="hidden">
             <h2>Laps Data:</h2>
             <pre id="lapsOutput"></pre>
 
-            <!-- VERPLAATST: Slider en Text Input voor Max Fast Lap Time -->
-            <!-- Deze div krijgt nu dynamisch de 'hidden' class toegewezen/verwijderd -->
             <div id="maxFastLapControls" class="input-group slider-group">
                 <label for="maxFastLapInput">Max Fast Lap Time:</label>
                 <input type="range" id="maxFastLapSlider" min="10" max="180" value="60" step="0.1">
