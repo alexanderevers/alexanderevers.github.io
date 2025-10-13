@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const lapsOutput = document.getElementById('lapsOutput');
 
     // Base URL for your proxy server
-    const PROXY_BASE_URL = 'http://localhost:3000/api/mylaps'; // Adjust if your proxy is on a different host/port
+    const PROXY_BASE_URL = 'https://us-central1-proxyapi-475018.cloudfunctions.net/mylapsProxyFunction/api/mylaps'; // Adjust if your proxy is on a different host/port
 
     let userActivities = []; // To store fetched activities
 
