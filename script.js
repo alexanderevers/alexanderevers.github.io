@@ -10,7 +10,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const lapsOutput = document.getElementById('lapsOutput');
     const lapTimeChartCanvas = document.getElementById('lapTimeChart');
 
-    // Nieuwe elementen voor de slider
     const maxFastLapSlider = document.getElementById('maxFastLapSlider');
     const maxFastLapValueSpan = document.getElementById('maxFastLapValue');
 
@@ -18,9 +17,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let userActivities = [];
     let lapChart = null;
+    let currentLapData = []; // Zorg ervoor dat deze altijd de laatst geladen data bevat
 
-    // Haal de initiële waarde direct van de slider
-    let MAX_FAST_LAP_TIME_SECONDS = parseInt(maxFastLapSlider.value, 10);
+    let MAX_FAST_LAP_TIME_SECONDS = parseInt(maxFastLapSlider.value, 10); // Startwaarde van de slider
 
     Chart.register(ChartDataLabels);
 
@@ -42,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchLapsBtn.disabled = true;
         lapsOutput.textContent = '';
         userActivities = [];
+        currentLapData = []; // Reset ook de opgeslagen data bij het resetten van de UI
 
         if (lapChart) {
             lapChart.destroy();
@@ -175,6 +175,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             text: 'Lap Time'
                         },
                         beginAtZero: false,
+                        // Gebruik een 'min' waarde om de as niet te ver naar beneden te laten zakken
+                        min: Math.max(0, Math.min(...lapTimesInSeconds) - 5), // 5 seconden onder de snelste ronde, maar niet onder 0
                         suggestedMax: maxLapTime > 0 ? maxLapTime * 1.1 : MAX_FAST_LAP_TIME_SECONDS * 1.5,
                         ticks: {
                             callback: function(value, index, ticks) {
@@ -195,17 +197,18 @@ document.addEventListener('DOMContentLoaded', () => {
                                     label += formatSecondsToDuration(context.parsed.y);
                                 }
                                 return label;
+                                }
                             }
-                        }
-                    },
+                        },
                     datalabels: {
                         display: true,
                         color: function(context) {
                             const value = context.dataset.data[context.dataIndex];
                             return value <= MAX_FAST_LAP_TIME_SECONDS ? '#fff' : '#333';
                         },
-                        anchor: 'center',
-                        align: 'center',
+                        anchor: 'start', // Start aan de basis van de balk
+                        align: 'end', // Tekst eindigt op de 'anchor' positie
+                        offset: 5, // Aantal pixels offset van de anchor (5 pixels boven de X-as)
                         font: {
                             weight: 'bold',
                             size: 10
@@ -213,7 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         formatter: function(value, context) {
                             return formatSecondsToDuration(value);
                         },
-                        rotation: 270
+                        rotation: 270 // Draai de tekst 90 graden tegen de klok in (verticaal)
                     }
                 }
             }
@@ -285,9 +288,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // We moeten de ruwe lap data opslaan, zodat we de grafiek opnieuw kunnen tekenen bij een slider-wijziging
-    let currentLapData = [];
-
     fetchLapsBtn.addEventListener('click', async () => {
         hide(lapsDataDiv);
         lapsOutput.textContent = '';
@@ -311,7 +311,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(errorData.error || `Proxy error: ${response.status} ${response.statusText}`);
             }
             const activitySessions = await response.json();
-            currentLapData = activitySessions.sessions[0]?.laps || []; // Sla de data op
+            currentLapData = activitySessions.sessions[0]?.laps || []; // Sla de data op in currentLapData
 
             hide(loadingDiv);
             show(lapsDataDiv);
@@ -323,8 +323,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 lapsOutput.textContent = lapsText;
 
-                // Roep de update functie aan om de grafiek te tekenen
-                updateLapChart(currentLapData);
+                updateLapChart(currentLapData); // Teken de grafiek met de geladen data
 
             } else {
                 lapsOutput.textContent = "No lap data found for the selected activity.";
@@ -356,7 +355,7 @@ document.addEventListener('DOMContentLoaded', () => {
             lapChart.destroy();
             lapChart = null;
         }
-        currentLapData = []; // Reset stored lap data
+        currentLapData = []; // Reset stored lap data when activity changes
     });
 
     // Event listener voor de slider
@@ -372,5 +371,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialiseer de tekst van de slider-waarde bij het laden van de pagina
     maxFastLapValueSpan.textContent = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
-    resetUI();
+    resetUI(); // Start met een schone lei
 });
