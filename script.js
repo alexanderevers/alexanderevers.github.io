@@ -144,14 +144,12 @@ document.addEventListener('DOMContentLoaded', () => {
     
         const yAxisMin = Math.max(0, minLapTime - 5);
     
-        // --- HIER ZAT DE FOUT ---
-        // Het is nu gecorrigeerd.
         lapData.forEach((lap, index) => {
             lapNumbers.push(`Lap ${index + 1}`);
-            const lapTime = parseDurationToSeconds(lap.duration); // GECORRIGEERD: Gebruik 'lapTime'
-            lapTimesInSeconds.push(lapTime); // GECORRIGEERD: Voeg 'lapTime' toe aan de array
+            const lapTime = parseDurationToSeconds(lap.duration);
+            lapTimesInSeconds.push(lapTime);
     
-            if (lapTime <= MAX_FAST_LAP_TIME_SECONDS) { // GECORRIGEERD: Gebruik 'lapTime' voor de vergelijking
+            if (lapTime <= MAX_FAST_LAP_TIME_SECONDS) {
                 backgroundColors.push('rgba(0, 123, 255, 0.8)');
                 borderColors.push('rgba(0, 123, 255, 1)');
             } else {
@@ -198,29 +196,37 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                     },
-                    /*
-                    // Dit is de oude code voor het tonen van de verticale tekst.
-                    // Om het weer aan te zetten, verwijder de /* en */ en haal de regel "display: false" hieronder weg.
+                    // --- DATALABELS CONFIGURATIE MET VASTE Y-WAARDE ---
                     datalabels: {
-                        display: function(context) {
-                            return context.dataset.data[context.dataIndex] > MAX_FAST_LAP_TIME_SECONDS;
-                        },
-                        anchor: 'center',
+                        display: context => context.dataset.data[context.dataIndex] > MAX_FAST_LAP_TIME_SECONDS,
+                        
+                        // Plaats het label op de bodem van het grafiek-gebied.
                         align: 'bottom',
-                        offset: 8,
+                        anchor: 'center',
+
+                        // Bereken de offset om het label naar de vaste y-waarde van 40 te verplaatsen.
+                        offset: function(context) {
+                            const scale = context.chart.scales.y;
+                            const yAxisMin = scale.min; // De actuele min-waarde van de y-as
+                            const fixedLabelValue = 40; // De vaste y-waarde waar we het label willen hebben
+
+                            // Bepaal de definitieve doelwaarde.
+                            // Als 40 buiten de grafiek valt, gebruik dan een veilige fallback-waarde.
+                            const finalTargetValue = Math.max(fixedLabelValue, yAxisMin + 1);
+
+                            // Bereken de pixelposities
+                            const chartBottomPixel = scale.getPixelForValue(yAxisMin);
+                            const targetPixel = scale.getPixelForValue(finalTargetValue);
+
+                            // Het verschil in pixels is de afstand die we omhoog moeten.
+                            // Een positieve offset met 'align: bottom' duwt het label omhoog.
+                            return chartBottomPixel - targetPixel;
+                        },
+
                         color: '#333',
-                        font: {
-                            weight: 'bold',
-                            size: 10
-                        },
-                        formatter: function(value) {
-                            return formatSecondsToDuration(value);
-                        },
+                        font: { weight: 'bold', size: 10 },
+                        formatter: value => formatSecondsToDuration(value),
                         rotation: 270
-                    }
-                    */
-                    datalabels: {
-                        display: false
                     }
                 }
             }
@@ -252,6 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const userData = await response.json();
             
+            // Sla het nummer op *na* een succesvolle userid-lookup
             saveTransponder(transponder);
 
             const userID = userData.userId;
