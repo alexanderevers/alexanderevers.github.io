@@ -130,6 +130,64 @@ button:disabled {
     height: 100% !important;
 }
 
+.slider-group {
+    margin-top: 20px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    border-top: 1px solid #eee; /* Optioneel: lijn om het te scheiden */
+    padding-top: 15px;
+}
+
+.slider-group label {
+    flex-shrink: 0;
+}
+
+.slider-group input[type="range"] {
+    flex-grow: 1;
+    width: auto; /* Override default range width */
+    height: 8px;
+    -webkit-appearance: none; /* Remove default styling */
+    appearance: none;
+    background: #ddd;
+    border-radius: 5px;
+    outline: none;
+    opacity: 0.7;
+    transition: opacity .2s;
+}
+
+.slider-group input[type="range"]:hover {
+    opacity: 1;
+}
+
+.slider-group input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #007bff;
+    cursor: pointer;
+    border: 1px solid #0056b3;
+}
+
+.slider-group input[type="range"]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #007bff;
+    cursor: pointer;
+    border: 1px solid #0056b3;
+}
+
+#maxFastLapValue {
+    font-weight: bold;
+    color: #007bff;
+    min-width: 80px; /* Zorg voor voldoende ruimte voor de tekst */
+    text-align: right;
+}
+
 .hidden {
     display: none !important;
 }

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial =1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MYLAPS Activity Viewer</title>
     <link rel="stylesheet" href="style.css">
     <!-- Include Chart.js library -->
@@ -21,6 +21,13 @@
 
         <div id="loading" class="hidden">Loading...</div>
         <div id="error" class="hidden error-message"></div>
+
+        <!-- New Slider for Max Fast Lap Time -->
+        <div class="input-group slider-group">
+            <label for="maxFastLapSlider">Max Fast Lap Time:</label>
+            <input type="range" id="maxFastLapSlider" min="10" max="180" value="60" step="1">
+            <span id="maxFastLapValue">1:00.000</span>
+        </div>
 
         <div id="activitiesList" class="hidden">
             <h2>Recent Activities:</h2>

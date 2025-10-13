@@ -5,17 +5,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const errorDiv = document.getElementById('error');
     const activitiesListDiv = document.getElementById('activitiesList');
     const activitySelect = document.getElementById('activitySelect');
-    const fetchLapsBtn = document = document.getElementById('fetchLapsBtn');
+    const fetchLapsBtn = document.getElementById('fetchLapsBtn');
     const lapsDataDiv = document.getElementById('lapsData');
     const lapsOutput = document.getElementById('lapsOutput');
     const lapTimeChartCanvas = document.getElementById('lapTimeChart');
+
+    // Nieuwe elementen voor de slider
+    const maxFastLapSlider = document.getElementById('maxFastLapSlider');
+    const maxFastLapValueSpan = document.getElementById('maxFastLapValue');
 
     const PROXY_BASE_URL = 'https://us-central1-proxyapi-475018.cloudfunctions.net/mylapsProxyFunction/api/mylaps';
 
     let userActivities = [];
     let lapChart = null;
 
-    const MAX_FAST_LAP_TIME_SECONDS = 60; // 1 minuut
+    // Haal de initiële waarde direct van de slider
+    let MAX_FAST_LAP_TIME_SECONDS = parseInt(maxFastLapSlider.value, 10);
 
     Chart.register(ChartDataLabels);
 
@@ -101,6 +106,120 @@ document.addEventListener('DOMContentLoaded', () => {
         return regex.test(transponder);
     }
 
+    // Functie om de grafiek te updaten, wordt aangeroepen na het laden van data of bij slider-verandering
+    function updateLapChart(lapData) {
+        if (!lapTimeChartCanvas || !lapData || lapData.length === 0) {
+            if (lapChart) {
+                lapChart.destroy();
+                lapChart = null;
+            }
+            return;
+        }
+
+        const lapNumbers = [];
+        const lapTimesInSeconds = [];
+        const backgroundColors = [];
+        const borderColors = [];
+
+        let maxLapTime = 0; // In seconds
+        lapData.forEach(lap => {
+            const lapTime = parseDurationToSeconds(lap.duration);
+            if (lapTime > maxLapTime) {
+                maxLapTime = lapTime;
+            }
+        });
+
+        lapData.forEach(lap => {
+            lapNumbers.push(`Lap ${lap.nr}`);
+            const lapTime = parseDurationToSeconds(lap.duration);
+            lapTimesInSeconds.push(lapTime);
+
+            if (lapTime <= MAX_FAST_LAP_TIME_SECONDS) {
+                backgroundColors.push('rgba(0, 123, 255, 0.8)'); // Darker blue
+                borderColors.push('rgba(0, 123, 255, 1)');
+            } else {
+                backgroundColors.push('rgba(173, 216, 230, 0.6)'); // Lighter, desaturated blue
+                borderColors.push('rgba(173, 216, 230, 0.8)');
+            }
+        });
+
+        if (lapChart) {
+            lapChart.destroy();
+        }
+
+        lapChart = new Chart(lapTimeChartCanvas, {
+            type: 'bar',
+            data: {
+                labels: lapNumbers,
+                datasets: [{
+                    label: 'Lap Time',
+                    data: lapTimesInSeconds,
+                    backgroundColor: backgroundColors,
+                    borderColor: borderColors,
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Lap Number'
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Lap Time'
+                        },
+                        beginAtZero: false,
+                        suggestedMax: maxLapTime > 0 ? maxLapTime * 1.1 : MAX_FAST_LAP_TIME_SECONDS * 1.5,
+                        ticks: {
+                            callback: function(value, index, ticks) {
+                                return formatSecondsToDuration(value);
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += formatSecondsToDuration(context.parsed.y);
+                                }
+                                return label;
+                            }
+                        }
+                    },
+                    datalabels: {
+                        display: true,
+                        color: function(context) {
+                            const value = context.dataset.data[context.dataIndex];
+                            return value <= MAX_FAST_LAP_TIME_SECONDS ? '#fff' : '#333';
+                        },
+                        anchor: 'center',
+                        align: 'center',
+                        font: {
+                            weight: 'bold',
+                            size: 10
+                        },
+                        formatter: function(value, context) {
+                            return formatSecondsToDuration(value);
+                        },
+                        rotation: 270
+                    }
+                }
+            }
+        });
+    }
+
 
     fetchActivitiesBtn.addEventListener('click', async () => {
         resetUI();
@@ -166,6 +285,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // We moeten de ruwe lap data opslaan, zodat we de grafiek opnieuw kunnen tekenen bij een slider-wijziging
+    let currentLapData = [];
+
     fetchLapsBtn.addEventListener('click', async () => {
         hide(lapsDataDiv);
         lapsOutput.textContent = '';
@@ -189,125 +311,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(errorData.error || `Proxy error: ${response.status} ${response.statusText}`);
             }
             const activitySessions = await response.json();
-            const specificActivityData = activitySessions.sessions[0]?.laps || [];
+            currentLapData = activitySessions.sessions[0]?.laps || []; // Sla de data op
 
             hide(loadingDiv);
             show(lapsDataDiv);
 
-            if (specificActivityData.length > 0) {
+            if (currentLapData.length > 0) {
                 let lapsText = 'Lap Number - Duration\n---------------------\n';
-                const lapNumbers = [];
-                const lapTimesInSeconds = [];
-                const backgroundColors = [];
-                const borderColors = [];
-
-                // Calculate max lap time for suggestedMax if desired
-                let maxLapTime = 0; // In seconds
-                specificActivityData.forEach(lap => {
-                    const lapTime = parseDurationToSeconds(lap.duration);
-                    if (lapTime > maxLapTime) {
-                        maxLapTime = lapTime;
-                    }
-                });
-
-                specificActivityData.forEach(lap => {
+                currentLapData.forEach(lap => {
                     lapsText += `${String(lap.nr).padEnd(12)} - ${lap.duration}\n`;
-                    lapNumbers.push(`Lap ${lap.nr}`);
-                    const lapTime = parseDurationToSeconds(lap.duration);
-                    lapTimesInSeconds.push(lapTime);
-
-                    if (lapTime <= MAX_FAST_LAP_TIME_SECONDS) {
-                        backgroundColors.push('rgba(0, 123, 255, 0.8)'); // Darker blue
-                        borderColors.push('rgba(0, 123, 255, 1)');
-                    } else {
-                        backgroundColors.push('rgba(173, 216, 230, 0.6)'); // Lighter, desaturated blue
-                        borderColors.push('rgba(173, 216, 230, 0.8)');
-                    }
                 });
                 lapsOutput.textContent = lapsText;
 
-                if (lapChart) {
-                    lapChart.destroy();
-                }
-
-                lapChart = new Chart(lapTimeChartCanvas, {
-                    type: 'bar',
-                    data: {
-                        labels: lapNumbers,
-                        datasets: [{
-                            label: 'Lap Time',
-                            data: lapTimesInSeconds,
-                            backgroundColor: backgroundColors,
-                            borderColor: borderColors,
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            x: {
-                                title: {
-                                    display: true,
-                                    text: 'Lap Number'
-                                }
-                            },
-                            y: {
-                                title: {
-                                    display: true,
-                                    text: 'Lap Time'
-                                },
-                                beginAtZero: false, // Start at a relevant time, not necessarily 0
-                                // Suggested Max: Calculate a max based on the data,
-                                // or use a fixed value slightly above MAX_FAST_LAP_TIME_SECONDS
-                                // to keep fast laps more prominent.
-                                // Let's try 1.2 * the slowest lap time to give some buffer.
-                                // If maxLapTime is very high, this will still scale appropriately.
-                                suggestedMax: maxLapTime > 0 ? maxLapTime * 1.1 : MAX_FAST_LAP_TIME_SECONDS * 1.5,
-                                ticks: {
-                                    callback: function(value, index, ticks) {
-                                        return formatSecondsToDuration(value);
-                                    }
-                                }
-                            }
-                        },
-                        plugins: {
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        let label = context.dataset.label || '';
-                                        if (label) {
-                                            label += ': ';
-                                        }
-                                        if (context.parsed.y !== null) {
-                                            label += formatSecondsToDuration(context.parsed.y);
-                                        }
-                                        return label;
-                                    }
-                                }
-                            },
-                            datalabels: { // Configuration for chartjs-plugin-datalabels
-                                display: true,
-                                color: function(context) {
-                                    const value = context.dataset.data[context.dataIndex];
-                                    // Bepaal de tekstkleur gebaseerd op de achtergrondkleur van de balk
-                                    // Donkere balken => lichte tekst, lichte balken => donkere tekst
-                                    return value <= MAX_FAST_LAP_TIME_SECONDS ? '#fff' : '#333';
-                                },
-                                anchor: 'center',
-                                align: 'center',
-                                font: {
-                                    weight: 'bold',
-                                    size: 10
-                                },
-                                formatter: function(value, context) {
-                                    return formatSecondsToDuration(value);
-                                },
-                                rotation: 270 // Draai de tekst 90 graden tegen de klok in (verticaal)
-                            }
-                        }
-                    }
-                });
+                // Roep de update functie aan om de grafiek te tekenen
+                updateLapChart(currentLapData);
 
             } else {
                 lapsOutput.textContent = "No lap data found for the selected activity.";
@@ -339,7 +356,21 @@ document.addEventListener('DOMContentLoaded', () => {
             lapChart.destroy();
             lapChart = null;
         }
+        currentLapData = []; // Reset stored lap data
     });
 
+    // Event listener voor de slider
+    maxFastLapSlider.addEventListener('input', () => {
+        MAX_FAST_LAP_TIME_SECONDS = parseInt(maxFastLapSlider.value, 10);
+        maxFastLapValueSpan.textContent = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
+
+        // Als er lap data geladen is, update de grafiek direct
+        if (currentLapData.length > 0) {
+            updateLapChart(currentLapData);
+        }
+    });
+
+    // Initialiseer de tekst van de slider-waarde bij het laden van de pagina
+    maxFastLapValueSpan.textContent = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
     resetUI();
 });
