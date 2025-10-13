@@ -8,11 +8,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const fetchLapsBtn = document.getElementById('fetchLapsBtn');
     const lapsDataDiv = document.getElementById('lapsData');
     const lapsOutput = document.getElementById('lapsOutput');
+    const lapTimeChartCanvas = document.getElementById('lapTimeChart');
 
-    // Base URL for your proxy server (Google Cloud Function)
     const PROXY_BASE_URL = 'https://us-central1-proxyapi-475018.cloudfunctions.net/mylapsProxyFunction/api/mylaps';
 
     let userActivities = []; // To store fetched activities
+    let lapChart = null; // Variable to hold our Chart.js instance
 
     function show(element) {
         element.classList.remove('hidden');
@@ -32,25 +33,67 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchLapsBtn.disabled = true;
         lapsOutput.textContent = '';
         userActivities = [];
+
+        // Destroy previous chart instance if it exists
+        if (lapChart) {
+            lapChart.destroy();
+            lapChart = null;
+        }
     }
 
     // Function to format date to DD/MM/YYYY - HH:MM
     function formatDateTime(isoString) {
         const date = new Date(isoString);
-        // Using toLocaleString for potentially better timezone handling and less manual formatting,
-        // but explicitly setting options to match DD/MM/YYYY - HH:MM
         const options = {
             day: '2-digit',
             month: '2-digit',
             year: 'numeric',
             hour: '2-digit',
             minute: '2-digit',
-            hour12: false // Use 24-hour format
+            hour12: false
         };
-        // For consistent output like "DD/MM/YYYY - HH:MM", we might need to do some string manipulation
-        // as toLocaleString's separator can vary by locale.
-        const parts = date.toLocaleString('en-GB', options).split(', '); // Example: "01/01/2023, 14:30"
+        const parts = date.toLocaleString('en-GB', options).split(', ');
         return `${parts[0]} - ${parts[1]}`;
+    }
+
+    // Function to parse duration string (e.g., "54.551" or "1:20.259") into seconds
+    function parseDurationToSeconds(durationString) {
+        const parts = durationString.split(':');
+        let totalSeconds = 0;
+        if (parts.length === 1) { // Format: "SS.ms" (e.g., "54.551")
+            totalSeconds = parseFloat(parts[0]);
+        } else if (parts.length === 2) { // Format: "MM:SS.ms" (e.g., "1:20.259")
+            const minutes = parseInt(parts[0], 10);
+            const seconds = parseFloat(parts[1]);
+            totalSeconds = (minutes * 60) + seconds;
+        } else if (parts.length === 3) { // Format: "HH:MM:SS.ms" (less common for laps, but good to handle)
+            const hours = parseInt(parts[0], 10);
+            const minutes = parseInt(parts[1], 10);
+            const seconds = parseFloat(parts[2]);
+            totalSeconds = (hours * 3600) + (minutes * 60) + seconds;
+        }
+        return totalSeconds;
+    }
+
+    // Function to format seconds back to MM:SS.ms or SS.ms for chart tooltips/labels
+    function formatSecondsToDuration(totalSeconds) {
+        if (isNaN(totalSeconds) || totalSeconds < 0) return '';
+
+        const minutes = Math.floor(totalSeconds / 60);
+        const remainingSeconds = totalSeconds % 60;
+
+        const secondsPart = remainingSeconds.toFixed(3); // Keep milliseconds
+        const [sec, ms] = secondsPart.split('.');
+
+        const formattedSec = String(sec).padStart(2, '0');
+        const formattedMs = ms || '000'; // Ensure milliseconds are present
+
+        if (minutes > 0) {
+            const formattedMin = String(minutes).padStart(2, '0');
+            return `${formattedMin}:${formattedSec}.${formattedMs}`;
+        } else {
+            return `${formattedSec}.${formattedMs}`;
+        }
     }
 
 
@@ -67,7 +110,6 @@ document.addEventListener('DOMContentLoaded', () => {
         show(loadingDiv);
 
         try {
-            // Step 1: Get User ID via your proxy
             let url = `${PROXY_BASE_URL}/userid/${transponder}`;
             let response = await fetch(url);
 
@@ -78,7 +120,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const userData = await response.json();
             const userID = userData.userId;
 
-            // Step 2: Get Activities via your proxy
             url = `${PROXY_BASE_URL}/activities/${userID}`;
             response = await fetch(url);
 
@@ -95,13 +136,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 userActivities.forEach(activity => {
                     const option = document.createElement('option');
                     option.value = activity.id;
-                    // Format the start time using the new function
                     const formattedTime = formatDateTime(activity.startTime);
                     option.textContent = `${formattedTime} - ${activity.location.sport} - ${activity.location.name}`;
                     activitySelect.appendChild(option);
                 });
                 show(activitiesListDiv);
-                // Only enable fetchLapsBtn if there are activities to select AND one is selected
                 fetchLapsBtn.disabled = !activitySelect.value;
             } else {
                 errorDiv.textContent = "No activities found for this transponder.";
@@ -111,7 +150,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error("Error fetching activities via proxy:", error);
             hide(loadingDiv);
-            // Updated error message to mention the Cloud Function specifically
             errorDiv.textContent = `Error: ${error.message}. Please check the transponder number and ensure your Cloud Function proxy is running and accessible.`;
             show(errorDiv);
         }
@@ -132,7 +170,6 @@ document.addEventListener('DOMContentLoaded', () => {
         show(loadingDiv);
 
         try {
-            // Step 3: Get Laps for Selected Activity via your proxy
             const url = `${PROXY_BASE_URL}/laps/${selectedActivityId}`;
             const response = await fetch(url);
 
@@ -148,12 +185,82 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (specificActivityData.length > 0) {
                 let lapsText = 'Lap Number - Duration\n---------------------\n';
+                const lapNumbers = [];
+                const lapTimesInSeconds = [];
+
                 specificActivityData.forEach(lap => {
                     lapsText += `${String(lap.nr).padEnd(12)} - ${lap.duration}\n`;
+                    lapNumbers.push(`Lap ${lap.nr}`); // X-axis labels
+                    lapTimesInSeconds.push(parseDurationToSeconds(lap.duration)); // Y-axis values
                 });
                 lapsOutput.textContent = lapsText;
+
+                // --- Chart.js Integration ---
+                if (lapChart) {
+                    lapChart.destroy(); // Destroy previous chart if it exists
+                }
+
+                lapChart = new Chart(lapTimeChartCanvas, {
+                    type: 'bar', // Vertical bar chart
+                    data: {
+                        labels: lapNumbers, // Lap numbers on X-axis
+                        datasets: [{
+                            label: 'Lap Time',
+                            data: lapTimesInSeconds, // Lap times on Y-axis (in seconds)
+                            backgroundColor: 'rgba(0, 123, 255, 0.7)', // Blue bars
+                            borderColor: 'rgba(0, 123, 255, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false, // Allows chart to take specified height/width
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Lap Number'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Lap Time'
+                                },
+                                beginAtZero: false, // Lap times usually don't start at zero
+                                ticks: {
+                                    // Custom formatter for Y-axis ticks
+                                    callback: function(value, index, ticks) {
+                                        return formatSecondsToDuration(value);
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.parsed.y !== null) {
+                                            label += formatSecondsToDuration(context.parsed.y);
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
             } else {
                 lapsOutput.textContent = "No lap data found for the selected activity.";
+                if (lapChart) {
+                    lapChart.destroy(); // Destroy chart if no data
+                    lapChart = null;
+                }
             }
 
         } catch (error) {
@@ -162,6 +269,10 @@ document.addEventListener('DOMContentLoaded', () => {
             errorDiv.textContent = `Error: ${error.message}. Could not retrieve lap data.`;
             show(errorDiv);
             hide(lapsDataDiv);
+            if (lapChart) {
+                lapChart.destroy(); // Destroy chart on error
+                lapChart = null;
+            }
         }
     });
 
@@ -170,6 +281,10 @@ document.addEventListener('DOMContentLoaded', () => {
         lapsOutput.textContent = '';
         hide(errorDiv);
         fetchLapsBtn.disabled = !activitySelect.value;
+        if (lapChart) { // Destroy chart when activity selection changes
+            lapChart.destroy();
+            lapChart = null;
+        }
     });
 
     // Initial state setup
