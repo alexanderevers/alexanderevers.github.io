@@ -15,10 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let userActivities = [];
     let lapChart = null;
 
-    // Define the threshold for "fast" laps (e.g., 1 minute = 60 seconds)
     const MAX_FAST_LAP_TIME_SECONDS = 60; // 1 minute
 
-    // Register the datalabels plugin globally once
     Chart.register(ChartDataLabels);
 
     function show(element) {
@@ -84,7 +82,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const minutes = Math.floor(totalSeconds / 60);
         const remainingSeconds = totalSeconds % 60;
 
-        // Ensure milliseconds are always 3 digits
         const secondsPart = remainingSeconds.toFixed(3);
         const [sec, ms] = secondsPart.split('.');
 
@@ -92,11 +89,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const formattedMs = ms || '000';
 
         if (minutes > 0) {
-            const formattedMin = String(minutes).padStart(1, '0'); // Minutes don't need padding if < 10
+            const formattedMin = String(minutes).padStart(1, '0');
             return `${formattedMin}:${formattedSec}.${formattedMs}`;
         } else {
             return `${formattedSec}.${formattedMs}`;
         }
+    }
+
+    // New validation function for transponder number format
+    function isValidTransponderFormat(transponder) {
+        // Regular expression for XX-12345:
+        // ^      - start of string
+        // [A-Z]{2} - exactly two uppercase letters
+        // -      - a literal hyphen
+        // \d{5}  - exactly five digits
+        // $      - end of string
+        const regex = /^[A-Z]{2}-\d{5}$/;
+        return regex.test(transponder);
     }
 
 
@@ -108,6 +117,13 @@ document.addEventListener('DOMContentLoaded', () => {
             errorDiv.textContent = "Please enter a transponder number.";
             show(errorDiv);
             return;
+        }
+
+        // Add the format validation here
+        if (!isValidTransponderFormat(transponder)) {
+            errorDiv.textContent = "Invalid transponder format. Expected: XX-12345 (e.g., AB-12345).";
+            show(errorDiv);
+            return; // Stop execution if format is invalid
         }
 
         show(loadingDiv);
@@ -199,20 +215,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     const lapTime = parseDurationToSeconds(lap.duration);
                     lapTimesInSeconds.push(lapTime);
 
-                    // Determine color based on lap time
                     if (lapTime <= MAX_FAST_LAP_TIME_SECONDS) {
-                        // Fast lap (e.g., <= 60 seconds) - darker blue
                         backgroundColors.push('rgba(0, 123, 255, 0.8)');
                         borderColors.push('rgba(0, 123, 255, 1)');
                     } else {
-                        // Slower lap (> 60 seconds) - lighter, desaturated color
-                        backgroundColors.push('rgba(173, 216, 230, 0.6)'); // Light blue, more transparent
+                        backgroundColors.push('rgba(173, 216, 230, 0.6)');
                         borderColors.push('rgba(173, 216, 230, 0.8)');
                     }
                 });
                 lapsOutput.textContent = lapsText;
 
-                // --- Chart.js Integration ---
                 if (lapChart) {
                     lapChart.destroy();
                 }
@@ -224,8 +236,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         datasets: [{
                             label: 'Lap Time',
                             data: lapTimesInSeconds,
-                            backgroundColor: backgroundColors, // Use array of colors
-                            borderColor: borderColors,       // Use array of colors
+                            backgroundColor: backgroundColors,
+                            borderColor: borderColors,
                             borderWidth: 1
                         }]
                     },
@@ -267,21 +279,19 @@ document.addEventListener('DOMContentLoaded', () => {
                                     }
                                 }
                             },
-                            datalabels: { // Configuration for chartjs-plugin-datalabels
+                            datalabels: {
                                 display: true,
                                 color: function(context) {
-                                    // Make text dark for light bars, light for dark bars
                                     const value = context.dataset.data[context.dataIndex];
                                     return value <= MAX_FAST_LAP_TIME_SECONDS ? '#fff' : '#333';
                                 },
-                                anchor: 'center', // Position the label in the center of the bar
+                                anchor: 'center',
                                 align: 'center',
                                 font: {
                                     weight: 'bold',
                                     size: 10
                                 },
                                 formatter: function(value, context) {
-                                    // Format the label to MM:SS.ms or SS.ms
                                     return formatSecondsToDuration(value);
                                 }
                             }
