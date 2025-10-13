@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const errorDiv = document.getElementById('error');
     const activitiesListDiv = document.getElementById('activitiesList');
     const activitySelect = document.getElementById('activitySelect');
-    const fetchLapsBtn = document.getElementById('fetchLapsBtn');
+    const fetchLapsBtn = document = document.getElementById('fetchLapsBtn');
     const lapsDataDiv = document.getElementById('lapsData');
     const lapsOutput = document.getElementById('lapsOutput');
     const lapTimeChartCanvas = document.getElementById('lapTimeChart');
@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let userActivities = [];
     let lapChart = null;
 
-    const MAX_FAST_LAP_TIME_SECONDS = 60; // 1 minute
+    const MAX_FAST_LAP_TIME_SECONDS = 60; // 1 minuut
 
     Chart.register(ChartDataLabels);
 
@@ -96,14 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // New validation function for transponder number format
     function isValidTransponderFormat(transponder) {
-        // Regular expression for XX-12345:
-        // ^      - start of string
-        // [A-Z]{2} - exactly two uppercase letters
-        // -      - a literal hyphen
-        // \d{5}  - exactly five digits
-        // $      - end of string
         const regex = /^[A-Z]{2}-\d{5}$/;
         return regex.test(transponder);
     }
@@ -119,11 +112,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Add the format validation here
         if (!isValidTransponderFormat(transponder)) {
             errorDiv.textContent = "Invalid transponder format. Expected: XX-12345 (e.g., AB-12345).";
             show(errorDiv);
-            return; // Stop execution if format is invalid
+            return;
         }
 
         show(loadingDiv);
@@ -209,6 +201,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 const backgroundColors = [];
                 const borderColors = [];
 
+                // Calculate max lap time for suggestedMax if desired
+                let maxLapTime = 0; // In seconds
+                specificActivityData.forEach(lap => {
+                    const lapTime = parseDurationToSeconds(lap.duration);
+                    if (lapTime > maxLapTime) {
+                        maxLapTime = lapTime;
+                    }
+                });
+
                 specificActivityData.forEach(lap => {
                     lapsText += `${String(lap.nr).padEnd(12)} - ${lap.duration}\n`;
                     lapNumbers.push(`Lap ${lap.nr}`);
@@ -216,10 +217,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     lapTimesInSeconds.push(lapTime);
 
                     if (lapTime <= MAX_FAST_LAP_TIME_SECONDS) {
-                        backgroundColors.push('rgba(0, 123, 255, 0.8)');
+                        backgroundColors.push('rgba(0, 123, 255, 0.8)'); // Darker blue
                         borderColors.push('rgba(0, 123, 255, 1)');
                     } else {
-                        backgroundColors.push('rgba(173, 216, 230, 0.6)');
+                        backgroundColors.push('rgba(173, 216, 230, 0.6)'); // Lighter, desaturated blue
                         borderColors.push('rgba(173, 216, 230, 0.8)');
                     }
                 });
@@ -256,7 +257,13 @@ document.addEventListener('DOMContentLoaded', () => {
                                     display: true,
                                     text: 'Lap Time'
                                 },
-                                beginAtZero: false,
+                                beginAtZero: false, // Start at a relevant time, not necessarily 0
+                                // Suggested Max: Calculate a max based on the data,
+                                // or use a fixed value slightly above MAX_FAST_LAP_TIME_SECONDS
+                                // to keep fast laps more prominent.
+                                // Let's try 1.2 * the slowest lap time to give some buffer.
+                                // If maxLapTime is very high, this will still scale appropriately.
+                                suggestedMax: maxLapTime > 0 ? maxLapTime * 1.1 : MAX_FAST_LAP_TIME_SECONDS * 1.5,
                                 ticks: {
                                     callback: function(value, index, ticks) {
                                         return formatSecondsToDuration(value);
@@ -279,10 +286,12 @@ document.addEventListener('DOMContentLoaded', () => {
                                     }
                                 }
                             },
-                            datalabels: {
+                            datalabels: { // Configuration for chartjs-plugin-datalabels
                                 display: true,
                                 color: function(context) {
                                     const value = context.dataset.data[context.dataIndex];
+                                    // Bepaal de tekstkleur gebaseerd op de achtergrondkleur van de balk
+                                    // Donkere balken => lichte tekst, lichte balken => donkere tekst
                                     return value <= MAX_FAST_LAP_TIME_SECONDS ? '#fff' : '#333';
                                 },
                                 anchor: 'center',
@@ -293,7 +302,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                 },
                                 formatter: function(value, context) {
                                     return formatSecondsToDuration(value);
-                                }
+                                },
+                                rotation: 270 // Draai de tekst 90 graden tegen de klok in (verticaal)
                             }
                         }
                     }
