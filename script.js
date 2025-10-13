@@ -9,11 +9,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const lapsDataDiv = document.getElementById('lapsData');
     const lapsOutput = document.getElementById('lapsOutput');
 
-    const MYLAPS_std_header = {
-        "Accept": "application/json",
-        "Origin": "https://speedhive.mylaps.com",
-        "Referer": "https://speedhive.mylaps.com/",
-    };
+    // Base URL for your proxy server
+    const PROXY_BASE_URL = 'http://localhost:3000/api/mylaps'; // Adjust if your proxy is on a different host/port
 
     let userActivities = []; // To store fetched activities
 
@@ -50,24 +47,25 @@ document.addEventListener('DOMContentLoaded', () => {
         show(loadingDiv);
 
         try {
-            // Step 1: Get User ID
-            let url = `https://usersandproducts-api.speedhive.com/api/v2/products/chips/code/${transponder}/account`;
-            let response = await fetch(url, { headers: MYLAPS_std_header });
+            // Step 1: Get User ID via your proxy
+            let url = `${PROXY_BASE_URL}/userid/${transponder}`;
+            let response = await fetch(url);
 
             if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Failed to fetch User ID: ${response.status} ${response.statusText} - ${errorText}`);
+                // If proxy sends an error, it should be in JSON format
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Proxy error: ${response.status} ${response.statusText}`);
             }
             const userData = await response.json();
             const userID = userData.userId;
 
-            // Step 2: Get Activities
-            url = `https://practice-api.speedhive.com/api/v1/accounts/${userID}/training/activities?count=100`;
-            response = await fetch(url, { headers: MYLAPS_std_header });
+            // Step 2: Get Activities via your proxy
+            url = `${PROXY_BASE_URL}/activities/${userID}`;
+            response = await fetch(url);
 
             if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Failed to fetch activities: ${response.status} ${response.statusText} - ${errorText}`);
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Proxy error: ${response.status} ${response.statusText}`);
             }
             const activitiesResponse = await response.json();
             userActivities = activitiesResponse.activities || [];
@@ -78,20 +76,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 userActivities.forEach(activity => {
                     const option = document.createElement('option');
                     option.value = activity.id;
-                    option.textContent = `ID: ${activity.id} - Time: ${new Date(activity.startTime).toLocaleString()}, Name: ${activity.location.sport} - ${activity.location.name}`;
+                    // Format time for better readability
+                    const startTime = new Date(activity.startTime).toLocaleString();
+                    option.textContent = `ID: ${activity.id} - Time: ${startTime}, Name: ${activity.location.sport} - ${activity.location.name}`;
                     activitySelect.appendChild(option);
                 });
                 show(activitiesListDiv);
-                fetchLapsBtn.disabled = false; // Enable if activities are found
+                // Only enable fetchLapsBtn if there are activities to select
+                fetchLapsBtn.disabled = !activitySelect.value;
             } else {
                 errorDiv.textContent = "No activities found for this transponder.";
                 show(errorDiv);
             }
 
         } catch (error) {
-            console.error("Error fetching activities:", error);
+            console.error("Error fetching activities via proxy:", error);
             hide(loadingDiv);
-            errorDiv.textContent = `Error: ${error.message}. Please check the transponder number and ensure the API is accessible.`;
+            errorDiv.textContent = `Error: ${error.message}. Please check the transponder number and ensure your proxy server is running.`;
             show(errorDiv);
         }
     });
@@ -111,13 +112,13 @@ document.addEventListener('DOMContentLoaded', () => {
         show(loadingDiv);
 
         try {
-            // Step 3: Get Laps for Selected Activity
-            const url = `https://practice-api.speedhive.com/api/v1/training/activities/${selectedActivityId}/sessions`;
-            const response = await fetch(url, { headers: MYLAPS_std_header });
+            // Step 3: Get Laps for Selected Activity via your proxy
+            const url = `${PROXY_BASE_URL}/laps/${selectedActivityId}`;
+            const response = await fetch(url);
 
             if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Failed to fetch lap data: ${response.status} ${response.statusText} - ${errorText}`);
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Proxy error: ${response.status} ${response.statusText}`);
             }
             const activitySessions = await response.json();
             const specificActivityData = activitySessions.sessions[0]?.laps || [];
@@ -126,9 +127,11 @@ document.addEventListener('DOMContentLoaded', () => {
             show(lapsDataDiv);
 
             if (specificActivityData.length > 0) {
-                let lapsText = '';
+                let lapsText = 'Lap Number - Duration\n---------------------\n';
                 specificActivityData.forEach(lap => {
-                    lapsText += `${lap.nr} - \t\t ${lap.duration}\n`;
+                    // Format duration if needed (e.g., from seconds to HH:MM:SS.ms)
+                    // For now, displaying as is, assuming it's already a string or number
+                    lapsText += `${String(lap.nr).padEnd(12)} - ${lap.duration}\n`;
                 });
                 lapsOutput.textContent = lapsText;
             } else {
@@ -136,7 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
         } catch (error) {
-            console.error("Error fetching laps:", error);
+            console.error("Error fetching laps via proxy:", error);
             hide(loadingDiv);
             errorDiv.textContent = `Error: ${error.message}. Could not retrieve lap data.`;
             show(errorDiv);
@@ -149,11 +152,9 @@ document.addEventListener('DOMContentLoaded', () => {
         hide(lapsDataDiv);
         lapsOutput.textContent = '';
         hide(errorDiv); // Clear any previous errors
-        if (activitySelect.value) {
-            fetchLapsBtn.disabled = false;
-        } else {
-            fetchLapsBtn.disabled = true;
-        }
+
+        // Enable "Fetch Laps" button only if an activity is selected
+        fetchLapsBtn.disabled = !activitySelect.value;
     });
 
     // Initial state setup
