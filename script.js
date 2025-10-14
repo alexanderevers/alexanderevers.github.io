@@ -12,6 +12,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const lapsOutput = document.getElementById('lapsOutput');
     const lapTimeChartCanvas = document.getElementById('lapTimeChart');
+    
+    const chartContainer = document.querySelector('.chart-container');
 
     const maxFastLapSlider = document.getElementById('maxFastLapSlider');
     const maxFastLapInput = document.getElementById('maxFastLapInput');
@@ -74,6 +76,11 @@ document.addEventListener('DOMContentLoaded', () => {
         userActivities = [];
         currentLapData = [];
 
+        // --- AANGEPAST: Reset de hoogte van de grafiek ---
+        if(chartContainer) {
+            chartContainer.style.height = ''; // Verwijder inline stijl, CSS pakt het weer over
+        }
+
         if (lapChart) {
             lapChart.destroy();
             lapChart = null;
@@ -131,6 +138,15 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
     
+        const numberOfLaps = lapData.length;
+        const heightPerLap = 25;
+        const minChartHeight = 400;
+        const calculatedHeight = Math.max(minChartHeight, numberOfLaps * heightPerLap);
+        
+        if (chartContainer) {
+            chartContainer.style.height = `${calculatedHeight}px`;
+        }
+
         const lapNumbers = [];
         const lapTimesInSeconds = [];
         const backgroundColors = [];
@@ -144,14 +160,12 @@ document.addEventListener('DOMContentLoaded', () => {
     
         const yAxisMin = Math.max(0, minLapTime - 5);
     
-        // --- HIER ZAT DE FOUT ---
-        // Het is nu gecorrigeerd.
         lapData.forEach((lap, index) => {
             lapNumbers.push(`Lap ${index + 1}`);
-            const lapTime = parseDurationToSeconds(lap.duration); // GECORRIGEERD: Gebruik 'lapTime'
-            lapTimesInSeconds.push(lapTime); // GECORRIGEERD: Voeg 'lapTime' toe aan de array
+            const lapTime = parseDurationToSeconds(lap.duration);
+            lapTimesInSeconds.push(lapTime);
     
-            if (lapTime <= MAX_FAST_LAP_TIME_SECONDS) { // GECORRIGEERD: Gebruik 'lapTime' voor de vergelijking
+            if (lapTime <= MAX_FAST_LAP_TIME_SECONDS) {
                 backgroundColors.push('rgba(0, 123, 255, 0.8)');
                 borderColors.push('rgba(0, 123, 255, 1)');
             } else {
@@ -175,16 +189,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 }]
             },
             options: {
+                indexAxis: 'y',
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
-                    x: { title: { display: true, text: 'Lap Number' } },
-                    y: {
+                    x: { 
                         title: { display: true, text: 'Lap Time' },
                         beginAtZero: false,
                         min: yAxisMin,
-                        max: MAX_FAST_LAP_TIME_SECONDS + 1,
+                        max: MAX_FAST_LAP_TIME_SECONDS/* + 1*/,
                         ticks: { callback: value => formatSecondsToDuration(value) }
+                    },
+                    y: { 
+                        title: { display: true, text: 'Lap Number' }
                     }
                 },
                 plugins: {
@@ -193,30 +210,13 @@ document.addEventListener('DOMContentLoaded', () => {
                             label: context => {
                                 let label = context.dataset.label || '';
                                 if (label) label += ': ';
-                                if (context.parsed.y !== null) label += formatSecondsToDuration(context.parsed.y);
+                                if (context.parsed.x !== null) {
+                                    label += formatSecondsToDuration(context.parsed.x);
+                                }
                                 return label;
                             }
                         }
                     },
-                    /*
-                    datalabels: {
-                        display: function(context) {
-                            return context.dataset.data[context.dataIndex] > MAX_FAST_LAP_TIME_SECONDS;
-                        },
-                        anchor: 'center',
-                        align: 'bottom',
-                        offset: 8,
-                        color: '#333',
-                        font: {
-                            weight: 'bold',
-                            size: 10
-                        },
-                        formatter: function(value) {
-                            return formatSecondsToDuration(value);
-                        },
-                        rotation: 270
-                    }
-                    */
                     datalabels: {
                         display: false
                     }
@@ -343,6 +343,12 @@ document.addEventListener('DOMContentLoaded', () => {
         hide(errorDiv);
         hide(maxFastLapControls);
         fetchLapsBtn.disabled = !activitySelect.value;
+        
+        // --- AANGEPAST: Reset de hoogte van de grafiek ---
+        if(chartContainer) {
+            chartContainer.style.height = ''; // Verwijder inline stijl, CSS pakt het weer over
+        }
+
         if (lapChart) {
             lapChart.destroy();
             lapChart = null;
