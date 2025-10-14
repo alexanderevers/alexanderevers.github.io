@@ -199,8 +199,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     },
                     /*
-                    // Dit is de oude code voor het tonen van de verticale tekst.
-                    // Om het weer aan te zetten, verwijder de /* en */ en haal de regel "display: false" hieronder weg.
                     datalabels: {
                         display: function(context) {
                             return context.dataset.data[context.dataIndex] > MAX_FAST_LAP_TIME_SECONDS;
