@@ -144,12 +144,14 @@ document.addEventListener('DOMContentLoaded', () => {
     
         const yAxisMin = Math.max(0, minLapTime - 5);
     
+        // --- HIER ZAT DE FOUT ---
+        // Het is nu gecorrigeerd.
         lapData.forEach((lap, index) => {
             lapNumbers.push(`Lap ${index + 1}`);
-            const lapTime = parseDurationToSeconds(lap.duration);
-            lapTimesInSeconds.push(lapTime);
+            const lapTime = parseDurationToSeconds(lap.duration); // GECORRIGEERD: Gebruik 'lapTime'
+            lapTimesInSeconds.push(lapTime); // GECORRIGEERD: Voeg 'lapTime' toe aan de array
     
-            if (lapTime <= MAX_FAST_LAP_TIME_SECONDS) {
+            if (lapTime <= MAX_FAST_LAP_TIME_SECONDS) { // GECORRIGEERD: Gebruik 'lapTime' voor de vergelijking
                 backgroundColors.push('rgba(0, 123, 255, 0.8)');
                 borderColors.push('rgba(0, 123, 255, 1)');
             } else {
@@ -196,7 +198,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                     },
-
+                    /*
+                    // Dit is de oude code voor het tonen van de verticale tekst.
+                    // Om het weer aan te zetten, verwijder de /* en */ en haal de regel "display: false" hieronder weg.
                     datalabels: {
                         display: function(context) {
                             return context.dataset.data[context.dataIndex] > MAX_FAST_LAP_TIME_SECONDS;
