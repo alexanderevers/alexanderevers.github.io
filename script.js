@@ -12,7 +12,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const lapsOutput = document.getElementById('lapsOutput');
     const lapTimeChartCanvas = document.getElementById('lapTimeChart');
-    
     const chartContainer = document.querySelector('.chart-container');
 
     const maxFastLapSlider = document.getElementById('maxFastLapSlider');
@@ -30,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
 
+    // Registreer alleen de datalabels plugin. De glow plugin is verwijderd.
     Chart.register(ChartDataLabels);
 
     function loadSavedTransponders() {
@@ -46,7 +46,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function saveTransponder(transponder) {
         const saved = localStorage.getItem(TRANSPONDER_STORAGE_KEY);
         let transponders = saved ? JSON.parse(saved) : [];
-        
         if (!transponders.includes(transponder)) {
             transponders.push(transponder);
             localStorage.setItem(TRANSPONDER_STORAGE_KEY, JSON.stringify(transponders));
@@ -75,12 +74,9 @@ document.addEventListener('DOMContentLoaded', () => {
         lapsOutput.textContent = '';
         userActivities = [];
         currentLapData = [];
-
-        // --- AANGEPAST: Reset de hoogte van de grafiek ---
-        if(chartContainer) {
-            chartContainer.style.height = ''; // Verwijder inline stijl, CSS pakt het weer over
+        if (chartContainer) {
+            chartContainer.style.height = '';
         }
-
         if (lapChart) {
             lapChart.destroy();
             lapChart = null;
@@ -98,6 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function parseDurationToSeconds(durationString) {
+        if (typeof durationString !== 'string') return NaN;
         const parts = durationString.split(':');
         let totalSeconds = 0;
         if (parts.length === 1) {
@@ -140,7 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
         const numberOfLaps = lapData.length;
         const heightPerLap = 25;
-        const minChartHeight = 400;
+        const minChartHeight = 300;
         const calculatedHeight = Math.max(minChartHeight, numberOfLaps * heightPerLap);
         
         if (chartContainer) {
@@ -151,6 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const lapTimesInSeconds = [];
         const backgroundColors = [];
         const borderColors = [];
+        const borderWidths = []; // Array voor de dikte van de rand
     
         let minLapTime = Infinity;
         lapData.forEach(lap => {
@@ -167,10 +165,20 @@ document.addEventListener('DOMContentLoaded', () => {
     
             if (lapTime <= MAX_FAST_LAP_TIME_SECONDS) {
                 backgroundColors.push('rgba(0, 123, 255, 0.8)');
-                borderColors.push('rgba(0, 123, 255, 1)');
+                if (lap.status === 'FASTER') {
+                    borderColors.push('rgba(46, 204, 113, 0.9)'); // Lichtgroen
+                    borderWidths.push(3);
+                } else if (lap.status === 'SLOWER') {
+                    borderColors.push('rgba(231, 76, 60, 0.9)'); // Lichtrood
+                    borderWidths.push(3);
+                } else {
+                    borderColors.push('rgba(0, 123, 255, 1)');
+                    borderWidths.push(1);
+                }
             } else {
                 backgroundColors.push('rgba(173, 216, 230, 0.6)');
                 borderColors.push('rgba(173, 216, 230, 0.8)');
+                borderWidths.push(1);
             }
         });
     
@@ -185,7 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     data: lapTimesInSeconds,
                     backgroundColor: backgroundColors,
                     borderColor: borderColors,
-                    borderWidth: 1
+                    borderWidth: borderWidths // Gebruik de array voor randdikte
                 }]
             },
             options: {
@@ -197,28 +205,65 @@ document.addEventListener('DOMContentLoaded', () => {
                         title: { display: true, text: 'Lap Time' },
                         beginAtZero: false,
                         min: yAxisMin,
-                        max: MAX_FAST_LAP_TIME_SECONDS/* + 1*/,
+                        max: MAX_FAST_LAP_TIME_SECONDS + 1,
                         ticks: { callback: value => formatSecondsToDuration(value) }
+                    },
+                    xTop: {
+                        position: 'top',
+                        beginAtZero: false,
+                        min: yAxisMin,
+                        max: MAX_FAST_LAP_TIME_SECONDS + 1,
+                        ticks: { callback: value => formatSecondsToDuration(value) },
+                        grid: {
+                            drawOnChartArea: false 
+                        }
                     },
                     y: { 
                         title: { display: true, text: 'Lap Number' }
                     }
                 },
                 plugins: {
+                    legend: {
+                        display: false
+                    },
                     tooltip: {
                         callbacks: {
-                            label: context => {
-                                let label = context.dataset.label || '';
-                                if (label) label += ': ';
-                                if (context.parsed.x !== null) {
-                                    label += formatSecondsToDuration(context.parsed.x);
+                            label: function(context) {
+                                const lap = currentLapData[context.dataIndex];
+                                if (!lap) return '';
+                                const tooltipLines = [];
+                                tooltipLines.push(`Time: ${lap.duration}`);
+                                if (lap.diffPrevLap) {
+                                    const sign = lap.status === 'SLOWER' ? '+' : '-';
+                                    tooltipLines.push(`Diff: ${sign}${lap.diffPrevLap}`);
                                 }
-                                return label;
+                                tooltipLines.push(`Session: ${lap.sessionDuration || 'N/A'}`);
+                                const speed = lap.speed?.kph?.toFixed(1) || 'N/A';
+                                tooltipLines.push(`Speed: ${speed} km/h`);
+                                return tooltipLines;
                             }
                         }
                     },
                     datalabels: {
-                        display: false
+                        display: function(context) {
+                            const lap = currentLapData[context.dataIndex];
+                            if (!lap || !lap.diffPrevLap) return false;
+                            const absoluteDiffString = lap.diffPrevLap.replace(/^[+-]/, '');
+                            if (parseDurationToSeconds(absoluteDiffString) > 30) return false;
+                            return true;
+                        },
+                        anchor: 'end',
+                        align: 'left',
+                        offset: 4,
+                        color: 'black',
+                        font: { weight: 'bold' },
+                        formatter: function(value, context) {
+                            const lap = currentLapData[context.dataIndex];
+                            const sign = lap.status === 'SLOWER' ? '+' : '-';
+                            const absoluteDiffString = lap.diffPrevLap.replace(/^[+-]/, '');
+                            const diffSeconds = parseDurationToSeconds(absoluteDiffString);
+                            return `${sign}${diffSeconds.toFixed(1)}`;
+                        }
                     }
                 }
             }
@@ -228,40 +273,30 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchActivitiesBtn.addEventListener('click', async () => {
         resetUI();
         const transponder = transponderInput.value.trim();
-
         if (!transponder) {
             errorDiv.textContent = "Please enter a transponder number.";
             show(errorDiv);
             return;
         }
-
         if (!isValidTransponderFormat(transponder)) {
             errorDiv.textContent = "Invalid transponder format. Expected: XX-12345 (e.g., AB-12345).";
             show(errorDiv);
             return;
         }
-
         show(loadingDiv);
-
         try {
             let url = `${PROXY_BASE_URL}/userid/${transponder}`;
             let response = await fetch(url);
             if (!response.ok) throw new Error((await response.json()).error || `Proxy error: ${response.status}`);
-            
             const userData = await response.json();
-            
             saveTransponder(transponder);
-
             const userID = userData.userId;
             url = `${PROXY_BASE_URL}/activities/${userID}`;
             response = await fetch(url);
             if (!response.ok) throw new Error((await response.json()).error || `Proxy error: ${response.status}`);
-            
             const activitiesResponse = await response.json();
             userActivities = activitiesResponse.activities || [];
-
             hide(loadingDiv);
-
             if (userActivities.length > 0) {
                 userActivities.forEach(activity => {
                     const option = document.createElement('option');
@@ -283,28 +318,22 @@ document.addEventListener('DOMContentLoaded', () => {
             show(errorDiv);
         }
     });
-
     fetchLapsBtn.addEventListener('click', async () => {
         hide(lapsDataDiv);
         hide(errorDiv);
         hide(maxFastLapControls);
-
         const selectedActivityId = activitySelect.value;
         if (!selectedActivityId) {
             errorDiv.textContent = "Please select an activity from the list.";
             show(errorDiv);
             return;
         }
-
         show(loadingDiv);
-
         try {
             const url = `${PROXY_BASE_URL}/laps/${selectedActivityId}`;
             const response = await fetch(url);
             if (!response.ok) throw new Error((await response.json()).error || `Proxy error: ${response.status}`);
-            
             const activitySessions = await response.json();
-
             currentLapData = [];
             if (activitySessions && activitySessions.sessions) {
                 activitySessions.sessions.forEach(session => {
@@ -313,14 +342,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
             }
-
             hide(loadingDiv);
             show(lapsDataDiv);
-
             if (currentLapData.length > 0) {
-                lapsOutput.textContent = 'Lap Number - Duration\n---------------------\n' +
-                    currentLapData.map(lap => `${String(lap.nr).padEnd(12)} - ${lap.duration}`).join('\n');
-                show(maxFastLapControls); 
+                let header = ['Lap'.padEnd(5), 'Duration'.padEnd(12), 'S. Duration'.padEnd(13), 'Diff Prev'.padEnd(11), 'Speed (km/h)'.padEnd(15)].join('');
+                let separator = '-'.repeat(header.length);
+                const lapRows = currentLapData.map(lap => {
+                    const nr = String(lap.nr).padEnd(5);
+                    const duration = lap.duration.padEnd(12);
+                    const sessionDuration = (lap.sessionDuration || 'N/A').padEnd(13);
+                    let diff = 'N/A';
+                    if (lap.diffPrevLap) {
+                        const sign = lap.status === 'SLOWER' ? '+' : '-';
+                        diff = `${sign}${lap.diffPrevLap}`;
+                    }
+                    const diffFormatted = diff.padEnd(11);
+                    const speed = (lap.speed?.kph?.toFixed(1) || 'N/A').padEnd(15);
+                    return `${nr}${duration}${sessionDuration}${diffFormatted}${speed}`;
+                }).join('\n');
+                lapsOutput.textContent = `${header}\n${separator}\n${lapRows}`;
+                show(maxFastLapControls);
                 updateLapChart(currentLapData);
             } else {
                 lapsOutput.textContent = "No lap data found for the selected activity.";
@@ -337,38 +378,31 @@ document.addEventListener('DOMContentLoaded', () => {
             hide(lapsDataDiv);
         }
     });
-
     activitySelect.addEventListener('change', () => {
         hide(lapsDataDiv);
         hide(errorDiv);
         hide(maxFastLapControls);
         fetchLapsBtn.disabled = !activitySelect.value;
-        
-        // --- AANGEPAST: Reset de hoogte van de grafiek ---
-        if(chartContainer) {
-            chartContainer.style.height = ''; // Verwijder inline stijl, CSS pakt het weer over
+        if (chartContainer) {
+            chartContainer.style.height = '';
         }
-
         if (lapChart) {
             lapChart.destroy();
             lapChart = null;
         }
         currentLapData = [];
     });
-
     maxFastLapSlider.addEventListener('input', () => {
         MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
         maxFastLapInput.value = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
         hide(maxFastLapValueError);
         if (currentLapData.length > 0) updateLapChart(currentLapData);
     });
-
     maxFastLapInput.addEventListener('input', () => {
         const inputText = maxFastLapInput.value.trim();
         const parsedSeconds = parseDurationToSeconds(inputText);
         const sliderMin = parseFloat(maxFastLapSlider.min);
         const sliderMax = parseFloat(maxFastLapSlider.max);
-
         if (isNaN(parsedSeconds) || parsedSeconds < sliderMin || parsedSeconds > sliderMax) {
             maxFastLapValueError.textContent = `Invalid time or out of range (${formatSecondsToDuration(sliderMin)} - ${formatSecondsToDuration(sliderMax)})`;
             show(maxFastLapValueError);
@@ -379,7 +413,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (currentLapData.length > 0) updateLapChart(currentLapData);
         }
     });
-
     loadSavedTransponders();
     maxFastLapSlider.value = parseFloat(maxFastLapSlider.value).toFixed(1);
     maxFastLapInput.value = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
