@@ -260,12 +260,27 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                     },
+                    // --- AANGEPAST: Datalabels met absolute limiet ---
                     datalabels: {
                         display: function(context) {
                             const lap = currentLapData[context.dataIndex];
-                            if (!lap || !lap.diffPrevLap) return false;
+                            const lapTime = context.dataset.data[context.dataIndex];
+
+                            // NIEUW: Verberg als de rondetijd boven de 1:30.000 is
+                            if (lapTime > 90) { // 90 seconden = 1:30.000
+                                return false;
+                            }
+                            
+                            if (lapTime > MAX_FAST_LAP_TIME_SECONDS) {
+                                return false;
+                            }
+                            if (!lap || !lap.diffPrevLap) {
+                                return false;
+                            }
                             const absoluteDiffString = lap.diffPrevLap.replace(/^[+-]/, '');
-                            if (parseDurationToSeconds(absoluteDiffString) > 30) return false;
+                            if (parseDurationToSeconds(absoluteDiffString) > 30) {
+                                return false;
+                            }
                             return true;
                         },
                         anchor: 'end',
@@ -300,10 +315,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // --- AANGEPAST: Update de URL in de adresbalk ---
         const newUrl = `${window.location.pathname}?transponder=${transponder}`;
         window.history.pushState({ path: newUrl }, '', newUrl);
-        // --- Einde aanpassing ---
 
         show(loadingDiv);
         try {
