@@ -14,12 +14,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const lapTimeChartCanvas = document.getElementById('lapTimeChart');
     const chartContainer = document.querySelector('.chart-container');
 
-    const maxFastLapSlider = document.getElementById('maxFastLapSlider');
-    const maxFastLapInput = document.getElementById('maxFastLapInput');
-    const maxFastLapValueError = document.getElementById('maxFastLapValueError');
-
     const transponderDatalist = document.getElementById('transponder-list');
-    const TRANSPONDER_STORAGE_KEY = 'savedTransponders';
+    const TRANSPONDER_COOKIE_KEY = 'savedTransponders';
 
     const PROXY_BASE_URL = 'https://us-central1-proxyapi-475018.cloudfunctions.net/mylapsProxyFunction/api/mylaps';
 
@@ -29,12 +25,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
 
-    // Registreer alleen de datalabels plugin. De glow plugin is verwijderd.
     Chart.register(ChartDataLabels);
 
+    function setCookie(name, value, days) {
+        let expires = "";
+        if (days) {
+            const date = new Date();
+            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+            expires = "; expires=" + date.toUTCString();
+        }
+        document.cookie = name + "=" + (value || "") + expires + "; path=/; SameSite=Lax";
+    }
+
+    function getCookie(name) {
+        const nameEQ = name + "=";
+        const ca = document.cookie.split(';');
+        for (let i = 0; i < ca.length; i++) {
+            let c = ca[i];
+            while (c.charAt(0) == ' ') c = c.substring(1, c.length);
+            if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length, c.length);
+        }
+        return null;
+    }
+
     function loadSavedTransponders() {
-        const saved = localStorage.getItem(TRANSPONDER_STORAGE_KEY);
-        const transponders = saved ? JSON.parse(saved) : [];
+        const saved = getCookie(TRANSPONDER_COOKIE_KEY);
+        const transponders = saved ? saved.split(',') : [];
         transponderDatalist.innerHTML = '';
         transponders.forEach(transponder => {
             const option = document.createElement('option');
@@ -44,11 +60,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function saveTransponder(transponder) {
-        const saved = localStorage.getItem(TRANSPONDER_STORAGE_KEY);
-        let transponders = saved ? JSON.parse(saved) : [];
+        const saved = getCookie(TRANSPONDER_COOKIE_KEY);
+        let transponders = saved ? saved.split(',') : [];
         if (!transponders.includes(transponder)) {
             transponders.push(transponder);
-            localStorage.setItem(TRANSPONDER_STORAGE_KEY, JSON.stringify(transponders));
+            setCookie(TRANSPONDER_COOKIE_KEY, transponders.join(','), 365);
             loadSavedTransponders();
         }
     }
@@ -148,7 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const lapTimesInSeconds = [];
         const backgroundColors = [];
         const borderColors = [];
-        const borderWidths = []; // Array voor de dikte van de rand
+        const borderWidths = [];
     
         let minLapTime = Infinity;
         lapData.forEach(lap => {
@@ -166,10 +182,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (lapTime <= MAX_FAST_LAP_TIME_SECONDS) {
                 backgroundColors.push('rgba(0, 123, 255, 0.8)');
                 if (lap.status === 'FASTER') {
-                    borderColors.push('rgba(46, 204, 113, 0.9)'); // Lichtgroen
+                    borderColors.push('rgba(46, 204, 113, 0.9)');
                     borderWidths.push(3);
                 } else if (lap.status === 'SLOWER') {
-                    borderColors.push('rgba(231, 76, 60, 0.9)'); // Lichtrood
+                    borderColors.push('rgba(231, 76, 60, 0.9)');
                     borderWidths.push(3);
                 } else {
                     borderColors.push('rgba(0, 123, 255, 1)');
@@ -193,7 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     data: lapTimesInSeconds,
                     backgroundColor: backgroundColors,
                     borderColor: borderColors,
-                    borderWidth: borderWidths // Gebruik de array voor randdikte
+                    borderWidth: borderWidths
                 }]
             },
             options: {
@@ -272,7 +288,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     fetchActivitiesBtn.addEventListener('click', async () => {
         resetUI();
-        const transponder = transponderInput.value.trim();
+        const transponder = transponderInput.value.trim().toUpperCase();
         if (!transponder) {
             errorDiv.textContent = "Please enter a transponder number.";
             show(errorDiv);
@@ -283,13 +299,21 @@ document.addEventListener('DOMContentLoaded', () => {
             show(errorDiv);
             return;
         }
+
+        // --- AANGEPAST: Update de URL in de adresbalk ---
+        const newUrl = `${window.location.pathname}?transponder=${transponder}`;
+        window.history.pushState({ path: newUrl }, '', newUrl);
+        // --- Einde aanpassing ---
+
         show(loadingDiv);
         try {
             let url = `${PROXY_BASE_URL}/userid/${transponder}`;
             let response = await fetch(url);
             if (!response.ok) throw new Error((await response.json()).error || `Proxy error: ${response.status}`);
             const userData = await response.json();
+            
             saveTransponder(transponder);
+
             const userID = userData.userId;
             url = `${PROXY_BASE_URL}/activities/${userID}`;
             response = await fetch(url);
@@ -318,6 +342,7 @@ document.addEventListener('DOMContentLoaded', () => {
             show(errorDiv);
         }
     });
+    
     fetchLapsBtn.addEventListener('click', async () => {
         hide(lapsDataDiv);
         hide(errorDiv);
@@ -378,6 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
             hide(lapsDataDiv);
         }
     });
+
     activitySelect.addEventListener('change', () => {
         hide(lapsDataDiv);
         hide(errorDiv);
@@ -392,12 +418,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         currentLapData = [];
     });
+    
     maxFastLapSlider.addEventListener('input', () => {
         MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
         maxFastLapInput.value = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
         hide(maxFastLapValueError);
         if (currentLapData.length > 0) updateLapChart(currentLapData);
     });
+    
     maxFastLapInput.addEventListener('input', () => {
         const inputText = maxFastLapInput.value.trim();
         const parsedSeconds = parseDurationToSeconds(inputText);
@@ -413,8 +441,20 @@ document.addEventListener('DOMContentLoaded', () => {
             if (currentLapData.length > 0) updateLapChart(currentLapData);
         }
     });
+
     loadSavedTransponders();
     maxFastLapSlider.value = parseFloat(maxFastLapSlider.value).toFixed(1);
     maxFastLapInput.value = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
     resetUI();
+
+    function handleUrlParameter() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const transponderFromUrl = urlParams.get('transponder');
+        if (transponderFromUrl) {
+            transponderInput.value = transponderFromUrl.toUpperCase();
+            fetchActivitiesBtn.click();
+        }
+    }
+
+    handleUrlParameter();
 });
