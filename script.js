@@ -10,9 +10,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const maxFastLapControls = document.getElementById('maxFastLapControls'); 
 
-    const lapsOutput = document.getElementById('lapsOutput');
+    const lapsTableContainer = document.getElementById('lapsTableContainer');
     const lapTimeChartCanvas = document.getElementById('lapTimeChart');
     const chartContainer = document.querySelector('.chart-container');
+
+    const maxFastLapSlider = document.getElementById('maxFastLapSlider');
+    const maxFastLapInput = document.getElementById('maxFastLapInput');
+    const maxFastLapValueError = document.getElementById('maxFastLapValueError');
 
     const transponderDatalist = document.getElementById('transponder-list');
     const TRANSPONDER_COOKIE_KEY = 'savedTransponders';
@@ -26,6 +30,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
 
     Chart.register(ChartDataLabels);
+
+    // Helper functie om een specifieke data-attribuut te vinden
+    const findDataAttribute = (lap, type) => {
+        if (!lap || !lap.dataAttributes) return 'N/A';
+        const attr = lap.dataAttributes.find(a => a.type === type);
+        return attr ? attr.value.toFixed(1) : 'N/A';
+    };
 
     function setCookie(name, value, days) {
         let expires = "";
@@ -87,7 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
         errorDiv.textContent = '';
         activitySelect.innerHTML = '<option value="">Select an activity</option>';
         fetchLapsBtn.disabled = true;
-        lapsOutput.textContent = '';
+        lapsTableContainer.innerHTML = '';
         userActivities = [];
         currentLapData = [];
         if (chartContainer) {
@@ -260,17 +271,13 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                     },
-                    // --- AANGEPAST: Datalabels met absolute limiet ---
                     datalabels: {
                         display: function(context) {
                             const lap = currentLapData[context.dataIndex];
                             const lapTime = context.dataset.data[context.dataIndex];
-
-                            // NIEUW: Verberg als de rondetijd boven de 1:30.000 is
-                            if (lapTime > 90) { // 90 seconden = 1:30.000
+                            if (lapTime > 90) {
                                 return false;
                             }
-                            
                             if (lapTime > MAX_FAST_LAP_TIME_SECONDS) {
                                 return false;
                             }
@@ -314,19 +321,15 @@ document.addEventListener('DOMContentLoaded', () => {
             show(errorDiv);
             return;
         }
-
         const newUrl = `${window.location.pathname}?transponder=${transponder}`;
         window.history.pushState({ path: newUrl }, '', newUrl);
-
         show(loadingDiv);
         try {
             let url = `${PROXY_BASE_URL}/userid/${transponder}`;
             let response = await fetch(url);
             if (!response.ok) throw new Error((await response.json()).error || `Proxy error: ${response.status}`);
             const userData = await response.json();
-            
             saveTransponder(transponder);
-
             const userID = userData.userId;
             url = `${PROXY_BASE_URL}/activities/${userID}`;
             response = await fetch(url);
@@ -360,6 +363,7 @@ document.addEventListener('DOMContentLoaded', () => {
         hide(lapsDataDiv);
         hide(errorDiv);
         hide(maxFastLapControls);
+        lapsTableContainer.innerHTML = '';
         const selectedActivityId = activitySelect.value;
         if (!selectedActivityId) {
             errorDiv.textContent = "Please select an activity from the list.";
@@ -383,30 +387,47 @@ document.addEventListener('DOMContentLoaded', () => {
             hide(loadingDiv);
             show(lapsDataDiv);
             if (currentLapData.length > 0) {
-                let header = ['Lap'.padEnd(5), 'Duration'.padEnd(12), 'S. Duration'.padEnd(13), 'Diff Prev'.padEnd(11), 'Speed (km/h)'.padEnd(15)].join('');
-                let separator = '-'.repeat(header.length);
-                const lapRows = currentLapData.map(lap => {
-                    const nr = String(lap.nr).padEnd(5);
-                    const duration = lap.duration.padEnd(12);
-                    const sessionDuration = (lap.sessionDuration || 'N/A').padEnd(13);
+                const table = document.createElement('table');
+                table.className = 'laps-table';
+                const thead = table.createTHead();
+                const headerRow = thead.insertRow();
+                // AANGEPAST: Headers inclusief Temp/Voltage
+                const headers = ['Lap', 'Duration', 'S. Duration', 'Diff Prev', 'Speed (km/h)', 'Voltage (V)', 'Temp (°C)'];
+                headers.forEach(text => {
+                    const th = document.createElement('th');
+                    th.textContent = text;
+                    headerRow.appendChild(th);
+                });
+                const tbody = table.createTBody();
+                currentLapData.forEach(lap => {
+                    const row = tbody.insertRow();
+                    const nr = lap.nr;
+                    const duration = lap.duration;
+                    const sessionDuration = lap.sessionDuration || 'N/A';
                     let diff = 'N/A';
                     if (lap.diffPrevLap) {
                         const sign = lap.status === 'SLOWER' ? '+' : '-';
                         diff = `${sign}${lap.diffPrevLap}`;
                     }
-                    const diffFormatted = diff.padEnd(11);
-                    const speed = (lap.speed?.kph?.toFixed(1) || 'N/A').padEnd(15);
-                    return `${nr}${duration}${sessionDuration}${diffFormatted}${speed}`;
-                }).join('\n');
-                lapsOutput.textContent = `${header}\n${separator}\n${lapRows}`;
+                    const speed = lap.speed?.kph?.toFixed(1) || 'N/A';
+                    // AANGEPAST: Haal Temp/Voltage op
+                    const voltage = findDataAttribute(lap, 'VOLTAGE');
+                    const temp = findDataAttribute(lap, 'TEMPERATURE');
+                    
+                    // AANGEPAST: Vul alle cellen
+                    row.insertCell().textContent = nr;
+                    row.insertCell().textContent = duration;
+                    row.insertCell().textContent = sessionDuration;
+                    row.insertCell().textContent = diff;
+                    row.insertCell().textContent = speed;
+                    row.insertCell().textContent = voltage;
+                    row.insertCell().textContent = temp;
+                });
+                lapsTableContainer.appendChild(table);
                 show(maxFastLapControls);
                 updateLapChart(currentLapData);
             } else {
-                lapsOutput.textContent = "No lap data found for the selected activity.";
-                if (lapChart) {
-                    lapChart.destroy();
-                    lapChart = null;
-                }
+                lapsTableContainer.innerHTML = '<p>No lap data found for the selected activity.</p>';
             }
         } catch (error) {
             console.error("Error fetching laps via proxy:", error);

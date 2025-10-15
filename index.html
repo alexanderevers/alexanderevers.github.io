@@ -15,11 +15,8 @@
         <h1>MYLAPS Activity Viewer</h1>
         <div class="input-group">
             <label for="transponderInput">Transponder Number:</label>
-            <!-- AANGEPAST: list attribuut toegevoegd -->
             <input type="text" id="transponderInput" placeholder="Enter transponder number" list="transponder-list">
             <button id="fetchActivitiesBtn">Fetch Activities</button>
-            
-            <!-- NIEUW: Datalist voor suggesties -->
             <datalist id="transponder-list"></datalist>
         </div>
 
@@ -37,9 +34,6 @@
         </div>
 
         <div id="lapsData" class="hidden">
-            <h2>Laps Data:</h2>
-            <pre id="lapsOutput"></pre>
-
             <div id="maxFastLapControls" class="input-group slider-group">
                 <label for="maxFastLapInput">Max Fast Lap Time:</label>
                 <input type="range" id="maxFastLapSlider" min="10" max="180" value="60" step="0.1">
@@ -49,6 +43,12 @@
 
             <div class="chart-container">
                 <canvas id="lapTimeChart"></canvas>
+            </div>
+
+            <!-- AANGEPAST: Titel en container voor de tabel, verplaatst naar ONDER de grafiek -->
+            <div class="table-section">
+                <h2>Laps Data</h2>
+                <div id="lapsTableContainer"></div> <!-- Hier komt de tabel -->
             </div>
         </div>
     </div>

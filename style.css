@@ -40,14 +40,14 @@ h1 {
 h2 {
     color: #0056b3;
     text-align: left;
-    margin-bottom: 15px; /* Algemene marge voor H2's */
+    margin-bottom: 15px;
 }
 
 /* Algemene input-group styling */
 .input-group {
     display: flex;
     flex-direction: column;
-    align-items: flex-start; /* ALTIJD LINKS UITLIJNEN */
+    align-items: flex-start;
     gap: 10px;
 }
 
@@ -63,7 +63,7 @@ h2 {
     border: 1px solid #ddd;
     border-radius: 4px;
     width: 100%;
-    max-width: 300px; /* Consistent maximale breedte voor inputs en selects */
+    max-width: 300px;
 }
 
 .input-group button {
@@ -86,39 +86,24 @@ h2 {
     cursor: not-allowed;
 }
 
-/* --- SPECIFIEKE STIJLEN --- */
-
-/* Activities List Group (Select Activity and Fetch Laps) */
+/* Activities List Group */
 #activitiesList {
     border-top: 1px solid #eee;
     padding-top: 20px;
-    /* Hier hoeft geen display: flex meer, want de innerlijke div activity-controls-group regelt dat */
 }
 
 #activitiesList h2 {
-    margin-bottom: 15px; /* Extra ruimte onder de titel van deze sectie */
+    margin-bottom: 15px;
 }
 
-/* NIEUW: Styling voor de wrapper div binnen #activitiesList */
-.activity-controls-group {
-    /* Deze div krijgt de .input-group styling, dus die regelt flex-direction, align-items, gap etc. */
-}
-
-/* Select box (Fetch Laps balk) - valt nu onder de algemene .input-group select styling */
-/* #activitySelect { } */
-
-/* Fetch Laps knop - valt nu onder de algemene .input-group button styling */
-/* #activitiesList #fetchLapsBtn { } */
-
-
-/* Slider Group (Max Fast Lap Time) */
+/* Slider Group */
 #maxFastLapControls {
     border-top: 1px solid #eee;
     padding-top: 20px;
     display: flex;
-    flex-direction: row; /* Standaard naast elkaar (op desktop) */
-    align-items: center; /* Verticaal centreren */
-    flex-wrap: wrap; /* Laat elementen wrappen op kleine schermen */
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
     gap: 10px;
     margin-bottom: 5px;
 }
@@ -144,26 +129,47 @@ h2 {
     margin-top: -5px;
 }
 
-/* Laps Data Display */
-#lapsData {
-    padding-top: 0;
-}
-
-#lapsOutput {
-    background-color: #f8f8f8;
-    border: 1px solid #ddd;
-    padding: 15px;
-    border-radius: 4px;
-    white-space: pre;
-    overflow-x: auto;
-    max-height: 200px;
-    margin-bottom: 20px;
-}
-
 .chart-container {
     position: relative;
     height: 400px;
     width: 100%;
+    margin-bottom: 20px; /* Ruimte tussen grafiek en tabel */
+}
+
+/* Styling voor de Laps Data Tabel */
+.table-section {
+    width: 100%;
+}
+
+#lapsTableContainer {
+    width: 100%;
+    overflow-x: auto; /* Horizontale scroll op kleine schermen */
+}
+
+.laps-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8em; /* AANGEPAST: Kleinere tekst */
+}
+
+.laps-table th, .laps-table td {
+    padding: 6px 8px; /* AANGEPAST: Minder padding */
+    border: 1px solid #ddd;
+    text-align: left;
+    white-space: nowrap; /* Voorkom dat tekst afbreekt */
+}
+
+.laps-table th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+}
+
+.laps-table tbody tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.laps-table tbody tr:hover {
+    background-color: #f1f1f1;
 }
 
 .hidden {
@@ -182,8 +188,7 @@ h2 {
     text-align: left;
 }
 
-
-/* --- MEDIA QUERIES (RESPONSIVE STIJLEN) --- */
+/* MEDIA QUERIES */
 @media (max-width: 768px) {
     body {
         padding: 10px;
@@ -194,31 +199,26 @@ h2 {
         gap: 15px;
     }
 
-    /* Alle input-velden en buttons op mobiel volle breedte */
     .input-group input[type="text"],
     .input-group select,
     .input-group button {
         width: 100%;
-        max-width: none; /* Reset max-width voor mobiel */
+        max-width: none;
     }
 
-    /* Slider groep gedrag op mobiel */
     #maxFastLapControls {
         flex-direction: column;
         align-items: flex-start;
     }
 
     #maxFastLapControls input[type="range"] {
+        width: 100%;
         max-width: 100%;
         margin-bottom: 10px;
     }
 
     #maxFastLapInput {
         width: 100%;
-        text-align: left;
-    }
-
-    #maxFastLapValueError {
         text-align: left;
     }
 
