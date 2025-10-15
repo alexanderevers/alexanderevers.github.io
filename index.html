@@ -23,27 +23,26 @@
         <div id="loading" class="hidden">Loading...</div>
         <div id="error" class="hidden error-message"></div>
 
-        <!-- AANGEPAST: Volledig nieuwe structuur voor de "Recent Activities" sectie -->
         <div id="activitiesList" class="hidden">
             <h2>Recent Activities</h2>
             <div class="activities-split-view">
-                <!-- Linker paneel met de selectie -->
                 <div class="activities-left-panel">
                     <div class="activity-controls-group input-group"> 
                         <select id="activitySelect">
                             <option value="">Select an activity</option>
                         </select>
-                        <button id="fetchLapsBtn" disabled>Fetch Laps</button>
+                        <div> <!-- Wrapper voor de knoppen -->
+                            <button id="fetchLapsBtn" disabled>Fetch Laps</button>
+                            <button id="downloadGpxBtn" class="hidden">Download GPX for Strava</button>
+                        </div>
                     </div>
                 </div>
-                <!-- Rechter paneel met de details (initieel verborgen) -->
                 <div class="activities-right-panel hidden" id="activityInfoPanel">
                     <div id="activityInfoTable"></div>
                 </div>
             </div>
         </div>
 
-        <!-- NIEUW: Container voor de Sessie Samenvatting -->
         <div id="sessionSummary" class="hidden"></div>
 
         <div id="lapsData" class="hidden">
@@ -67,6 +66,12 @@
             </div>
         </div>
     </div>
+
+    <!-- Laad alle scripts in de juiste volgorde -->
+    <script src="utils.js"></script>
+    <script src="gpx-generator.js"></script>
+    <script src="api.js"></script>
+    <script src="chart-factory.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
