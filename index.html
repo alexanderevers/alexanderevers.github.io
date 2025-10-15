@@ -41,14 +41,22 @@
                 <span id="maxFastLapValueError" class="error-message hidden">Invalid time format</span>
             </div>
 
-            <div class="chart-container">
-                <canvas id="lapTimeChart"></canvas>
+            <!-- Hoofdgrafiek (groot en dynamisch) -->
+            <div class="chart-container" id="mainChartContainer">
+                <canvas id="mainLapChart"></canvas>
             </div>
 
-            <!-- AANGEPAST: Titel en container voor de tabel, verplaatst naar ONDER de grafiek -->
-            <div class="table-section">
-                <h2>Laps Data</h2>
-                <div id="lapsTableContainer"></div> <!-- Hier komt de tabel -->
+            <!-- NIEUW: Sectie voor tabel en context-grafiek -->
+            <div class="table-and-context-section hidden" id="tableAndContextSection">
+                <h2>Laps Data Analysis</h2>
+                <div class="split-view">
+                    <!-- Context-grafiek (klein en vast) -->
+                    <div class="chart-container" id="contextChartContainer">
+                        <canvas id="contextLapChart"></canvas>
+                    </div>
+                    <!-- Tabel met scroll -->
+                    <div id="lapsTableContainer"></div>
+                </div>
             </div>
         </div>
     </div>

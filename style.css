@@ -92,10 +92,6 @@ h2 {
     padding-top: 20px;
 }
 
-#activitiesList h2 {
-    margin-bottom: 15px;
-}
-
 /* Slider Group */
 #maxFastLapControls {
     border-top: 1px solid #eee;
@@ -129,39 +125,64 @@ h2 {
     margin-top: -5px;
 }
 
+/* Algemene container voor grafieken */
 .chart-container {
     position: relative;
-    height: 400px;
-    width: 100%;
-    margin-bottom: 20px; /* Ruimte tussen grafiek en tabel */
-}
-
-/* Styling voor de Laps Data Tabel */
-.table-section {
     width: 100%;
 }
 
+/* Hoofdgrafiek container (deze krijgt dynamische hoogte via JS) */
+#mainChartContainer {
+    margin-bottom: 30px; /* Ruimte tussen de twee secties */
+}
+
+/* Sectie voor tabel en context-grafiek */
+.table-and-context-section {
+    border-top: 1px solid #eee;
+    padding-top: 20px;
+}
+
+.split-view {
+    display: flex;
+    flex-direction: row;
+    gap: 20px;
+    height: 400px; /* Vaste hoogte voor de hele split-view sectie */
+}
+
+/* Context-grafiek container (linkerkant) */
+#contextChartContainer {
+    flex: 0 0 35%; /* Neem 35% van de breedte, niet groeien/krimpen */
+    height: 100%;
+}
+
+/* Tabel container (rechterkant, met scroll) */
 #lapsTableContainer {
-    width: 100%;
-    overflow-x: auto; /* Horizontale scroll op kleine schermen */
+    flex-grow: 1; /* Neem de resterende ruimte */
+    height: 100%;
+    overflow: auto; /* Belangrijk: maak de tabel intern scrollbaar */
+    border: 1px solid #ddd; /* Nette rand om de scroll-container */
 }
 
 .laps-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.8em; /* AANGEPAST: Kleinere tekst */
+    font-size: 0.8em;
 }
 
 .laps-table th, .laps-table td {
-    padding: 6px 8px; /* AANGEPAST: Minder padding */
-    border: 1px solid #ddd;
+    padding: 6px 8px;
+    border-bottom: 1px solid #ddd;
+    border-right: 1px solid #ddd;
     text-align: left;
-    white-space: nowrap; /* Voorkom dat tekst afbreekt */
+    white-space: nowrap;
 }
 
 .laps-table th {
     background-color: #f2f2f2;
     font-weight: bold;
+    position: sticky; /* Maakt de header sticky binnen de scrollende container */
+    top: 0;
+    z-index: 1; /* Zorgt dat de header boven de rijen blijft */
 }
 
 .laps-table tbody tr:nth-child(even) {
@@ -193,36 +214,40 @@ h2 {
     body {
         padding: 10px;
     }
-
     .container {
         padding: 20px;
         gap: 15px;
     }
-
     .input-group input[type="text"],
     .input-group select,
     .input-group button {
         width: 100%;
         max-width: none;
     }
-
     #maxFastLapControls {
         flex-direction: column;
         align-items: flex-start;
     }
-
     #maxFastLapControls input[type="range"] {
         width: 100%;
         max-width: 100%;
         margin-bottom: 10px;
     }
-
     #maxFastLapInput {
         width: 100%;
         text-align: left;
     }
 
-    .chart-container {
+    /* Maak de split-view verticaal op mobiel */
+    .split-view {
+        flex-direction: column;
+        height: auto;
+    }
+    #contextChartContainer {
+        height: 250px;
+        margin-bottom: 20px;
+    }
+    #lapsTableContainer {
         height: 300px;
     }
 }

@@ -10,9 +10,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const maxFastLapControls = document.getElementById('maxFastLapControls'); 
 
+    const mainLapChartCanvas = document.getElementById('mainLapChart');
+    const mainChartContainer = document.getElementById('mainChartContainer');
+    const contextLapChartCanvas = document.getElementById('contextLapChart');
+    const tableAndContextSection = document.getElementById('tableAndContextSection');
     const lapsTableContainer = document.getElementById('lapsTableContainer');
-    const lapTimeChartCanvas = document.getElementById('lapTimeChart');
-    const chartContainer = document.querySelector('.chart-container');
 
     const maxFastLapSlider = document.getElementById('maxFastLapSlider');
     const maxFastLapInput = document.getElementById('maxFastLapInput');
@@ -24,19 +26,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const PROXY_BASE_URL = 'https://us-central1-proxyapi-475018.cloudfunctions.net/mylapsProxyFunction/api/mylaps';
 
     let userActivities = [];
-    let lapChart = null;
+    let mainLapChart = null;
+    let contextLapChart = null;
     let currentLapData = [];
+    let estimatedRowHeight = 28;
+    let hoveredRowIndex = null;
 
     let MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
 
     Chart.register(ChartDataLabels);
-
-    // Helper functie om een specifieke data-attribuut te vinden
-    const findDataAttribute = (lap, type) => {
-        if (!lap || !lap.dataAttributes) return 'N/A';
-        const attr = lap.dataAttributes.find(a => a.type === type);
-        return attr ? attr.value.toFixed(1) : 'N/A';
-    };
 
     function setCookie(name, value, days) {
         let expires = "";
@@ -95,18 +93,23 @@ document.addEventListener('DOMContentLoaded', () => {
         hide(lapsDataDiv);
         hide(maxFastLapValueError);
         hide(maxFastLapControls);
+        hide(tableAndContextSection);
         errorDiv.textContent = '';
         activitySelect.innerHTML = '<option value="">Select an activity</option>';
         fetchLapsBtn.disabled = true;
         lapsTableContainer.innerHTML = '';
         userActivities = [];
         currentLapData = [];
-        if (chartContainer) {
-            chartContainer.style.height = '';
+        if (mainChartContainer) {
+            mainChartContainer.style.height = '';
         }
-        if (lapChart) {
-            lapChart.destroy();
-            lapChart = null;
+        if (mainLapChart) {
+            mainLapChart.destroy();
+            mainLapChart = null;
+        }
+        if (contextLapChart) {
+            contextLapChart.destroy();
+            contextLapChart = null;
         }
     }
 
@@ -153,40 +156,28 @@ document.addEventListener('DOMContentLoaded', () => {
         return /^[A-Z]{2}-\d{5}$/.test(transponder);
     }
 
-    function updateLapChart(lapData) {
-        if (!lapTimeChartCanvas || !lapData || lapData.length === 0) {
-            if (lapChart) {
-                lapChart.destroy();
-                lapChart = null;
-            }
-            return;
-        }
+    function updateCharts(lapData, startIndex = 0) {
+        if (!lapData || lapData.length === 0) return;
+        updateMainLapChart(lapData);
+        updateContextLapChart(lapData, startIndex);
+    }
     
-        const numberOfLaps = lapData.length;
-        const heightPerLap = 25;
-        const minChartHeight = 300;
-        const calculatedHeight = Math.max(minChartHeight, numberOfLaps * heightPerLap);
-        
-        if (chartContainer) {
-            chartContainer.style.height = `${calculatedHeight}px`;
-        }
-
+    function prepareChartData(data) {
         const lapNumbers = [];
         const lapTimesInSeconds = [];
         const backgroundColors = [];
         const borderColors = [];
         const borderWidths = [];
-    
+        
         let minLapTime = Infinity;
-        lapData.forEach(lap => {
+        data.forEach(lap => {
             const lapTime = parseDurationToSeconds(lap.duration);
             if (lapTime < minLapTime) minLapTime = lapTime;
         });
-    
         const yAxisMin = Math.max(0, minLapTime - 5);
     
-        lapData.forEach((lap, index) => {
-            lapNumbers.push(`Lap ${index + 1}`);
+        data.forEach(lap => {
+            lapNumbers.push(`Lap ${lap.nr}`);
             const lapTime = parseDurationToSeconds(lap.duration);
             lapTimesInSeconds.push(lapTime);
     
@@ -208,106 +199,142 @@ document.addEventListener('DOMContentLoaded', () => {
                 borderWidths.push(1);
             }
         });
-    
-        if (lapChart) lapChart.destroy();
-    
-        lapChart = new Chart(lapTimeChartCanvas, {
-            type: 'bar',
-            data: {
-                labels: lapNumbers,
-                datasets: [{
-                    label: 'Lap Time',
-                    data: lapTimesInSeconds,
-                    backgroundColor: backgroundColors,
-                    borderColor: borderColors,
-                    borderWidth: borderWidths
-                }]
-            },
-            options: {
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    x: { 
-                        title: { display: true, text: 'Lap Time' },
-                        beginAtZero: false,
-                        min: yAxisMin,
-                        max: MAX_FAST_LAP_TIME_SECONDS + 1,
-                        ticks: { callback: value => formatSecondsToDuration(value) }
-                    },
-                    xTop: {
-                        position: 'top',
-                        beginAtZero: false,
-                        min: yAxisMin,
-                        max: MAX_FAST_LAP_TIME_SECONDS + 1,
-                        ticks: { callback: value => formatSecondsToDuration(value) },
-                        grid: {
-                            drawOnChartArea: false 
-                        }
-                    },
-                    y: { 
-                        title: { display: true, text: 'Lap Number' }
-                    }
+        return { lapNumbers, lapTimesInSeconds, backgroundColors, borderColors, borderWidths, yAxisMin };
+    }
+
+    function getChartOptions(yAxisMin, showDataLabels, fullLapData) {
+        return {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { 
+                    beginAtZero: false,
+                    min: yAxisMin,
+                    max: MAX_FAST_LAP_TIME_SECONDS + 0,
+                    ticks: { callback: value => formatSecondsToDuration(value) }
                 },
-                plugins: {
-                    legend: {
-                        display: false
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const lap = currentLapData[context.dataIndex];
-                                if (!lap) return '';
-                                const tooltipLines = [];
-                                tooltipLines.push(`Time: ${lap.duration}`);
-                                if (lap.diffPrevLap) {
-                                    const sign = lap.status === 'SLOWER' ? '+' : '-';
-                                    tooltipLines.push(`Diff: ${sign}${lap.diffPrevLap}`);
-                                }
-                                tooltipLines.push(`Session: ${lap.sessionDuration || 'N/A'}`);
-                                const speed = lap.speed?.kph?.toFixed(1) || 'N/A';
-                                tooltipLines.push(`Speed: ${speed} km/h`);
-                                return tooltipLines;
+                xTop: {
+                    position: 'top',
+                    beginAtZero: false,
+                    min: yAxisMin,
+                    max: MAX_FAST_LAP_TIME_SECONDS + 1,
+                    ticks: { callback: value => formatSecondsToDuration(value) },
+                    grid: { drawOnChartArea: false }
+                },
+                y: { 
+                    ticks: {
+                        font: function(context) {
+                            // GECORRIGEERD: Bereken de juiste index om te markeren
+                            let indexToMatch;
+                            if (context.chart === mainLapChart) {
+                                // De hoofdgrafiek gebruikt de globale index direct
+                                indexToMatch = hoveredRowIndex;
+                            } else {
+                                // De context-grafiek moet de globale index omrekenen naar een lokale index
+                                const startIndex = context.chart.startIndex || 0;
+                                indexToMatch = hoveredRowIndex - startIndex;
                             }
-                        }
-                    },
-                    datalabels: {
-                        display: function(context) {
-                            const lap = currentLapData[context.dataIndex];
-                            const lapTime = context.dataset.data[context.dataIndex];
-                            if (lapTime > 90) {
-                                return false;
+                            
+                            if (context.index === indexToMatch) {
+                                return { weight: 'bold' };
                             }
-                            if (lapTime > MAX_FAST_LAP_TIME_SECONDS) {
-                                return false;
-                            }
-                            if (!lap || !lap.diffPrevLap) {
-                                return false;
-                            }
-                            const absoluteDiffString = lap.diffPrevLap.replace(/^[+-]/, '');
-                            if (parseDurationToSeconds(absoluteDiffString) > 30) {
-                                return false;
-                            }
-                            return true;
-                        },
-                        anchor: 'end',
-                        align: 'left',
-                        offset: 4,
-                        color: 'black',
-                        font: { weight: 'bold' },
-                        formatter: function(value, context) {
-                            const lap = currentLapData[context.dataIndex];
-                            const sign = lap.status === 'SLOWER' ? '+' : '-';
-                            const absoluteDiffString = lap.diffPrevLap.replace(/^[+-]/, '');
-                            const diffSeconds = parseDurationToSeconds(absoluteDiffString);
-                            return `${sign}${diffSeconds.toFixed(1)}`;
+                            return { weight: 'normal' };
                         }
                     }
                 }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const dataIndex = context.dataIndex;
+                            let lap;
+                            if (context.chart === mainLapChart) {
+                                lap = fullLapData[dataIndex];
+                            } else {
+                                const startIndex = context.chart.startIndex || 0;
+                                lap = currentLapData[startIndex + dataIndex];
+                            }
+                            if (!lap) return '';
+                            const tooltipLines = [];
+                            tooltipLines.push(`Time: ${lap.duration}`);
+                            if (lap.diffPrevLap) {
+                                const sign = lap.status === 'SLOWER' ? '+' : '-';
+                                tooltipLines.push(`Diff: ${sign}${lap.diffPrevLap}`);
+                            }
+                            tooltipLines.push(`Session: ${lap.sessionDuration || 'N/A'}`);
+                            const speed = lap.speed?.kph?.toFixed(1) || 'N/A';
+                            tooltipLines.push(`Speed: ${speed} km/h`);
+                            return tooltipLines;
+                        }
+                    }
+                },
+                datalabels: {
+                    display: showDataLabels ? function(context) {
+                        const lap = fullLapData[context.dataIndex];
+                        const lapTime = context.dataset.data[context.dataIndex];
+                        if (lapTime > 90) return false;
+                        if (lapTime > MAX_FAST_LAP_TIME_SECONDS) return false;
+                        if (!lap || !lap.diffPrevLap) return false;
+                        const absoluteDiffString = lap.diffPrevLap.replace(/^[+-]/, '');
+                        if (parseDurationToSeconds(absoluteDiffString) > 30) return false;
+                        return true;
+                    } : false,
+                    anchor: 'end',
+                    align: 'left',
+                    offset: 4,
+                    color: 'black',
+                    font: { weight: 'bold' },
+                    formatter: function(value, context) {
+                        const lap = fullLapData[context.dataIndex];
+                        const sign = lap.status === 'SLOWER' ? '+' : '-';
+                        const absoluteDiffString = lap.diffPrevLap.replace(/^[+-]/, '');
+                        const diffSeconds = parseDurationToSeconds(absoluteDiffString);
+                        return `${sign}${diffSeconds.toFixed(1)}`;
+                    }
+                }
             }
+        };
+    }
+
+    function updateMainLapChart(lapData) {
+        if (!mainLapChartCanvas || !lapData || lapData.length === 0) return;
+        const numberOfLaps = lapData.length;
+        const heightPerLap = 25;
+        const minChartHeight = 300;
+        const calculatedHeight = Math.max(minChartHeight, numberOfLaps * heightPerLap);
+        mainChartContainer.style.height = `${calculatedHeight}px`;
+        const { lapNumbers, lapTimesInSeconds, backgroundColors, borderColors, borderWidths, yAxisMin } = prepareChartData(lapData);
+        if (mainLapChart) mainLapChart.destroy();
+        mainLapChart = new Chart(mainLapChartCanvas, {
+            type: 'bar',
+            data: {
+                labels: lapNumbers,
+                datasets: [{ data: lapTimesInSeconds, backgroundColor: backgroundColors, borderColor: borderColors, borderWidth: borderWidths }]
+            },
+            options: getChartOptions(yAxisMin, true, lapData)
         });
     }
 
+    function updateContextLapChart(lapData, startIndex = 0) {
+        if (!contextLapChartCanvas || !lapData || lapData.length === 0) return;
+        const dataSlice = lapData.slice(startIndex, startIndex + 10);
+        const { lapTimesInSeconds, backgroundColors, borderColors, borderWidths, yAxisMin } = prepareChartData(dataSlice);
+        const contextLapNumbers = dataSlice.map(lap => `Lap ${lap.nr}`);
+        if (contextLapChart) contextLapChart.destroy();
+        contextLapChart = new Chart(contextLapChartCanvas, {
+            type: 'bar',
+            data: {
+                labels: contextLapNumbers,
+                datasets: [{ data: lapTimesInSeconds, backgroundColor: backgroundColors, borderColor: borderColors, borderWidth: borderWidths }]
+            },
+            options: getChartOptions(yAxisMin, false, dataSlice)
+        });
+        contextLapChart.startIndex = startIndex; // Sla de startindex op voor later gebruik
+    }
+    
     fetchActivitiesBtn.addEventListener('click', async () => {
         resetUI();
         const transponder = transponderInput.value.trim().toUpperCase();
@@ -358,12 +385,33 @@ document.addEventListener('DOMContentLoaded', () => {
             show(errorDiv);
         }
     });
+
+    const handleTableScroll = () => {
+        const scrollTop = lapsTableContainer.scrollTop;
+        const newStartIndex = Math.floor(scrollTop / estimatedRowHeight);
+        if (newStartIndex !== (contextLapChart.startIndex || 0)) {
+            updateContextLapChart(currentLapData, newStartIndex);
+        }
+    };
+
+    let throttleTimer;
+    const throttle = (callback, time) => {
+        if (throttleTimer) return;
+        throttleTimer = true;
+        setTimeout(() => {
+            callback();
+            throttleTimer = false;
+        }, time);
+    };
     
     fetchLapsBtn.addEventListener('click', async () => {
         hide(lapsDataDiv);
         hide(errorDiv);
         hide(maxFastLapControls);
+        hide(tableAndContextSection);
         lapsTableContainer.innerHTML = '';
+        lapsTableContainer.removeEventListener('scroll', () => throttle(handleTableScroll, 100));
+
         const selectedActivityId = activitySelect.value;
         if (!selectedActivityId) {
             errorDiv.textContent = "Please select an activity from the list.";
@@ -391,7 +439,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 table.className = 'laps-table';
                 const thead = table.createTHead();
                 const headerRow = thead.insertRow();
-                // AANGEPAST: Headers inclusief Temp/Voltage
                 const headers = ['Lap', 'Duration', 'S. Duration', 'Diff Prev', 'Speed (km/h)', 'Voltage (V)', 'Temp (°C)'];
                 headers.forEach(text => {
                     const th = document.createElement('th');
@@ -399,33 +446,52 @@ document.addEventListener('DOMContentLoaded', () => {
                     headerRow.appendChild(th);
                 });
                 const tbody = table.createTBody();
-                currentLapData.forEach(lap => {
+                currentLapData.forEach((lap, index) => {
                     const row = tbody.insertRow();
-                    const nr = lap.nr;
-                    const duration = lap.duration;
-                    const sessionDuration = lap.sessionDuration || 'N/A';
+                    
+                    row.addEventListener('mouseenter', () => {
+                        hoveredRowIndex = index;
+                        if (mainLapChart) mainLapChart.update('none');
+                        if (contextLapChart) contextLapChart.update('none');
+                    });
+                    row.addEventListener('mouseleave', () => {
+                        hoveredRowIndex = null;
+                        if (mainLapChart) mainLapChart.update('none');
+                        if (contextLapChart) contextLapChart.update('none');
+                    });
+
+                    const findDataAttribute = (lap, type) => {
+                        if (!lap || !lap.dataAttributes) return 'N/A';
+                        const attr = lap.dataAttributes.find(a => a.type === type);
+                        return attr ? attr.value.toFixed(1) : 'N/A';
+                    };
+                    row.insertCell().textContent = lap.nr;
+                    row.insertCell().textContent = lap.duration;
+                    row.insertCell().textContent = lap.sessionDuration || 'N/A';
                     let diff = 'N/A';
                     if (lap.diffPrevLap) {
                         const sign = lap.status === 'SLOWER' ? '+' : '-';
                         diff = `${sign}${lap.diffPrevLap}`;
                     }
-                    const speed = lap.speed?.kph?.toFixed(1) || 'N/A';
-                    // AANGEPAST: Haal Temp/Voltage op
-                    const voltage = findDataAttribute(lap, 'VOLTAGE');
-                    const temp = findDataAttribute(lap, 'TEMPERATURE');
-                    
-                    // AANGEPAST: Vul alle cellen
-                    row.insertCell().textContent = nr;
-                    row.insertCell().textContent = duration;
-                    row.insertCell().textContent = sessionDuration;
                     row.insertCell().textContent = diff;
-                    row.insertCell().textContent = speed;
-                    row.insertCell().textContent = voltage;
-                    row.insertCell().textContent = temp;
+                    row.insertCell().textContent = lap.speed?.kph?.toFixed(1) || 'N/A';
+                    row.insertCell().textContent = findDataAttribute(lap, 'VOLTAGE');
+                    row.insertCell().textContent = findDataAttribute(lap, 'TEMPERATURE');
                 });
                 lapsTableContainer.appendChild(table);
+                
                 show(maxFastLapControls);
-                updateLapChart(currentLapData);
+                show(tableAndContextSection);
+                
+                updateCharts(currentLapData, 0);
+                
+                lapsTableContainer.addEventListener('scroll', () => throttle(handleTableScroll, 100));
+                
+                const firstRow = table.querySelector('tbody tr');
+                if (firstRow) {
+                    estimatedRowHeight = firstRow.offsetHeight;
+                }
+
             } else {
                 lapsTableContainer.innerHTML = '<p>No lap data found for the selected activity.</p>';
             }
@@ -442,13 +508,16 @@ document.addEventListener('DOMContentLoaded', () => {
         hide(lapsDataDiv);
         hide(errorDiv);
         hide(maxFastLapControls);
+        hide(tableAndContextSection);
+        lapsTableContainer.removeEventListener('scroll', () => throttle(handleTableScroll, 100));
         fetchLapsBtn.disabled = !activitySelect.value;
-        if (chartContainer) {
-            chartContainer.style.height = '';
+        if (mainLapChart) {
+            mainLapChart.destroy();
+            mainLapChart = null;
         }
-        if (lapChart) {
-            lapChart.destroy();
-            lapChart = null;
+        if (contextLapChart) {
+            contextLapChart.destroy();
+            contextLapChart = null;
         }
         currentLapData = [];
     });
@@ -457,7 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
         MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
         maxFastLapInput.value = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
         hide(maxFastLapValueError);
-        if (currentLapData.length > 0) updateLapChart(currentLapData);
+        if (currentLapData.length > 0) updateCharts(currentLapData, contextLapChart.startIndex || 0);
     });
     
     maxFastLapInput.addEventListener('input', () => {
@@ -472,7 +541,7 @@ document.addEventListener('DOMContentLoaded', () => {
             hide(maxFastLapValueError);
             MAX_FAST_LAP_TIME_SECONDS = parsedSeconds;
             maxFastLapSlider.value = parsedSeconds;
-            if (currentLapData.length > 0) updateLapChart(currentLapData);
+            if (currentLapData.length > 0) updateCharts(currentLapData, contextLapChart.startIndex || 0);
         }
     });
 
