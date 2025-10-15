@@ -25,6 +25,7 @@ function getCookie(name) {
     return null;
 }
 
+// TOEGEVOEGD: De ontbrekende functie om opgeslagen transponders te laden
 function loadSavedTransponders(cookieKey, datalistElement) {
     const saved = getCookie(cookieKey);
     const transponders = saved ? saved.split(',') : [];
@@ -36,6 +37,7 @@ function loadSavedTransponders(cookieKey, datalistElement) {
     });
 }
 
+// TOEGEVOEGD: De ontbrekende functie om een transponder op te slaan
 function saveTransponder(transponder, cookieKey) {
     const saved = getCookie(cookieKey);
     let transponders = saved ? saved.split(',') : [];
@@ -44,6 +46,7 @@ function saveTransponder(transponder, cookieKey) {
         setCookie(cookieKey, transponders.join(','), 365);
     }
 }
+
 
 // --- DOM & UI Functies ---
 
@@ -54,6 +57,7 @@ function show(element) {
 function hide(element) {
     if (element) element.classList.add('hidden');
 }
+
 
 // --- Formatting Functies ---
 

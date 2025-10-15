@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let estimatedRowHeight = 28;
     let hoveredRowIndex = null;
     let MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
+    let generatedGpxFilename = 'training_session.gpx'; // Variabele voor de bestandsnaam
 
     Chart.register(ChartDataLabels);
     
@@ -45,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sessionSummaryContainer.innerHTML = '';
         activityInfoTable.innerHTML = '';
         userActivities = []; currentLapData = [];
+        generatedGpxFilename = 'training_session.gpx'; // Reset de bestandsnaam
         if (mainChartContainer) mainChartContainer.style.height = '';
         if (mainLapChart) { mainLapChart.destroy(); mainLapChart = null; }
         if (contextLapChart) { contextLapChart.destroy(); contextLapChart = null; }
@@ -62,24 +64,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const minChartHeight = 300;
         const calculatedHeight = Math.max(minChartHeight, numberOfLaps * heightPerLap);
         mainChartContainer.style.height = `${calculatedHeight}px`;
-        const chartData = prepareChartData(lapData, MAX_FAST_LAP_TIME_SECONDS);
+        const { lapNumbers, lapTimesInSeconds, backgroundColors, borderColors, borderWidths, yAxisMin } = prepareChartData(lapData, MAX_FAST_LAP_TIME_SECONDS);
         if (mainLapChart) mainLapChart.destroy();
         mainLapChart = new Chart(mainLapChartCanvas, {
             type: 'bar',
-            data: { labels: chartData.lapNumbers, datasets: [{ data: chartData.lapTimesInSeconds, backgroundColor: chartData.backgroundColors, borderColor: chartData.borderColors, borderWidth: chartData.borderWidths }] },
-            options: getChartOptions(chartData.yAxisMin, true, lapData, hoveredRowIndex, MAX_FAST_LAP_TIME_SECONDS, mainLapChart, contextLapChart, currentLapData)
+            data: { labels: lapNumbers, datasets: [{ data: lapTimesInSeconds, backgroundColor: backgroundColors, borderColor: borderColors, borderWidth: borderWidths }] },
+            options: getChartOptions(yAxisMin, true, lapData, hoveredRowIndex, MAX_FAST_LAP_TIME_SECONDS, mainLapChart, contextLapChart, currentLapData)
         });
     }
 
     function updateContextLapChart(lapData, startIndex = 0) {
         const dataSlice = lapData.slice(startIndex, startIndex + 10);
-        const chartData = prepareChartData(dataSlice, MAX_FAST_LAP_TIME_SECONDS);
+        const { lapTimesInSeconds, backgroundColors, borderColors, borderWidths, yAxisMin } = prepareChartData(dataSlice, MAX_FAST_LAP_TIME_SECONDS);
         const contextLapNumbers = dataSlice.map(lap => `Lap ${lap.nr}`);
         if (contextLapChart) contextLapChart.destroy();
         contextLapChart = new Chart(contextLapChartCanvas, {
             type: 'bar',
-            data: { labels: contextLapNumbers, datasets: [{ data: chartData.lapTimesInSeconds, backgroundColor: chartData.backgroundColors, borderColor: chartData.borderColors, borderWidth: chartData.borderWidths }] },
-            options: getChartOptions(chartData.yAxisMin, false, dataSlice, hoveredRowIndex, MAX_FAST_LAP_TIME_SECONDS, mainLapChart, contextLapChart, currentLapData)
+            data: { labels: contextLapNumbers, datasets: [{ data: lapTimesInSeconds, backgroundColor: backgroundColors, borderColor: borderColors, borderWidth: borderWidths }] },
+            options: getChartOptions(yAxisMin, false, dataSlice, hoveredRowIndex, MAX_FAST_LAP_TIME_SECONDS, mainLapChart, contextLapChart, currentLapData)
         });
         contextLapChart.startIndex = startIndex;
     }
@@ -145,7 +147,9 @@ document.addEventListener('DOMContentLoaded', () => {
         lapsTableContainer.innerHTML = '';
         sessionSummaryContainer.innerHTML = '';
         resetGpxState(downloadGpxBtn);
+        generatedGpxFilename = 'training_session.gpx';
         lapsTableContainer.removeEventListener('scroll', () => throttle(handleTableScroll, 100));
+        
         const selectedActivityId = activitySelect.value;
         if (!selectedActivityId) {
             errorDiv.textContent = "Please select an activity from the list.";
@@ -222,6 +226,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 lapsTableContainer.addEventListener('scroll', () => throttle(handleTableScroll, 100));
                 const firstRow = table.querySelector('tbody tr');
                 if (firstRow) estimatedRowHeight = firstRow.offsetHeight;
+
+                // Bouw de bestandsnaam op
+                const selectedActivity = userActivities.find(act => act.id === parseInt(selectedActivityId));
+                if (selectedActivity) {
+                    const sport = selectedActivity.location.sport.replace(/\s+/g, '');
+                    const location = selectedActivity.location.name.replace(/\s+/g, '_');
+                    const date = new Date(selectedActivity.startTime);
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const dateString = `${year}-${month}-${day}`;
+                    generatedGpxFilename = `${sport}-${location}-${dateString}-session.gpx`;
+                }
+
                 generateAndPrepareGpxDownload(currentLapData, downloadGpxBtn);
             } else {
                 lapsTableContainer.innerHTML = '<p>No lap data found for the selected activity.</p>';
@@ -235,7 +253,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    downloadGpxBtn.addEventListener('click', handleGpxDownload);
+    downloadGpxBtn.addEventListener('click', () => {
+        handleGpxDownload(generatedGpxFilename);
+    });
 
     activitySelect.addEventListener('change', () => {
         hide(lapsDataDiv); hide(errorDiv); hide(maxFastLapControls);
