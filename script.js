@@ -6,36 +6,30 @@ document.addEventListener('DOMContentLoaded', () => {
     const activitiesListDiv = document.getElementById('activitiesList');
     const activitySelect = document.getElementById('activitySelect');
     const fetchLapsBtn = document.getElementById('fetchLapsBtn');
+    const sessionSummaryContainer = document.getElementById('sessionSummary');
     const lapsDataDiv = document.getElementById('lapsData');
-    
-    const maxFastLapControls = document.getElementById('maxFastLapControls'); 
-
+    const maxFastLapControls = document.getElementById('maxFastLapControls');
     const mainLapChartCanvas = document.getElementById('mainLapChart');
     const mainChartContainer = document.getElementById('mainChartContainer');
     const contextLapChartCanvas = document.getElementById('contextLapChart');
     const tableAndContextSection = document.getElementById('tableAndContextSection');
     const lapsTableContainer = document.getElementById('lapsTableContainer');
-
     const maxFastLapSlider = document.getElementById('maxFastLapSlider');
     const maxFastLapInput = document.getElementById('maxFastLapInput');
     const maxFastLapValueError = document.getElementById('maxFastLapValueError');
-
     const transponderDatalist = document.getElementById('transponder-list');
+    const activityInfoPanel = document.getElementById('activityInfoPanel');
+    const activityInfoTable = document.getElementById('activityInfoTable');
     const TRANSPONDER_COOKIE_KEY = 'savedTransponders';
-
     const PROXY_BASE_URL = 'https://us-central1-proxyapi-475018.cloudfunctions.net/mylapsProxyFunction/api/mylaps';
-
     let userActivities = [];
     let mainLapChart = null;
     let contextLapChart = null;
     let currentLapData = [];
     let estimatedRowHeight = 28;
     let hoveredRowIndex = null;
-
     let MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
-
     Chart.register(ChartDataLabels);
-
     function setCookie(name, value, days) {
         let expires = "";
         if (days) {
@@ -45,7 +39,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         document.cookie = name + "=" + (value || "") + expires + "; path=/; SameSite=Lax";
     }
-
     function getCookie(name) {
         const nameEQ = name + "=";
         const ca = document.cookie.split(';');
@@ -56,7 +49,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return null;
     }
-
     function loadSavedTransponders() {
         const saved = getCookie(TRANSPONDER_COOKIE_KEY);
         const transponders = saved ? saved.split(',') : [];
@@ -67,7 +59,6 @@ document.addEventListener('DOMContentLoaded', () => {
             transponderDatalist.appendChild(option);
         });
     }
-
     function saveTransponder(transponder) {
         const saved = getCookie(TRANSPONDER_COOKIE_KEY);
         let transponders = saved ? saved.split(',') : [];
@@ -77,32 +68,30 @@ document.addEventListener('DOMContentLoaded', () => {
             loadSavedTransponders();
         }
     }
-
     function show(element) {
         element.classList.remove('hidden');
     }
-
     function hide(element) {
         element.classList.add('hidden');
     }
-
     function resetUI() {
         hide(loadingDiv);
         hide(errorDiv);
         hide(activitiesListDiv);
         hide(lapsDataDiv);
-        hide(maxFastLapValueError);
         hide(maxFastLapControls);
         hide(tableAndContextSection);
+        hide(sessionSummaryContainer);
+        hide(activityInfoPanel);
         errorDiv.textContent = '';
         activitySelect.innerHTML = '<option value="">Select an activity</option>';
         fetchLapsBtn.disabled = true;
         lapsTableContainer.innerHTML = '';
+        sessionSummaryContainer.innerHTML = '';
+        activityInfoTable.innerHTML = '';
         userActivities = [];
         currentLapData = [];
-        if (mainChartContainer) {
-            mainChartContainer.style.height = '';
-        }
+        if (mainChartContainer) mainChartContainer.style.height = '';
         if (mainLapChart) {
             mainLapChart.destroy();
             mainLapChart = null;
@@ -112,17 +101,19 @@ document.addEventListener('DOMContentLoaded', () => {
             contextLapChart = null;
         }
     }
-
     function formatDateTime(isoString) {
         const date = new Date(isoString);
         const options = {
-            day: '2-digit', month: '2-digit', year: 'numeric',
-            hour: '2-digit', minute: '2-digit', hour12: false
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
         };
         const parts = date.toLocaleString('en-GB', options).split(', ');
         return `${parts[0]} - ${parts[1]}`;
     }
-
     function parseDurationToSeconds(durationString) {
         if (typeof durationString !== 'string') return NaN;
         const parts = durationString.split(':');
@@ -136,7 +127,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return totalSeconds;
     }
-
     function formatSecondsToDuration(totalSeconds) {
         if (isNaN(totalSeconds) || totalSeconds < 0) return '';
         const minutes = Math.floor(totalSeconds / 60);
@@ -151,36 +141,30 @@ document.addEventListener('DOMContentLoaded', () => {
             return `${formattedSec}.${formattedMs}`;
         }
     }
-
     function isValidTransponderFormat(transponder) {
         return /^[A-Z]{2}-\d{5}$/.test(transponder);
     }
-
     function updateCharts(lapData, startIndex = 0) {
         if (!lapData || lapData.length === 0) return;
         updateMainLapChart(lapData);
         updateContextLapChart(lapData, startIndex);
     }
-    
     function prepareChartData(data) {
         const lapNumbers = [];
         const lapTimesInSeconds = [];
         const backgroundColors = [];
         const borderColors = [];
         const borderWidths = [];
-        
         let minLapTime = Infinity;
         data.forEach(lap => {
             const lapTime = parseDurationToSeconds(lap.duration);
             if (lapTime < minLapTime) minLapTime = lapTime;
         });
         const yAxisMin = Math.max(0, minLapTime - 5);
-    
         data.forEach(lap => {
             lapNumbers.push(`Lap ${lap.nr}`);
             const lapTime = parseDurationToSeconds(lap.duration);
             lapTimesInSeconds.push(lapTime);
-    
             if (lapTime <= MAX_FAST_LAP_TIME_SECONDS) {
                 backgroundColors.push('rgba(0, 123, 255, 0.8)');
                 if (lap.status === 'FASTER') {
@@ -199,60 +183,74 @@ document.addEventListener('DOMContentLoaded', () => {
                 borderWidths.push(1);
             }
         });
-        return { lapNumbers, lapTimesInSeconds, backgroundColors, borderColors, borderWidths, yAxisMin };
+        return {
+            lapNumbers,
+            lapTimesInSeconds,
+            backgroundColors,
+            borderColors,
+            borderWidths,
+            yAxisMin
+        };
     }
-
     function getChartOptions(yAxisMin, showDataLabels, fullLapData) {
         return {
             indexAxis: 'y',
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                x: { 
+                x: {
                     beginAtZero: false,
                     min: yAxisMin,
-                    max: MAX_FAST_LAP_TIME_SECONDS + 0,
-                    ticks: { callback: value => formatSecondsToDuration(value) }
+                    max: MAX_FAST_LAP_TIME_SECONDS + 1,
+                    ticks: {
+                        callback: value => formatSecondsToDuration(value)
+                    }
                 },
                 xTop: {
                     position: 'top',
                     beginAtZero: false,
                     min: yAxisMin,
                     max: MAX_FAST_LAP_TIME_SECONDS + 1,
-                    ticks: { callback: value => formatSecondsToDuration(value) },
-                    grid: { drawOnChartArea: false }
+                    ticks: {
+                        callback: value => formatSecondsToDuration(value)
+                    },
+                    grid: {
+                        drawOnChartArea: false
+                    }
                 },
-                y: { 
+                y: {
                     ticks: {
                         font: function(context) {
-                            // GECORRIGEERD: Bereken de juiste index om te markeren
                             let indexToMatch;
                             if (context.chart === mainLapChart) {
-                                // De hoofdgrafiek gebruikt de globale index direct
                                 indexToMatch = hoveredRowIndex;
                             } else {
-                                // De context-grafiek moet de globale index omrekenen naar een lokale index
                                 const startIndex = context.chart.startIndex || 0;
                                 indexToMatch = hoveredRowIndex - startIndex;
                             }
-                            
                             if (context.index === indexToMatch) {
-                                return { weight: 'bold' };
+                                return {
+                                    weight: 'bold'
+                                };
                             }
-                            return { weight: 'normal' };
+                            return {
+                                weight: 'normal'
+                            };
                         }
                     }
                 }
             },
             plugins: {
-                legend: { display: false },
+                legend: {
+                    display: false
+                },
                 tooltip: {
                     callbacks: {
                         label: function(context) {
                             const dataIndex = context.dataIndex;
                             let lap;
                             if (context.chart === mainLapChart) {
-                                lap = fullLapData[dataIndex];
+                                lap = currentLapData[dataIndex];
                             } else {
                                 const startIndex = context.chart.startIndex || 0;
                                 lap = currentLapData[startIndex + dataIndex];
@@ -286,7 +284,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     align: 'left',
                     offset: 4,
                     color: 'black',
-                    font: { weight: 'bold' },
+                    font: {
+                        weight: 'bold'
+                    },
                     formatter: function(value, context) {
                         const lap = fullLapData[context.dataIndex];
                         const sign = lap.status === 'SLOWER' ? '+' : '-';
@@ -298,7 +298,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
     }
-
     function updateMainLapChart(lapData) {
         if (!mainLapChartCanvas || !lapData || lapData.length === 0) return;
         const numberOfLaps = lapData.length;
@@ -306,35 +305,56 @@ document.addEventListener('DOMContentLoaded', () => {
         const minChartHeight = 300;
         const calculatedHeight = Math.max(minChartHeight, numberOfLaps * heightPerLap);
         mainChartContainer.style.height = `${calculatedHeight}px`;
-        const { lapNumbers, lapTimesInSeconds, backgroundColors, borderColors, borderWidths, yAxisMin } = prepareChartData(lapData);
+        const {
+            lapNumbers,
+            lapTimesInSeconds,
+            backgroundColors,
+            borderColors,
+            borderWidths,
+            yAxisMin
+        } = prepareChartData(lapData);
         if (mainLapChart) mainLapChart.destroy();
         mainLapChart = new Chart(mainLapChartCanvas, {
             type: 'bar',
             data: {
                 labels: lapNumbers,
-                datasets: [{ data: lapTimesInSeconds, backgroundColor: backgroundColors, borderColor: borderColors, borderWidth: borderWidths }]
+                datasets: [{
+                    data: lapTimesInSeconds,
+                    backgroundColor: backgroundColors,
+                    borderColor: borderColors,
+                    borderWidth: borderWidths
+                }]
             },
             options: getChartOptions(yAxisMin, true, lapData)
         });
     }
-
     function updateContextLapChart(lapData, startIndex = 0) {
         if (!contextLapChartCanvas || !lapData || lapData.length === 0) return;
         const dataSlice = lapData.slice(startIndex, startIndex + 10);
-        const { lapTimesInSeconds, backgroundColors, borderColors, borderWidths, yAxisMin } = prepareChartData(dataSlice);
+        const {
+            lapTimesInSeconds,
+            backgroundColors,
+            borderColors,
+            borderWidths,
+            yAxisMin
+        } = prepareChartData(dataSlice);
         const contextLapNumbers = dataSlice.map(lap => `Lap ${lap.nr}`);
         if (contextLapChart) contextLapChart.destroy();
         contextLapChart = new Chart(contextLapChartCanvas, {
             type: 'bar',
             data: {
                 labels: contextLapNumbers,
-                datasets: [{ data: lapTimesInSeconds, backgroundColor: backgroundColors, borderColor: borderColors, borderWidth: borderWidths }]
+                datasets: [{
+                    data: lapTimesInSeconds,
+                    backgroundColor: backgroundColors,
+                    borderColor: borderColors,
+                    borderWidth: borderWidths
+                }]
             },
             options: getChartOptions(yAxisMin, false, dataSlice)
         });
-        contextLapChart.startIndex = startIndex; // Sla de startindex op voor later gebruik
+        contextLapChart.startIndex = startIndex;
     }
-    
     fetchActivitiesBtn.addEventListener('click', async () => {
         resetUI();
         const transponder = transponderInput.value.trim().toUpperCase();
@@ -349,7 +369,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const newUrl = `${window.location.pathname}?transponder=${transponder}`;
-        window.history.pushState({ path: newUrl }, '', newUrl);
+        window.history.pushState({
+            path: newUrl
+        }, '', newUrl);
         show(loadingDiv);
         try {
             let url = `${PROXY_BASE_URL}/userid/${transponder}`;
@@ -385,7 +407,6 @@ document.addEventListener('DOMContentLoaded', () => {
             show(errorDiv);
         }
     });
-
     const handleTableScroll = () => {
         const scrollTop = lapsTableContainer.scrollTop;
         const newStartIndex = Math.floor(scrollTop / estimatedRowHeight);
@@ -393,7 +414,6 @@ document.addEventListener('DOMContentLoaded', () => {
             updateContextLapChart(currentLapData, newStartIndex);
         }
     };
-
     let throttleTimer;
     const throttle = (callback, time) => {
         if (throttleTimer) return;
@@ -403,15 +423,15 @@ document.addEventListener('DOMContentLoaded', () => {
             throttleTimer = false;
         }, time);
     };
-    
     fetchLapsBtn.addEventListener('click', async () => {
         hide(lapsDataDiv);
         hide(errorDiv);
         hide(maxFastLapControls);
         hide(tableAndContextSection);
+        hide(sessionSummaryContainer);
         lapsTableContainer.innerHTML = '';
+        sessionSummaryContainer.innerHTML = '';
         lapsTableContainer.removeEventListener('scroll', () => throttle(handleTableScroll, 100));
-
         const selectedActivityId = activitySelect.value;
         if (!selectedActivityId) {
             errorDiv.textContent = "Please select an activity from the list.";
@@ -423,16 +443,51 @@ document.addEventListener('DOMContentLoaded', () => {
             const url = `${PROXY_BASE_URL}/laps/${selectedActivityId}`;
             const response = await fetch(url);
             if (!response.ok) throw new Error((await response.json()).error || `Proxy error: ${response.status}`);
-            const activitySessions = await response.json();
+            const fullSessionData = await response.json();
             currentLapData = [];
-            if (activitySessions && activitySessions.sessions) {
-                activitySessions.sessions.forEach(session => {
+            if (fullSessionData && fullSessionData.sessions) {
+                fullSessionData.sessions.forEach(session => {
                     if (session.laps && Array.isArray(session.laps)) {
                         currentLapData.push(...session.laps);
                     }
                 });
             }
             hide(loadingDiv);
+            if (fullSessionData.stats) {
+                const stats = fullSessionData.stats;
+                const bestLap = fullSessionData.bestLap;
+                const summaryHTML = `
+                    <div class="stat-card">
+                        <span class="label">Total Laps</span>
+                        <span class="value">${stats.lapCount || 'N/A'}</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="label">Best Lap</span>
+                        <span class="value">${stats.fastestTime || 'N/A'}</span>
+                        <span class="sub-value">(Lap ${bestLap.lapNr || 'N/A'})</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="label">Average Lap</span>
+                        <span class="value">${stats.averageTime || 'N/A'}</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="label">Total Time</span>
+                        <span class="value">${stats.totalTrainingTime || 'N/A'}</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="label">Avg Speed</span>
+                        <span class="value">${stats.averageSpeed?.kph?.toFixed(1) || 'N/A'}</span>
+                        <span class="sub-value">km/h</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="label">Top Speed</span>
+                        <span class="value">${stats.fastestSpeed?.kph?.toFixed(1) || 'N/A'}</span>
+                        <span class="sub-value">km/h</span>
+                    </div>
+                `;
+                sessionSummaryContainer.innerHTML = summaryHTML;
+                show(sessionSummaryContainer);
+            }
             show(lapsDataDiv);
             if (currentLapData.length > 0) {
                 const table = document.createElement('table');
@@ -448,7 +503,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const tbody = table.createTBody();
                 currentLapData.forEach((lap, index) => {
                     const row = tbody.insertRow();
-                    
                     row.addEventListener('mouseenter', () => {
                         hoveredRowIndex = index;
                         if (mainLapChart) mainLapChart.update('none');
@@ -459,7 +513,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (mainLapChart) mainLapChart.update('none');
                         if (contextLapChart) contextLapChart.update('none');
                     });
-
                     const findDataAttribute = (lap, type) => {
                         if (!lap || !lap.dataAttributes) return 'N/A';
                         const attr = lap.dataAttributes.find(a => a.type === type);
@@ -479,19 +532,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     row.insertCell().textContent = findDataAttribute(lap, 'TEMPERATURE');
                 });
                 lapsTableContainer.appendChild(table);
-                
                 show(maxFastLapControls);
                 show(tableAndContextSection);
-                
                 updateCharts(currentLapData, 0);
-                
                 lapsTableContainer.addEventListener('scroll', () => throttle(handleTableScroll, 100));
-                
                 const firstRow = table.querySelector('tbody tr');
                 if (firstRow) {
                     estimatedRowHeight = firstRow.offsetHeight;
                 }
-
             } else {
                 lapsTableContainer.innerHTML = '<p>No lap data found for the selected activity.</p>';
             }
@@ -503,12 +551,12 @@ document.addEventListener('DOMContentLoaded', () => {
             hide(lapsDataDiv);
         }
     });
-
     activitySelect.addEventListener('change', () => {
         hide(lapsDataDiv);
         hide(errorDiv);
         hide(maxFastLapControls);
         hide(tableAndContextSection);
+        hide(sessionSummaryContainer);
         lapsTableContainer.removeEventListener('scroll', () => throttle(handleTableScroll, 100));
         fetchLapsBtn.disabled = !activitySelect.value;
         if (mainLapChart) {
@@ -520,15 +568,34 @@ document.addEventListener('DOMContentLoaded', () => {
             contextLapChart = null;
         }
         currentLapData = [];
+
+        const selectedActivityId = activitySelect.value;
+        if (selectedActivityId) {
+            const activity = userActivities.find(act => act.id === parseInt(selectedActivityId));
+            if (activity) {
+                const tableHTML = `
+                    <table class="activity-info-table">
+                        <tbody>
+                            <tr><td>Sport:</td><td>${activity.location.sport}</td></tr>
+                            <tr><td>Location:</td><td>${activity.location.name}</td></tr>
+                            <tr><td>Start Time:</td><td>${formatDateTime(activity.startTime)}</td></tr>
+                        </tbody>
+                    </table>
+                `;
+                activityInfoTable.innerHTML = tableHTML;
+                show(activityInfoPanel);
+            }
+        } else {
+            hide(activityInfoPanel);
+            activityInfoTable.innerHTML = '';
+        }
     });
-    
     maxFastLapSlider.addEventListener('input', () => {
         MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
         maxFastLapInput.value = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
         hide(maxFastLapValueError);
         if (currentLapData.length > 0) updateCharts(currentLapData, contextLapChart.startIndex || 0);
     });
-    
     maxFastLapInput.addEventListener('input', () => {
         const inputText = maxFastLapInput.value.trim();
         const parsedSeconds = parseDurationToSeconds(inputText);
@@ -544,12 +611,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (currentLapData.length > 0) updateCharts(currentLapData, contextLapChart.startIndex || 0);
         }
     });
-
     loadSavedTransponders();
     maxFastLapSlider.value = parseFloat(maxFastLapSlider.value).toFixed(1);
     maxFastLapInput.value = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
     resetUI();
-
     function handleUrlParameter() {
         const urlParams = new URLSearchParams(window.location.search);
         const transponderFromUrl = urlParams.get('transponder');
@@ -558,6 +623,5 @@ document.addEventListener('DOMContentLoaded', () => {
             fetchActivitiesBtn.click();
         }
     }
-
     handleUrlParameter();
 });

@@ -23,15 +23,28 @@
         <div id="loading" class="hidden">Loading...</div>
         <div id="error" class="hidden error-message"></div>
 
+        <!-- AANGEPAST: Volledig nieuwe structuur voor de "Recent Activities" sectie -->
         <div id="activitiesList" class="hidden">
-            <h2>Recent Activities:</h2>
-            <div class="activity-controls-group input-group"> 
-                <select id="activitySelect">
-                    <option value="">Select an activity</option>
-                </select>
-                <button id="fetchLapsBtn" disabled>Fetch Laps</button>
+            <h2>Recent Activities</h2>
+            <div class="activities-split-view">
+                <!-- Linker paneel met de selectie -->
+                <div class="activities-left-panel">
+                    <div class="activity-controls-group input-group"> 
+                        <select id="activitySelect">
+                            <option value="">Select an activity</option>
+                        </select>
+                        <button id="fetchLapsBtn" disabled>Fetch Laps</button>
+                    </div>
+                </div>
+                <!-- Rechter paneel met de details (initieel verborgen) -->
+                <div class="activities-right-panel hidden" id="activityInfoPanel">
+                    <div id="activityInfoTable"></div>
+                </div>
             </div>
         </div>
+
+        <!-- NIEUW: Container voor de Sessie Samenvatting -->
+        <div id="sessionSummary" class="hidden"></div>
 
         <div id="lapsData" class="hidden">
             <div id="maxFastLapControls" class="input-group slider-group">
@@ -40,27 +53,20 @@
                 <input type="text" id="maxFastLapInput" value="1:00.000" placeholder="MM:SS.ms or SS.ms">
                 <span id="maxFastLapValueError" class="error-message hidden">Invalid time format</span>
             </div>
-
-            <!-- Hoofdgrafiek (groot en dynamisch) -->
             <div class="chart-container" id="mainChartContainer">
                 <canvas id="mainLapChart"></canvas>
             </div>
-
-            <!-- NIEUW: Sectie voor tabel en context-grafiek -->
             <div class="table-and-context-section hidden" id="tableAndContextSection">
                 <h2>Laps Data Analysis</h2>
                 <div class="split-view">
-                    <!-- Context-grafiek (klein en vast) -->
                     <div class="chart-container" id="contextChartContainer">
                         <canvas id="contextLapChart"></canvas>
                     </div>
-                    <!-- Tabel met scroll -->
                     <div id="lapsTableContainer"></div>
                 </div>
             </div>
         </div>
     </div>
-
     <script src="script.js"></script>
 </body>
 </html>
