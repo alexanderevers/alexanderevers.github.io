@@ -85,6 +85,43 @@ h2 {
     background-color: #cccccc;
     cursor: not-allowed;
 }
+/* Profile Info Section */
+#profile-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 10px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    border: 1px solid #e7e7e7;
+    margin-top: 10px;
+}
+
+#profile-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #007bff;
+}
+
+.profile-details {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+#profile-name {
+    font-weight: bold;
+    font-size: 1.2em;
+    color: #333;
+}
+
+#profile-nickname {
+    font-style: italic;
+    color: #555;
+    text-align: right; /* Align nickname to the right */
+}
 
 /* Activities List Group */
 #activitiesList {

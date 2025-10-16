@@ -1,0 +1,16 @@
+{
+  "name": "mylaps-proxy-function",
+  "version": "1.0.0",
+  "description": "A Google Cloud Function to proxy MYLAPS API requests.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "node-fetch": "^2.6.1",
+    "cors": "^2.8.5"
+  },
+  "engines": {
+    "node": "20"
+  }
+}

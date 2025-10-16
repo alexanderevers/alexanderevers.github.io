@@ -12,17 +12,38 @@ async function fetchActivities(transponder) {
         throw new Error(errorData.error || `User ID lookup failed: ${response.status}`);
     }
     const userData = await response.json();
-    
     const userID = userData.userId;
-    url = `${PROXY_BASE_URL}/activities/${userID}`;
-    response = await fetch(url);
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Activities fetch failed: ${response.status}`);
+
+    if (!userID) {
+        throw new Error('User ID not found for the given transponder.');
+    }
+
+    // Fetch activities and account profile in parallel
+    const activitiesUrl = `${PROXY_BASE_URL}/activities/${userID}`;
+    const accountUrl = `${PROXY_BASE_URL}/account/${userID}`;
+
+    const [activitiesResponse, accountResponse] = await Promise.all([
+        fetch(activitiesUrl),
+        fetch(accountUrl)
+    ]);
+
+    if (!activitiesResponse.ok) {
+        const errorData = await activitiesResponse.json();
+        throw new Error(errorData.error || `Activities fetch failed: ${activitiesResponse.status}`);
     }
     
-    const activitiesResponse = await response.json();
-    return activitiesResponse.activities || [];
+    const activitiesData = await activitiesResponse.json();
+    const activities = activitiesData.activities || [];
+
+    let accountData = null;
+    if (accountResponse.ok) {
+        accountData = await accountResponse.json();
+    } else {
+        // It's not a critical error if the profile can't be fetched, so just warn.
+        console.warn(`Could not fetch account details: ${accountResponse.status}`);
+    }
+
+    return { activities, account: accountData, userId: userID };
 }
 
 async function fetchLaps(activityId) {

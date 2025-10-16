@@ -21,10 +21,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const transponderDatalist = document.getElementById('transponder-list');
     const activityInfoPanel = document.getElementById('activityInfoPanel');
     const activityInfoTable = document.getElementById('activityInfoTable');
+    const profileInfoDiv = document.getElementById('profile-info');
+    const profileAvatar = document.getElementById('profile-avatar');
+    const profileName = document.getElementById('profile-name');
+    const profileNickname = document.getElementById('profile-nickname');
     
     const TRANSPONDER_COOKIE_KEY = 'savedTransponders';
 
     let userActivities = [];
+    let currentUserId = null;
     let mainLapChart = null;
     let contextLapChart = null;
     let currentLapData = [];
@@ -39,13 +44,17 @@ document.addEventListener('DOMContentLoaded', () => {
         hide(loadingDiv); hide(errorDiv); hide(activitiesListDiv); hide(lapsDataDiv);
         hide(maxFastLapControls); hide(tableAndContextSection); hide(sessionSummaryContainer);
         hide(activityInfoPanel); resetGpxState(downloadGpxBtn);
+        profileInfoDiv.style.display = 'none'; // Force hide with inline style
         errorDiv.textContent = '';
         activitySelect.innerHTML = '<option value="">Select an activity</option>';
         fetchLapsBtn.disabled = true;
         lapsTableContainer.innerHTML = '';
         sessionSummaryContainer.innerHTML = '';
         activityInfoTable.innerHTML = '';
-        userActivities = []; currentLapData = [];
+        userActivities = []; currentLapData = []; currentUserId = null;
+        profileName.textContent = '';
+        profileNickname.textContent = '';
+        profileAvatar.src = '';
         generatedGpxFilename = 'training_session.gpx'; // Reset de bestandsnaam
         if (mainChartContainer) mainChartContainer.style.height = '';
         if (mainLapChart) { mainLapChart.destroy(); mainLapChart = null; }
@@ -69,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
         mainLapChart = new Chart(mainLapChartCanvas, {
             type: 'bar',
             data: { labels: lapNumbers, datasets: [{ data: lapTimesInSeconds, backgroundColor: backgroundColors, borderColor: borderColors, borderWidth: borderWidths }] },
-            options: getChartOptions(yAxisMin, true, lapData, hoveredRowIndex, MAX_FAST_LAP_TIME_SECONDS, mainLapChart, contextLapChart, currentLapData)
+            options: getChartOptions(yAxisMin, true, lapData, hoveredRowIndex, MAX_FAST_LAP_TIME_SECONDS, mainLapChart, contextLapChart, currentLapData, 0)
         });
     }
 
@@ -81,9 +90,43 @@ document.addEventListener('DOMContentLoaded', () => {
         contextLapChart = new Chart(contextLapChartCanvas, {
             type: 'bar',
             data: { labels: contextLapNumbers, datasets: [{ data: lapTimesInSeconds, backgroundColor: backgroundColors, borderColor: borderColors, borderWidth: borderWidths }] },
-            options: getChartOptions(yAxisMin, false, dataSlice, hoveredRowIndex, MAX_FAST_LAP_TIME_SECONDS, mainLapChart, contextLapChart, currentLapData)
+            options: getChartOptions(yAxisMin, false, dataSlice, hoveredRowIndex, MAX_FAST_LAP_TIME_SECONDS, mainLapChart, contextLapChart, currentLapData, startIndex)
         });
         contextLapChart.startIndex = startIndex;
+    }
+
+    function displayProfileInfo(account, userId) {
+        // Always hide profile info at the start of this function to prevent flash of old content
+        profileInfoDiv.style.display = 'none';
+
+        if (account) {
+            let name = '';
+            // Handle both possible account info structures
+            if (account.name && (account.name.givenName || account.name.surName)) {
+                name = `${account.name.givenName || ''} ${account.name.surName || ''}`.trim();
+            } else if (account.givenName || account.surName) {
+                name = `${account.givenName || ''} ${account.surName || ''}`.trim();
+            }
+
+            if (name) {
+                profileName.textContent = name;
+                profileNickname.textContent = account.name.nickName || ''; // Use the nested nickName field
+
+                const avatarUrl = `${PROXY_BASE_URL}/avatar/${userId}`;
+
+                // Set up handlers before setting src to avoid race conditions
+                profileAvatar.onload = () => {
+                    profileInfoDiv.style.display = 'flex'; // Show the container using flex
+                };
+
+                profileAvatar.onerror = () => {
+                    profileAvatar.src = ''; // Clear src on error to avoid broken image icon
+                    profileInfoDiv.style.display = 'none'; // Hide the entire profile box on image load error
+                };
+
+                profileAvatar.src = avatarUrl;
+            }
+        }
     }
 
     fetchActivitiesBtn.addEventListener('click', async () => {
@@ -98,7 +141,11 @@ document.addEventListener('DOMContentLoaded', () => {
         window.history.pushState({ path: newUrl }, '', newUrl);
         show(loadingDiv);
         try {
-            userActivities = await fetchActivities(transponder);
+            const { activities, account, userId } = await fetchActivities(transponder);
+            userActivities = activities;
+            currentUserId = userId;
+
+            displayProfileInfo(account, userId);
             saveTransponder(transponder, TRANSPONDER_COOKIE_KEY);
             loadSavedTransponders(TRANSPONDER_COOKIE_KEY, transponderDatalist);
             hide(loadingDiv);
@@ -194,13 +241,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     const row = tbody.insertRow();
                     row.addEventListener('mouseenter', () => {
                         hoveredRowIndex = index;
-                        if (mainLapChart) mainLapChart.update('none');
-                        if (contextLapChart) contextLapChart.update('none');
+                        // Only update the context chart, as redrawing the main chart is slow and not needed for this effect.
+                        if (contextLapChart) {
+                            updateContextLapChart(currentLapData, contextLapChart.startIndex || 0);
+                        }
                     });
                     row.addEventListener('mouseleave', () => {
                         hoveredRowIndex = null;
-                        if (mainLapChart) mainLapChart.update('none');
-                        if (contextLapChart) contextLapChart.update('none');
+                        // Only update the context chart.
+                        if (contextLapChart) {
+                            updateContextLapChart(currentLapData, contextLapChart.startIndex || 0);
+                        }
                     });
                     const findDataAttribute = (lap, type) => {
                         if (!lap?.dataAttributes) return 'N/A';

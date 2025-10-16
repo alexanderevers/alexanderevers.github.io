@@ -43,18 +43,19 @@ function prepareChartData(data, maxFastTime) {
     return { lapNumbers, lapTimesInSeconds, backgroundColors, borderColors, borderWidths, yAxisMin };
 }
 
-function getChartOptions(yAxisMin, showDataLabels, fullLapData, hoveredRowIndex, maxFastTime, mainChartInstance, contextChartInstance, currentFullLapData) {
+function getChartOptions(yAxisMin, showDataLabels, fullLapData, hoveredRowIndex, maxFastTime, mainChartInstance, contextChartInstance, currentFullLapData, startIndex = 0) {
     return {
         indexAxis: 'y',
         responsive: true,
         maintainAspectRatio: false,
+        animation: false,
         scales: {
             x: { 
-                beginAtZero: false, min: yAxisMin, max: maxFastTime + 1,
+                beginAtZero: false, min: yAxisMin, max: maxFastTime + 0,
                 ticks: { callback: value => formatSecondsToDuration(value) }
             },
             xTop: {
-                position: 'top', beginAtZero: false, min: yAxisMin, max: maxFastTime + 1,
+                position: 'top', beginAtZero: false, min: yAxisMin, max: maxFastTime + 0,
                 ticks: { callback: value => formatSecondsToDuration(value) },
                 grid: { drawOnChartArea: false }
             },
@@ -62,14 +63,16 @@ function getChartOptions(yAxisMin, showDataLabels, fullLapData, hoveredRowIndex,
                 ticks: {
                     font: function(context) {
                         let indexToMatch;
-                        if (context.chart === mainChartInstance) {
+                        // Use showDataLabels to distinguish between the main chart (true) and context chart (false)
+                        if (showDataLabels) { // This is the main chart
                             indexToMatch = hoveredRowIndex;
-                        } else {
-                            const startIndex = context.chart.startIndex || 0;
+                        } else { // This is the context chart
                             indexToMatch = hoveredRowIndex - startIndex;
                         }
-                        if (context.index === indexToMatch) return { weight: 'bold' };
-                        return { weight: 'normal' };
+                        if (context.index === indexToMatch) {
+                            return { weight: 'bold', size: '14px' };
+                        }
+                        return { weight: 'normal', size: '12px' };
                     }
                 }
             }
@@ -81,10 +84,9 @@ function getChartOptions(yAxisMin, showDataLabels, fullLapData, hoveredRowIndex,
                     label: function(context) {
                         const dataIndex = context.dataIndex;
                         let lap;
-                        if (context.chart === mainChartInstance) {
+                        if (showDataLabels) { // This is the main chart
                             lap = currentFullLapData[dataIndex];
-                        } else {
-                            const startIndex = context.chart.startIndex || 0;
+                        } else { // This is the context chart
                             lap = currentFullLapData[startIndex + dataIndex];
                         }
                         if (!lap) return '';
