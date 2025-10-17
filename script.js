@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let hoveredRowIndex = null;
     let MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
     let generatedGpxFilename = 'training_session.gpx'; // Variabele voor de bestandsnaam
+    let showOnlySpeedLaps = false;
 
     Chart.register(ChartDataLabels);
     
@@ -80,8 +81,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateCharts(lapData, startIndex = 0) {
         if (!lapData || lapData.length === 0) return;
-        updateMainLapChart(lapData);
-        updateContextLapChart(lapData, startIndex);
+
+        const dataToDisplay = showOnlySpeedLaps
+            ? lapData.filter(lap => {
+                const durationInSeconds = parseDurationToSeconds(lap.duration);
+                return !isNaN(durationInSeconds) && durationInSeconds < MAX_FAST_LAP_TIME_SECONDS;
+            })
+            : lapData;
+
+        updateMainLapChart(dataToDisplay);
+        updateContextLapChart(dataToDisplay, startIndex);
     }
 
     function updateMainLapChart(lapData) {
@@ -411,6 +420,17 @@ document.addEventListener('DOMContentLoaded', () => {
     loadSavedTransponders(TRANSPONDER_COOKIE_KEY, transponderDatalist);
     maxFastLapSlider.value = parseFloat(maxFastLapSlider.value).toFixed(1);
     maxFastLapInput.value = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
+    
+    const toggleLapsBtn = document.getElementById('toggleLapsBtn');
+    toggleLapsBtn.addEventListener('click', () => {
+        showOnlySpeedLaps = !showOnlySpeedLaps;
+        toggleLapsBtn.textContent = showOnlySpeedLaps ? 'Show All Laps' : 'Show Speed Laps';
+        toggleLapsBtn.classList.toggle('active', showOnlySpeedLaps);
+        if (currentLapData.length > 0) {
+            updateCharts(currentLapData, contextLapChart?.startIndex || 0);
+        }
+    });
+
     resetUI();
     
     function handleUrlParameter() {
