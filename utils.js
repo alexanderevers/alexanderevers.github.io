@@ -104,6 +104,35 @@ function formatSecondsToDuration(totalSeconds) {
     }
 }
 
+function formatTotalTrainingTime(durationString) {
+    if (!durationString || typeof durationString !== 'string') return 'N/A';
+
+    // The format can be HH:MM:SS.ms or MM:SS.ms
+    const parts = durationString.split(':');
+    let totalSeconds = 0;
+
+    if (parts.length === 3) { // HH:MM:SS.ms
+        totalSeconds = (+parts[0]) * 3600 + (+parts[1]) * 60 + parseFloat(parts[2]);
+    } else if (parts.length === 2) { // MM:SS.ms
+        totalSeconds = (+parts[0]) * 60 + parseFloat(parts[1]);
+    } else {
+        // If format is unexpected, return as is.
+        return durationString;
+    }
+
+    if (isNaN(totalSeconds)) return durationString;
+
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = Math.floor(totalSeconds % 60);
+
+    const formattedHours = String(hours).padStart(2, '0');
+    const formattedMinutes = String(minutes).padStart(2, '0');
+    const formattedSeconds = String(seconds).padStart(2, '0');
+
+    return `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
+}
+
 function isValidTransponderFormat(transponder) {
     return /^[A-Z]{2}-\d{5}$/.test(transponder);
 }

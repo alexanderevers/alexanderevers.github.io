@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let mainLapChart = null;
     let contextLapChart = null;
     let currentLapData = [];
+    let currentTrackLength = 400; // Standaardwaarde, wordt bijgewerkt bij activiteitselectie
     let estimatedRowHeight = 28;
     let hoveredRowIndex = null;
     let MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
@@ -61,6 +62,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (contextLapChart) { contextLapChart.destroy(); contextLapChart = null; }
     }
     
+    function updateSpeedLapDistance() {
+        if (currentLapData.length === 0) return;
+    
+        const speedLaps = currentLapData.filter(lap => {
+            const durationInSeconds = parseDurationToSeconds(lap.duration);
+            return !isNaN(durationInSeconds) && durationInSeconds < MAX_FAST_LAP_TIME_SECONDS;
+        });
+        const speedLapsDistanceInMeters = speedLaps.length * currentTrackLength;
+        const speedLapsDistanceInKm = (speedLapsDistanceInMeters / 1000).toFixed(2);
+    
+        const speedLapElement = document.querySelector('.speed-laps-distance-value');
+        if (speedLapElement) {
+            speedLapElement.innerHTML = `${speedLapsDistanceInKm} <span class="sub-value">km</span>`;
+        }
+    }
+
     function updateCharts(lapData, startIndex = 0) {
         if (!lapData || lapData.length === 0) return;
         updateMainLapChart(lapData);
@@ -215,13 +232,38 @@ document.addEventListener('DOMContentLoaded', () => {
             hide(loadingDiv);
             if (fullSessionData.stats) {
                 const { stats, bestLap } = fullSessionData;
+
+                // Bereken de afstanden
+                const totalDistanceInMeters = currentLapData.length * currentTrackLength;
+                const speedLaps = currentLapData.filter(lap => {
+                    const durationInSeconds = parseDurationToSeconds(lap.duration);
+                    return !isNaN(durationInSeconds) && durationInSeconds < MAX_FAST_LAP_TIME_SECONDS;
+                });
+                const speedLapsDistanceInMeters = speedLaps.length * currentTrackLength;
+
+                const totalDistanceInKm = (totalDistanceInMeters / 1000).toFixed(2);
+                const speedLapsDistanceInKm = (speedLapsDistanceInMeters / 1000).toFixed(2);
+
                 sessionSummaryContainer.innerHTML = `
                     <div class="stat-card"><span class="label">Total Laps</span><span class="value">${stats.lapCount || 'N/A'}</span></div>
-                    <div class="stat-card"><span class="label">Best Lap</span><span class="value">${stats.fastestTime || 'N/A'}</span><span class="sub-value">(Lap ${bestLap.lapNr || 'N/A'})</span></div>
+                    <div class="stat-card">
+                        <span class="label">Best Lap</span>
+                        <span class="value">
+                            ${stats.fastestTime || 'N/A'} /
+                            <br><span class="best-lap-number">(Lap ${bestLap.lapNr || 'N/A'})</span>
+                        </span>
+                    </div>
                     <div class="stat-card"><span class="label">Average Lap</span><span class="value">${stats.averageTime || 'N/A'}</span></div>
-                    <div class="stat-card"><span class="label">Total Time</span><span class="value">${stats.totalTrainingTime || 'N/A'}</span></div>
-                    <div class="stat-card"><span class="label">Avg Speed</span><span class="value">${stats.averageSpeed?.kph?.toFixed(1) || 'N/A'}</span><span class="sub-value">km/h</span></div>
-                    <div class="stat-card"><span class="label">Top Speed</span><span class="value">${stats.fastestSpeed?.kph?.toFixed(1) || 'N/A'}</span><span class="sub-value">km/h</span></div>`;
+                    <div class="stat-card"><span class="label">Total Time</span><span class="value">${formatTotalTrainingTime(stats.totalTrainingTime) || 'N/A'}</span></div>
+                    <div class="stat-card">
+                        <span class="label">Total Distance</span>
+                        <span class="value">
+                            ${totalDistanceInKm} <span class="sub-value">km</span> /
+                            <br><span class="speed-laps-distance-value">${speedLapsDistanceInKm} <span class="sub-value">km</span></span>
+                        </span>
+                    </div>
+                    <div class="stat-card"><span class="label">Avg Speed</span><span class="value">${stats.averageSpeed?.kph?.toFixed(1) || 'N/A'}</span><span class="sub-value"> km/h</span></div>
+                    <div class="stat-card"><span class="label">Top Speed</span><span class="value">${stats.fastestSpeed?.kph?.toFixed(1) || 'N/A'}</span><span class="sub-value"> km/h</span></div>`;
                 show(sessionSummaryContainer);
             }
             show(lapsDataDiv);
@@ -320,6 +362,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (selectedActivityId) {
             const activity = userActivities.find(act => act.id === parseInt(selectedActivityId));
             if (activity) {
+                currentTrackLength = activity.location.trackLength || 400; // Update track length
                 activityInfoTable.innerHTML = `
                     <table class="activity-info-table">
                         <tbody>
@@ -340,7 +383,10 @@ document.addEventListener('DOMContentLoaded', () => {
         MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
         maxFastLapInput.value = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
         hide(maxFastLapValueError);
-        if (currentLapData.length > 0) updateCharts(currentLapData, contextLapChart?.startIndex || 0);
+        if (currentLapData.length > 0) {
+            updateCharts(currentLapData, contextLapChart?.startIndex || 0);
+            updateSpeedLapDistance();
+        }
     });
     
     maxFastLapInput.addEventListener('input', () => {
@@ -355,7 +401,10 @@ document.addEventListener('DOMContentLoaded', () => {
             hide(maxFastLapValueError);
             MAX_FAST_LAP_TIME_SECONDS = parsedSeconds;
             maxFastLapSlider.value = parsedSeconds;
-            if (currentLapData.length > 0) updateCharts(currentLapData, contextLapChart?.startIndex || 0);
+            if (currentLapData.length > 0) {
+                updateCharts(currentLapData, contextLapChart?.startIndex || 0);
+                updateSpeedLapDistance();
+            }
         }
     });
 

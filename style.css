@@ -206,6 +206,19 @@ h2 {
     color: #888;
 }
 
+.speed-lap-distance {
+    font-size: 0.8em; /* Maak de tekst kleiner */
+    font-weight: normal; /* Zorg ervoor dat het niet vetgedrukt is, indien nodig */
+    color: #555; /* Iets donkerder dan sub-value voor onderscheid */
+}
+
+.best-lap-number,
+.speed-laps-distance-value {
+    font-size: 0.6em;
+    font-weight: normal;
+    color: #555;
+}
+
 /* Laps Data Sectie Lay-out */
 #lapsData {
     display: flex;
