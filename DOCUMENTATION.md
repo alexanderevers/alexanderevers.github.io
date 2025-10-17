@@ -35,6 +35,8 @@ The proxy exposes several endpoints that map to the underlying MYLAPS API:
 -   `/api/mylaps/laps/:activityId`: Fetches lap data for a specific activity.
 -   `/api/mylaps/account/:userId`: Fetches a user's profile information (name, etc.).
 -   `/api/mylaps/avatar/:userId`: Fetches a user's profile image.
+-   `/api/mylaps/locations/:locationId`: Fetches a list of activities for a location. Supports `count` and `offset` query parameters.
+-   `/api/mylaps/chips/:chipCode`: Fetches a list of activities for a specific chip.
 
 ## Frontend Application
 

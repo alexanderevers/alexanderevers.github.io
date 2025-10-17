@@ -31,8 +31,13 @@ exports.mylapsProxy = (req, res) => {
             mylapsUrl = `https://usersandproducts-api.speedhive.com/api/v2/accounts/${param}/profiles`;
         } else if (endpoint === 'avatar' && param) {
             mylapsUrl = `https://usersandproducts-api.speedhive.com/api/v2/image/id/${param}`;
+        } else if (endpoint === 'locations' && param) {
+            const queryString = new URLSearchParams(req.query).toString();
+            mylapsUrl = `https://practice-api.speedhive.com/api/v1/locations/${param}/activities?${queryString}`;
+        } else if (endpoint === 'chips' && param) {
+            mylapsUrl = `https://practice-api.speedhive.com/api/v1/chips/code/${param}/training/activities`;
         } else {
-            return res.status(400).json({ error: 'Invalid MYLAPS API endpoint or missing parameter. Expected format: /api/mylaps/{userid|activities|laps|account|avatar}/{id}' });
+            return res.status(400).json({ error: 'Invalid MYLAPS API endpoint or missing parameter. Expected format: /api/mylaps/{userid|activities|laps|account|avatar|locations|chips}/{id}' });
         }
 
         if (!mylapsUrl) {
