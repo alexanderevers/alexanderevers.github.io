@@ -351,6 +351,87 @@ h2 {
     border-top: 1px solid #eee;
     padding-top: 20px;
 }
+/* Overlapping Sessions Cards */
+#overlappingSessionsTable { /* This is now a container, not a table */
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.session-card {
+    display: flex;
+    gap: 15px;
+    padding: 15px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    border: 1px solid #e7e7e7;
+    align-items: flex-start;
+}
+
+.session-card-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #28a745; /* Green to match the button */
+    flex-shrink: 0;
+}
+
+.session-card-main {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    gap: 10px;
+}
+
+.session-card-header {
+    display: flex;
+    flex-direction: column;
+}
+
+.session-card-name {
+    font-weight: bold;
+    font-size: 1.2em;
+    color: #333;
+}
+
+.session-card-name a {
+    text-decoration: none;
+    color: inherit;
+}
+
+.session-card-name a:hover {
+    color: #0056b3;
+}
+
+.session-card-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 10px;
+    width: 100%;
+}
+
+.session-stat {
+    background-color: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 10px;
+    text-align: center;
+}
+
+.session-stat .label {
+    font-size: 0.75em;
+    color: #666;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.session-stat .value {
+    font-size: 1.1em;
+    font-weight: bold;
+    color: #0056b3;
+}
+
 /* MEDIA QUERIES */
 @media (max-width: 768px) {
     body {

@@ -483,36 +483,50 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const table = document.createElement('table');
-        table.className = 'laps-table'; // Reuse existing table style
-        const thead = table.createTHead();
-        const headerRow = thead.insertRow();
-        const headers = ['Chip Code', 'Chip Label', 'Start Time', 'End Time'];
-        headers.forEach(text => {
-            const th = document.createElement('th');
-            th.textContent = text;
-            headerRow.appendChild(th);
-        });
-
-        const tbody = table.createTBody();
         sessions.forEach(session => {
-            const row = tbody.insertRow();
-            const chipCodeCell = row.insertCell();
-            if (session.chipCode) {
-                const link = document.createElement('a');
-                link.href = `?transponder=${session.chipCode}`;
-                link.textContent = session.chipCode;
-                link.target = '_blank';
-                chipCodeCell.appendChild(link);
-            } else {
-                chipCodeCell.textContent = 'N/A';
+            const stats = session.stats;
+            const card = document.createElement('div');
+            card.className = 'session-card';
+
+            // Use a placeholder if the avatar can't be loaded
+            const avatarUrl = session.account?.id ? `${PROXY_BASE_URL}/avatar/${session.account.id}` : 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+            // Determine the display name
+            let displayName = session.chipLabel || 'Unknown Rider';
+            if (session.account) {
+                const givenName = session.account.givenName || (session.account.name && session.account.name.givenName);
+                const surName = session.account.surName || (session.account.name && session.account.name.surName);
+                const nickName = session.account.name && session.account.name.nickName;
+
+                const fullName = `${givenName || ''} ${surName || ''}`.trim();
+
+                if (fullName && nickName) {
+                    displayName = `${fullName} - ${nickName}`;
+                } else {
+                    displayName = fullName || session.chipLabel || 'Unknown Rider';
+                }
             }
-            row.insertCell().textContent = session.chipLabel || 'N/A';
-            row.insertCell().textContent = formatDateTime(session.startTime);
-            row.insertCell().textContent = session.endTime ? formatDateTime(session.endTime) : 'Ongoing';
+
+            card.innerHTML = `
+                <img src="${avatarUrl}" class="session-card-avatar" alt="Rider Avatar" onerror="this.style.display='none'">
+                <div class="session-card-main">
+                    <div class="session-card-header">
+                        <span class="session-card-name">
+                            <a href="?transponder=${session.chipCode}" target="_blank">${displayName}</a>
+                        </span>
+                        <small>${formatDateTime(session.startTime)}</small>
+                    </div>
+                    <div class="session-card-stats">
+                        <div class="session-stat"><span class="label">Best Lap</span><span class="value">${stats?.fastestTime || 'N/A'}</span></div>
+                        <div class="session-stat"><span class="label">Laps</span><span class="value">${stats?.lapCount || 'N/A'}</span></div>
+                        <div class="session-stat"><span class="label">Duration</span><span class="value">${stats ? formatTotalTrainingTime(stats.totalTrainingTime) : 'N/A'}</span></div>
+                        <div class="session-stat"><span class="label">Avg Lap</span><span class="value">${stats?.averageTime || 'N/A'}</span></div>
+                    </div>
+                </div>
+            `;
+            overlappingSessionsTable.appendChild(card);
         });
 
-        overlappingSessionsTable.appendChild(table);
         show(overlappingSessions);
     }
 
@@ -543,7 +557,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 activity.id !== selectedActivity.id && sessions_overlap(selectedActivity, activity)
             );
 
-            displayOverlappingSessions(overlapping);
+            const overlappingWithDetails = await Promise.all(overlapping.map(async (activity) => {
+                try {
+                    // Fetch session details (laps and stats) and account info in parallel
+                    const [sessionDetails, accountDetails] = await Promise.all([
+                        fetchLaps(activity.id),
+                        fetchAccountDetails(activity.chipCode)
+                    ]);
+                    return { ...activity, stats: sessionDetails.stats, account: accountDetails };
+                } catch (e) {
+                    console.error(`Could not fetch details for activity ${activity.id}`, e);
+                    // Return activity with null stats/account so it can still be displayed
+                    return { ...activity, stats: null, account: null };
+                }
+            }));
+
+            displayOverlappingSessions(overlappingWithDetails);
 
         } catch (error) {
             console.error("Error fetching overlapping sessions:", error);

@@ -91,3 +91,32 @@ async function fetchAllActivitiesFromLocation(locationId, year, sport, sessionSt
 
     return allActivities;
 }
+
+async function fetchAccountDetails(transponder) {
+    try {
+        const url = `${PROXY_BASE_URL}/userid/${transponder}`;
+        const response = await fetch(url);
+        if (!response.ok) {
+            // It's not a critical error if a user can't be found, so just return null.
+            return null;
+        }
+        const userData = await response.json();
+        const userID = userData.userId;
+
+        if (!userID) {
+            return null;
+        }
+
+        const accountUrl = `${PROXY_BASE_URL}/account/${userID}`;
+        const accountResponse = await fetch(accountUrl);
+        
+        if (accountResponse.ok) {
+            const accountData = await accountResponse.json();
+            // The user ID is needed for the avatar URL, so we add it to the returned object.
+            return { ...accountData, id: userID };
+        }
+    } catch (error) {
+        console.warn(`Could not fetch account details for transponder ${transponder}:`, error);
+    }
+    return null;
+}
