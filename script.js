@@ -129,6 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function displayProfileInfo(account, userId) {
         // Always hide profile info at the start of this function to prevent flash of old content
         profileInfoDiv.style.display = 'none';
+        profileAvatar.style.display = 'none'; // Also hide avatar by default
 
         if (account) {
             let name = '';
@@ -142,17 +143,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (name) {
                 profileName.textContent = name;
                 profileNickname.textContent = account.name.nickName || ''; // Use the nested nickName field
+                profileInfoDiv.style.display = 'flex'; // Show the name/nickname container
 
                 const avatarUrl = `${PROXY_BASE_URL}/avatar/${userId}`;
 
                 // Set up handlers before setting src to avoid race conditions
                 profileAvatar.onload = () => {
-                    profileInfoDiv.style.display = 'flex'; // Show the container using flex
+                    profileAvatar.style.display = 'block'; // Show the avatar if it loads
                 };
 
                 profileAvatar.onerror = () => {
                     profileAvatar.src = ''; // Clear src on error to avoid broken image icon
-                    profileInfoDiv.style.display = 'none'; // Hide the entire profile box on image load error
+                    profileAvatar.style.display = 'none'; // Keep avatar hidden on error
                 };
 
                 profileAvatar.src = avatarUrl;
@@ -495,7 +497,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const tbody = table.createTBody();
         sessions.forEach(session => {
             const row = tbody.insertRow();
-            row.insertCell().textContent = session.chipCode || 'N/A';
+            const chipCodeCell = row.insertCell();
+            if (session.chipCode) {
+                const link = document.createElement('a');
+                link.href = `?transponder=${session.chipCode}`;
+                link.textContent = session.chipCode;
+                link.target = '_blank';
+                chipCodeCell.appendChild(link);
+            } else {
+                chipCodeCell.textContent = 'N/A';
+            }
             row.insertCell().textContent = session.chipLabel || 'N/A';
             row.insertCell().textContent = formatDateTime(session.startTime);
             row.insertCell().textContent = session.endTime ? formatDateTime(session.endTime) : 'Ongoing';
