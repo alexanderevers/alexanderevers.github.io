@@ -25,7 +25,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const profileAvatar = document.getElementById('profile-avatar');
     const profileName = document.getElementById('profile-name');
     const profileNickname = document.getElementById('profile-nickname');
-    
+    const fetchOverlappingBtn = document.getElementById('fetchOverlappingBtn');
+    const overlappingSessions = document.getElementById('overlappingSessions');
+    const overlappingSessionsTable = document.getElementById('overlappingSessionsTable');
+
     const TRANSPONDER_COOKIE_KEY = 'savedTransponders';
 
     let userActivities = [];
@@ -45,14 +48,16 @@ document.addEventListener('DOMContentLoaded', () => {
     function resetUI() {
         hide(loadingDiv); hide(errorDiv); hide(activitiesListDiv); hide(lapsDataDiv);
         hide(maxFastLapControls); hide(tableAndContextSection); hide(sessionSummaryContainer);
-        hide(activityInfoPanel); resetGpxState(downloadGpxBtn);
+        hide(activityInfoPanel); resetGpxState(downloadGpxBtn); hide(overlappingSessions); hide(fetchOverlappingBtn);
         profileInfoDiv.style.display = 'none'; // Force hide with inline style
         errorDiv.textContent = '';
         activitySelect.innerHTML = '<option value="">Select an activity</option>';
         fetchLapsBtn.disabled = true;
+        fetchOverlappingBtn.disabled = true;
         lapsTableContainer.innerHTML = '';
         sessionSummaryContainer.innerHTML = '';
         activityInfoTable.innerHTML = '';
+        overlappingSessionsTable.innerHTML = '';
         userActivities = []; currentLapData = []; currentUserId = null;
         profileName.textContent = '';
         profileNickname.textContent = '';
@@ -361,9 +366,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     activitySelect.addEventListener('change', () => {
         hide(lapsDataDiv); hide(errorDiv); hide(maxFastLapControls);
-        hide(tableAndContextSection); hide(sessionSummaryContainer);
+        hide(tableAndContextSection); hide(sessionSummaryContainer); hide(overlappingSessions);
         lapsTableContainer.removeEventListener('scroll', () => throttle(handleTableScroll, 100));
-        fetchLapsBtn.disabled = !activitySelect.value;
+        const hasSelection = !!activitySelect.value;
+        fetchLapsBtn.disabled = !hasSelection;
+        fetchOverlappingBtn.disabled = !hasSelection;
+        if (hasSelection) {
+            show(fetchOverlappingBtn);
+        } else {
+            hide(fetchOverlappingBtn);
+        }
         if (mainLapChart) { mainLapChart.destroy(); mainLapChart = null; }
         if (contextLapChart) { contextLapChart.destroy(); contextLapChart = null; }
         currentLapData = [];
@@ -442,4 +454,92 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     handleUrlParameter();
+
+    function sessions_overlap(activity1, activity2) {
+        const start1 = new Date(activity1.startTime);
+        const end1 = activity1.endTime ? new Date(activity1.endTime) : null;
+        const start2 = new Date(activity2.startTime);
+        const end2 = activity2.endTime ? new Date(activity2.endTime) : null;
+
+        if (end1 && end2) {
+            return start1 < end2 && start2 < end1;
+        }
+        if (!end1 && end2) {
+            return start2 < start1 || (start1 <= start2 && start2 < end2);
+        }
+        if (end1 && !end2) {
+            return start1 < start2 || (start2 <= start1 && start1 < end1);
+        }
+        return true; // If both are ongoing, they overlap
+    }
+
+    function displayOverlappingSessions(sessions) {
+        overlappingSessionsTable.innerHTML = ''; // Clear previous results
+        if (sessions.length === 0) {
+            overlappingSessionsTable.innerHTML = '<p>No overlapping sessions found.</p>';
+            show(overlappingSessions);
+            return;
+        }
+
+        const table = document.createElement('table');
+        table.className = 'laps-table'; // Reuse existing table style
+        const thead = table.createTHead();
+        const headerRow = thead.insertRow();
+        const headers = ['Chip Code', 'Chip Label', 'Start Time', 'End Time'];
+        headers.forEach(text => {
+            const th = document.createElement('th');
+            th.textContent = text;
+            headerRow.appendChild(th);
+        });
+
+        const tbody = table.createTBody();
+        sessions.forEach(session => {
+            const row = tbody.insertRow();
+            row.insertCell().textContent = session.chipCode || 'N/A';
+            row.insertCell().textContent = session.chipLabel || 'N/A';
+            row.insertCell().textContent = formatDateTime(session.startTime);
+            row.insertCell().textContent = session.endTime ? formatDateTime(session.endTime) : 'Ongoing';
+        });
+
+        overlappingSessionsTable.appendChild(table);
+        show(overlappingSessions);
+    }
+
+    fetchOverlappingBtn.addEventListener('click', async () => {
+        const selectedActivityId = activitySelect.value;
+        if (!selectedActivityId) {
+            errorDiv.textContent = "Please select an activity first.";
+            show(errorDiv);
+            return;
+        }
+
+        hide(errorDiv);
+        hide(overlappingSessions);
+        show(loadingDiv);
+
+        try {
+            const selectedActivity = userActivities.find(act => act.id === parseInt(selectedActivityId));
+            if (!selectedActivity) {
+                throw new Error("Could not find the selected activity details.");
+            }
+
+            const { location, startTime, sport } = selectedActivity;
+            const year = new Date(startTime).getFullYear();
+
+            const allActivities = await fetchAllActivitiesFromLocation(location.id, year, location.sport, startTime);
+
+            const overlapping = allActivities.filter(activity =>
+                activity.id !== selectedActivity.id && sessions_overlap(selectedActivity, activity)
+            );
+
+            displayOverlappingSessions(overlapping);
+
+        } catch (error) {
+            console.error("Error fetching overlapping sessions:", error);
+            errorDiv.textContent = `Error: ${error.message}`;
+            show(errorDiv);
+        } finally {
+            hide(loadingDiv);
+        }
+    });
 });

@@ -41,6 +41,7 @@
                         </select>
                         <div> <!-- Wrapper voor de knoppen -->
                             <button id="fetchLapsBtn" disabled>Fetch Laps</button>
+                            <button id="fetchOverlappingBtn" class="hidden">Find Overlapping Sessions</button>
                             <button id="downloadGpxBtn" class="hidden">Download GPX for Strava</button>
                         </div>
                     </div>
@@ -73,6 +74,11 @@
                     <div id="lapsTableContainer"></div>
                 </div>
             </div>
+        </div>
+
+        <div id="overlappingSessions" class="hidden">
+            <h2>Overlapping Sessions</h2>
+            <div id="overlappingSessionsTable"></div>
         </div>
     </div>
 

@@ -55,3 +55,39 @@ async function fetchLaps(activityId) {
     }
     return await response.json();
 }
+async function fetchAllActivitiesFromLocation(locationId, year, sport, sessionStartDate) {
+    let allActivities = [];
+    let offset = 0;
+    const count = 50; // Fetch 50 activities per page for efficiency
+    let hasMore = true;
+    const sessionDate = new Date(sessionStartDate);
+
+    while (hasMore) {
+        const url = `${PROXY_BASE_URL}/locations/${locationId}?year=${year}&sport=${sport}&count=${count}&offset=${offset}`;
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `Failed to fetch activities for location ${locationId}: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const newActivities = data.activities || [];
+
+        if (newActivities.length > 0) {
+            allActivities = allActivities.concat(newActivities);
+
+            // Check if the last activity fetched is older than the session start date
+            const lastActivityDate = new Date(newActivities[newActivities.length - 1].startTime);
+            if (lastActivityDate < sessionDate) {
+                hasMore = false; // Stop fetching if we've gone past the session date
+            } else {
+                offset += count;
+            }
+        } else {
+            hasMore = false;
+        }
+    }
+
+    return allActivities;
+}
