@@ -75,6 +75,16 @@ function formatDateTime(isoString) {
     return `${parts[0]} - ${parts[1]}`;
 }
 
+function formatTime(isoString) {
+    if (!isoString) return 'N/A';
+    const date = new Date(isoString);
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    const milliseconds = String(date.getMilliseconds()).padStart(3, '0').slice(0, 2);
+    return `${hours}:${minutes}:${seconds}.${milliseconds}`;
+}
+
 function parseDurationToSeconds(durationString) {
     if (typeof durationString !== 'string') return NaN;
     const parts = durationString.split(':');

@@ -58,7 +58,7 @@ async function fetchLaps(activityId) {
 async function fetchAllActivitiesFromLocation(locationId, year, sport, sessionStartDate) {
     let allActivities = [];
     let offset = 0;
-    const count = 50; // Fetch 50 activities per page for efficiency
+    const count = 250; 
     let hasMore = true;
     const sessionDate = new Date(sessionStartDate);
 

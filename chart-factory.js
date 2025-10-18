@@ -91,7 +91,10 @@ function getChartOptions(yAxisMin, showDataLabels, fullLapData, hoveredRowIndex,
                         }
                         if (!lap) return '';
                         const tooltipLines = [];
-                        tooltipLines.push(`Time: ${lap.duration}`);
+                        tooltipLines.push(`Duration: ${lap.duration}`);
+                        if (lap.dateTimeStart) {
+                            tooltipLines.push(`Lap Start: ${formatTime(lap.dateTimeStart)}`);
+                        }
                         if (lap.diffPrevLap) {
                             const sign = lap.status === 'SLOWER' ? '+' : '-';
                             tooltipLines.push(`Diff: ${sign}${lap.diffPrevLap}`);
