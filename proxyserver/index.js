@@ -36,8 +36,21 @@ exports.mylapsProxy = (req, res) => {
             mylapsUrl = `https://practice-api.speedhive.com/api/v1/locations/${param}/activities?${queryString}`;
         } else if (endpoint === 'chips' && param) {
             mylapsUrl = `https://practice-api.speedhive.com/api/v1/chips/code/${param}/training/activities`;
+        } else if (endpoint === 'search') {
+            const { term, count = 25, offset = 0 } = req.query;
+            if (!term) {
+                return res.status(400).json({ error: 'Search term is required.' });
+            }
+            const searchParams = new URLSearchParams({
+                term: term,
+                category: 'Active',
+                count: count,
+                offset: offset,
+                type: 'Profiles'
+            });
+            mylapsUrl = `https://search.speedhive.com/api/search?${searchParams.toString()}`;
         } else {
-            return res.status(400).json({ error: 'Invalid MYLAPS API endpoint or missing parameter. Expected format: /api/mylaps/{userid|activities|laps|account|avatar|locations|chips}/{id}' });
+            return res.status(400).json({ error: 'Invalid MYLAPS API endpoint or missing parameter. Expected format: /api/mylaps/{userid|activities|laps|account|avatar|locations|chips|search}/{id}' });
         }
 
         if (!mylapsUrl) {

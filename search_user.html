@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Search</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>User Search</h1>
+    <input type="text" id="searchInput" placeholder="Enter a name to search">
+    <button id="searchButton">Search</button>
+    <div id="resultsContainer"></div>
+    <div id="paginationControls">
+        <button id="prevButton" disabled>Previous</button>
+        <span id="pageInfo">Page 1</span>
+        <button id="nextButton" disabled>Next</button>
+    </div>
+
+    <script src="utils.js"></script>
+    <script src="search_user.js"></script>
+</body>
+</html>
