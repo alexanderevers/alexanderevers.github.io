@@ -7,14 +7,18 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>User Search</h1>
-    <input type="text" id="searchInput" placeholder="Enter a name to search">
-    <button id="searchButton">Search</button>
-    <div id="resultsContainer"></div>
-    <div id="paginationControls">
-        <button id="prevButton" disabled>Previous</button>
-        <span id="pageInfo">Page 1</span>
-        <button id="nextButton" disabled>Next</button>
+    <div class="container">
+        <h1>User Search</h1>
+        <div class="input-group">
+            <input type="text" id="searchInput" placeholder="Enter a name to search">
+            <button id="searchButton">Search</button>
+        </div>
+        <div id="resultsContainer"></div>
+        <div id="paginationControls" class="pagination-controls">
+            <button id="prevButton" disabled>Previous</button>
+            <span id="pageInfo">Page 1</span>
+            <button id="nextButton" disabled>Next</button>
+        </div>
     </div>
 
     <script src="utils.js"></script>
