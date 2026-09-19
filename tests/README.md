@@ -67,6 +67,10 @@ npm run test:e2e
 
 Windows, macOS and Linux are all supported. The repository was developed on Windows 11 with Edge.
 
+**Windows PowerShell:** if `npm` fails with "running scripts is disabled on this system", type `npm.cmd` instead of `npm`
+(for example `npm.cmd test`), or use Command Prompt or Git Bash. See the Windows note in
+[cloudflare-worker/README.md](../cloudflare-worker/README.md#run-it-on-your-own-computer) for a permanent fix.
+
 ```bash
 # only if the browser is in an unusual place
 CHROME_PATH="/path/to/chrome"  npm run test:e2e             # macOS / Linux / Git Bash
@@ -351,6 +355,7 @@ Understanding these makes the tests (and the code) easy to read.
 
 ## 12. Troubleshooting
 
+- **PowerShell: `npm.ps1 cannot be loaded because running scripts is disabled on this system`**: a Windows setting, not a project problem. Use `npm.cmd` instead of `npm`, or Command Prompt / Git Bash (see section 2).
 - **Everything fails with a syntax error at `??`, `?.` or `node:test`**: Node is too old. Install Node 22 or newer.
 - **`npm test` finds no tests**: run it from the repository root, and check that the quotes around the glob survive your shell (`"tests/unit/*.test.js"`).
 - **`test:e2e` prints one `SKIP` line instead of the four chart steps**: Chart.js could not be downloaded. Everything else ran.

@@ -68,6 +68,11 @@ The proxy only accepts `https://alexanderevers.github.io`, `localhost`/`127.0.0.
 and pages opened from a file. Another port is answered with `403`; change `ALLOWED_ORIGINS` in
 `cloudflare-worker/wrangler.toml` and redeploy if you need one.
 
+**On Windows PowerShell, `npm` or `npx` may fail with "running scripts is disabled on this system".** Use
+`npm.cmd` / `npx.cmd` instead (for example `npm.cmd test`), or open Command Prompt or Git Bash. A one-time fix for
+PowerShell is `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`. Details in
+[cloudflare-worker/README.md](cloudflare-worker/README.md#run-it-on-your-own-computer).
+
 To try the pages **without internet or the real API**, use the fake data of the tests. This prints an address to open:
 
 ```bash
