@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Race Replay</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="theme.js"></script>
+</head>
+<body>
+    <div class="container wide">
+        <a id="backLink" href="index.html" class="back-link">&larr; Back to activity viewer</a>
+        <h1>Race Replay</h1>
+        <p id="replaySubtitle" class="muted-note subtitle"></p>
+
+        <div id="replayEmpty" class="hidden">
+            <p>No replay data found. Open a replay from the main page: fetch an activity, choose
+                <strong>Find Overlapping Sessions</strong>, tick the riders you want and press <strong>Open replay</strong>.</p>
+        </div>
+
+        <div id="replayApp" class="hidden">
+            <div id="replayStatus" class="muted-note"></div>
+            <div class="track-wrap" id="trackWrap">
+                <canvas id="trackCanvas" aria-label="Oblong ice track with the selected riders"></canvas>
+                <div id="trackTooltip" class="track-tooltip hidden"></div>
+            </div>
+
+            <div class="replay-controls">
+                <button id="playBtn" disabled>Play</button>
+                <label class="speed-label">Speed
+                    <select id="speedSelect">
+                        <option value="1">1×</option>
+                        <option value="2">2×</option>
+                        <option value="5" selected>5×</option>
+                        <option value="10">10×</option>
+                        <option value="30">30×</option>
+                        <option value="60">60×</option>
+                    </select>
+                </label>
+                <input type="range" id="timeSlider" min="0" max="0" value="0" step="1" disabled aria-label="Replay position">
+                <span id="clockLabel" class="clock-label">--:--:--</span>
+            </div>
+
+            <h2>Riders <small id="riderCount"></small></h2>
+            <div id="riderList" class="rider-list"></div>
+        </div>
+    </div>
+
+    <footer class="theme-switch">
+        <span>Light</span>
+        <label class="switch">
+            <input type="checkbox" id="themeToggle" aria-label="Dark mode">
+            <span class="switch-track"></span>
+        </label>
+        <span>Dark</span>
+    </footer>
+
+    <script src="utils.js"></script>
+    <script src="api.js"></script>
+    <script src="replay-track.js"></script>
+    <script src="replay-model.js"></script>
+    <script src="replay.js"></script>
+</body>
+</html>

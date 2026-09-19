@@ -66,6 +66,15 @@ The frontend is a single-page application that handles user input, makes request
 -   **`api.js`**: This file contains the functions responsible for making `fetch` requests to the proxy server. The `PROXY_BASE_URL` constant in this file must point to your deployed Google Cloud Function URL.
 -   **`style.css`**: Contains all the styles for the application.
 
+### Race replay (`replay.html`)
+
+Shows the riders of overlapping sessions on an oblong 400 m track. It is opened from the main page: fetch an activity, press **Find Overlapping Sessions**, tick the riders and press **Open replay**.
+
+-   `fetch_overlapping_sessions.js` stores the riders (no lap data) in `localStorage` under `replayData` and opens `replay.html?activity=<id>`.
+-   `replay.js` fetches the laps of every rider that is switched on. Riders can be added or removed on the replay page (max 8 at once).
+-   Overlapping riders are sorted by **skated together**: the time both riders were skating at the same moment, computed from the real laps (`onIceOverlapMs`). Laps slower than 8 km/h count as breaks and are ignored, so riders who only share the same all-day session window show 0 min.
+-   `replay-model.js` turns laps into positions: a lap starts when the rider crosses the finish line, and the position inside a lap is interpolated evenly over the lap time. `replay-track.js` holds the track geometry.
+
 ### Data Flow
 
 1.  A user enters a transponder number and clicks "Fetch Activities".

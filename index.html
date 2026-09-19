@@ -95,6 +95,11 @@
 
         <div id="overlappingSessions" class="hidden">
             <h2>Overlapping Sessions</h2>
+            <div id="replayToolbar" class="replay-toolbar hidden">
+                <button id="openReplayBtn">Open replay</button>
+                <button id="replaySelectAllBtn" class="secondary-btn">Select all</button>
+                <span id="replaySelectedCount" class="muted-note"></span>
+            </div>
             <div id="overlappingSessionsTable"></div>
         </div>
     </div>
@@ -114,6 +119,7 @@
     <script src="api.js"></script>
     <script src="chart-factory.js"></script>
     <script src="stats.js"></script>
+    <script src="replay-model.js"></script>
     <script src="fetch_overlapping_sessions.js"></script>
     <script src="script.js"></script>
 </body>

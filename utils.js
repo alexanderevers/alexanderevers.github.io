@@ -120,6 +120,16 @@ function formatSecondsToDuration(totalSeconds) {
     }
 }
 
+/** Milliseconds as a short label: "<1 min", "12 min", "1 h 05 min". null -> "N/A". */
+function formatDurationShort(ms) {
+    if (ms === null || ms === undefined || isNaN(ms)) return 'N/A';
+    if (ms <= 0) return '0 min';
+    const minutes = Math.round(ms / 60000);
+    if (minutes < 1) return '<1 min';
+    if (minutes < 60) return `${minutes} min`;
+    return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} min`;
+}
+
 function formatTotalTrainingTime(durationString) {
     if (!durationString || typeof durationString !== 'string') return 'N/A';
 

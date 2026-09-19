@@ -492,5 +492,11 @@ document.addEventListener('DOMContentLoaded', () => {
     handleUrlParameter();
 
     // Setup event listeners from the new module
-    setupOverlappingSessionsEventListeners(() => userActivities);
+    const getReferenceRider = () => ({
+        name: [profileName.textContent, profileNickname.textContent].filter(Boolean).join(' - ')
+            || transponderInput.value.trim().toUpperCase(),
+        chipCode: transponderInput.value.trim().toUpperCase(),
+        accountId: currentUserId
+    });
+    setupOverlappingSessionsEventListeners(() => userActivities, getReferenceRider);
 });
