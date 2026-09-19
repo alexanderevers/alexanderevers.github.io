@@ -165,9 +165,11 @@ document.addEventListener('DOMContentLoaded', () => {
             row.className = 'rider-row';
             const avatar = rider.accountId ? `${PROXY_BASE_URL}/avatar/${encodeURIComponent(rider.accountId)}` : '';
             const session = `${formatTime(rider.startTime).slice(0, 5)}${rider.endTime ? '–' + formatTime(rider.endTime).slice(0, 5) : ''}`;
-            const together = !rider.isReference && rider.togetherMs !== null && rider.togetherMs !== undefined
-                ? `together ${formatDurationShort(rider.togetherMs)}` : null;
-            const meta = [rider.chipCode, session, together, rider.fastestTime ? `best ${rider.fastestTime}` : null, rider.lapCount ? `${rider.lapCount} laps` : null]
+            const hasTimes = !rider.isReference && rider.togetherMs !== null && rider.togetherMs !== undefined;
+            const together = hasTimes ? `together ${formatDurationShort(rider.togetherMs)}` : null;
+            const inGroup = hasTimes && rider.groupMs !== null && rider.groupMs !== undefined
+                ? `in your group ~${formatDurationShort(rider.groupMs)}` : null;
+            const meta = [rider.chipCode, session, together, inGroup, rider.fastestTime ? `best ${rider.fastestTime}` : null, rider.lapCount ? `${rider.lapCount} laps` : null]
                 .filter(Boolean).join(' · ');
             row.innerHTML = `
                 <input type="checkbox" aria-label="Show ${escapeHtml(rider.name)}">

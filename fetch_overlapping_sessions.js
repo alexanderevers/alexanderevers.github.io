@@ -20,6 +20,12 @@ function sessions_overlap(activity1, activity2) {
 
 const REPLAY_STORAGE_KEY = 'replayData';
 
+/** Estimated durations get a "~" in front; N/A stays N/A. */
+function formatEstimate(ms) {
+    const text = formatDurationShort(ms);
+    return text === 'N/A' ? text : `~${text}`;
+}
+
 function riderDisplayName(session) {
     let displayName = session.chipLabel || 'Unknown Rider';
     if (session.account) {
@@ -71,6 +77,7 @@ function displayOverlappingSessions(sessions) {
                 </div>
                 <div class="session-card-stats">
                     <div class="session-stat together"><span class="label">Skated together</span><span class="value">${formatDurationShort(session.togetherMs)}</span></div>
+                    <div class="session-stat together" title="Estimated time within 50 m of you while both were skating, corrected for the time unrelated skaters would be that close by chance"><span class="label">In your group</span><span class="value">${formatEstimate(session.groupMs)}</span></div>
                     <div class="session-stat"><span class="label">Best Lap</span><span class="value">${stats?.fastestTime || 'N/A'}</span></div>
                     <div class="session-stat"><span class="label">Laps</span><span class="value">${stats?.lapCount || 'N/A'}</span></div>
                     <div class="session-stat"><span class="label">Duration</span><span class="value">${stats ? formatTotalTrainingTime(stats.totalTrainingTime) : 'N/A'}</span></div>
@@ -100,7 +107,8 @@ function buildReplayPayload(reference, referenceRider, sessions, selectedIds) {
         endTime: session.endTime || null,
         fastestTime: session.stats?.fastestTime || null,
         lapCount: session.stats?.lapCount || null,
-        togetherMs: session.togetherMs ?? null
+        togetherMs: session.togetherMs ?? null,
+        groupMs: session.groupMs ?? null
     });
     return {
         version: 1,
@@ -211,18 +219,25 @@ function setupOverlappingSessionsEventListeners(getActivities, getReferenceRider
                         fetchLaps(activity.id),
                         fetchAccountDetails(activity.chipCode)
                     ]);
-                    const togetherMs = referenceLaps
-                        ? onIceOverlapMs(referenceLaps, normalizeLaps(sessionDetails), trackLengthM)
-                        : null;
-                    return { ...activity, stats: sessionDetails.stats, account: accountDetails, togetherMs };
+                    const riderLaps = normalizeLaps(sessionDetails);
+                    const togetherMs = referenceLaps ? onIceOverlapMs(referenceLaps, riderLaps, trackLengthM) : null;
+                    // Only riders who really shared the ice with you can have skated in your group.
+                    const groupMs = togetherMs === null ? null
+                        : (togetherMs > 0 ? groupTimeMs(referenceLaps, riderLaps, trackLengthM).groupMs : 0);
+                    return { ...activity, stats: sessionDetails.stats, account: accountDetails, togetherMs, groupMs };
                 } catch (e) {
                     console.error(`Could not fetch details for activity ${activity.id}`, e);
-                    return { ...activity, stats: null, account: null, togetherMs: null };
+                    return { ...activity, stats: null, account: null, togetherMs: null, groupMs: null };
                 }
             });
 
-            // Most time on the ice together first; riders we could not measure go last.
-            overlappingWithDetails.sort((a, b) => (b.togetherMs ?? -1) - (a.togetherMs ?? -1));
+            // First on time skated together (in the whole minutes shown on the cards), then on time in
+            // your group; riders we could not measure go last.
+            const shownMinutes = session => (session.togetherMs === null ? -1 : Math.round(session.togetherMs / 60000));
+            overlappingWithDetails.sort((a, b) =>
+                (shownMinutes(b) - shownMinutes(a))
+                || ((b.groupMs ?? -1) - (a.groupMs ?? -1))
+                || ((b.togetherMs ?? -1) - (a.togetherMs ?? -1)));
 
             lastOverlap = { reference: selectedActivity, sessions: overlappingWithDetails };
             displayOverlappingSessions(overlappingWithDetails);

@@ -82,6 +82,34 @@ function onIceOverlapMs(lapsA, lapsB, trackLengthM) {
     return total;
 }
 
+/**
+ * Estimated time (ms) two riders skated as a group: the time they were within radiusM of each other
+ * along the track while both were skating, corrected for chance. Two unrelated skaters end up within
+ * radiusM of each other a fraction 2 * radiusM / trackLength of the time (25% for 50 m on 400 m), so
+ * only the part above that counts: exactly at chance gives 0, always together gives all the shared time.
+ * Positions come from riderStateAt (even speed within a lap), sampled every second.
+ * Depends on trackDelta from replay-track.js.
+ */
+function groupTimeMs(lapsA, lapsB, trackLengthM, radiusM = 50) {
+    const extentA = lapExtent(lapsA);
+    const extentB = lapExtent(lapsB);
+    if (!extentA || !extentB) return { bothMs: 0, closeMs: 0, groupMs: 0 };
+    const from = Math.max(extentA.startMs, extentB.startMs);
+    const to = Math.min(extentA.endMs, extentB.endMs);
+    let both = 0;
+    let close = 0;
+    for (let t = from; t < to; t += 1000) {
+        const a = riderStateAt(lapsA, t, trackLengthM);
+        const b = riderStateAt(lapsB, t, trackLengthM);
+        if (!a || !b) continue;
+        both++;
+        if (Math.abs(trackDelta(a.frac, b.frac)) * trackLengthM <= radiusM) close++;
+    }
+    const chance = Math.min((2 * radiusM) / trackLengthM, 0.99);
+    const excess = both ? Math.max(0, (close / both - chance) / (1 - chance)) : 0;
+    return { bothMs: both * 1000, closeMs: close * 1000, groupMs: both * 1000 * excess };
+}
+
 if (typeof module !== 'undefined') {
-    module.exports = { normalizeLaps, lapExtent, riderStateAt, onIceOverlapMs };
+    module.exports = { normalizeLaps, lapExtent, riderStateAt, onIceOverlapMs, groupTimeMs };
 }
