@@ -17,7 +17,7 @@ const MASTER_TRACKS = [
     { file: 'tracks/2_westfries_hoorn_master_track.gpx', locationIds: [205, 3689], namePattern: /westfries|hoorn/i },
     { file: 'tracks/3_breda_master_track.gpx', locationIds: [3111], namePattern: /breda/i },
     { file: 'tracks/4_ireenwustijsbaan_tilburg_master_track.gpx', locationIds: [2838], namePattern: /tilburg|ireen\s*w/i },
-    { file: 'tracks/5_kennemerland_haarlem_master_track.gpx', locationIds: [], namePattern: /haarlem|kennemerland/i }
+    { file: 'tracks/5_kennemerland_haarlem_master_track.gpx', locationIds: [2822],namePattern: /haarlem|kennemerland/i }
 ];
 
 /** The master track entry for an activity's location, or undefined when the rink has no track file yet. */

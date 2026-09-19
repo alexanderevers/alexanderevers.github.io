@@ -83,7 +83,7 @@ The frontend is a single-page application that handles user input, makes request
 | `tracks/2_westfries_hoorn_master_track.gpx` | Kunstijsbaan de Westfries, Hoorn | 205, 3689 |
 | `tracks/3_breda_master_track.gpx` | Kunstijsbaan Breda | 3111 |
 | `tracks/4_ireenwustijsbaan_tilburg_master_track.gpx` | Ireen Wüst IJsbaan, Tilburg | 2838 |
-| `tracks/5_kennemerland_haarlem_master_track.gpx` | Kennemerland IJsbaan, Haarlem | matched by name (id not yet known) |
+| `tracks/5_kennemerland_haarlem_master_track.gpx` | Kennemerland IJsbaan, Haarlem | 2822 |
 
 For a rink without a track file the download button is not shown. To add a rink: record one lap (about 400 m, starting and ending at the finish line) as a GPX file, put it in `/tracks` and add a line to `MASTER_TRACKS`.
 
