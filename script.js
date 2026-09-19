@@ -276,7 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
         show(loadingDiv);
         try {
             const selectedActivity = userActivities.find(act => act.id === parseInt(selectedActivityId));
-            const fullSessionData = await fetchLaps(selectedActivityId);
+            const fullSessionData = await fetchLaps(selectedActivityId, selectedActivity?.endTime);
             currentLapData = [];
             if (fullSessionData?.sessions) {
                 fullSessionData.sessions.forEach(session => {

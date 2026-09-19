@@ -6,41 +6,48 @@ This document provides an overview of the project structure, focusing on the Goo
 
 The MYLAPS Activity Viewer is a web application that fetches and displays training activity data from the MYLAPS Speedhive platform. It consists of a static frontend (HTML, CSS, JavaScript) and a serverless proxy backend running on Google Cloud Functions.
 
-## Proxy Server (Google Cloud Function)
+## Proxy Server (Cloudflare Worker)
 
-The proxy server is essential for this application to work. The MYLAPS Speedhive API does not allow direct requests from a web browser due to CORS (Cross-Origin Resource Sharing) restrictions. The proxy server acts as a middleman, receiving requests from the frontend, forwarding them to the MYLAPS API with the correct headers, and then relaying the response back to the frontend.
+The proxy server is essential for this application to work. The MYLAPS Speedhive API does not allow direct requests from a web browser (CORS restrictions, and it expects an `Origin`/`Referer` header that a browser cannot set). The proxy acts as a middleman: it receives requests from the frontend, forwards them to the MYLAPS API with the correct headers, and relays the answer back. It also **caches** answers, so repeated requests never reach MYLAPS.
 
 ### Key Details
 
--   **Location:** The code for the proxy is located in the `/proxyserver` directory.
--   **Entry Point File:** The main file for the Cloud Function is `index.js`.
--   **Entry Point Function:** The function that Google Cloud executes is named `mylapsProxy`. This must match the `--entry-point` flag used when deploying.
--   **Public URL:** `https://us-central1-proxyapi-475018.cloudfunctions.net/mylapsProxyFunction` (used as `PROXY_BASE_URL` in `api.js`, with `/api/mylaps` appended).
+-   **Location:** the code is in the `/cloudflare-worker` directory (`src/index.js`, `wrangler.toml`). A step-by-step setup guide is in `cloudflare-worker/README.md`.
+-   **Public URL:** `https://mylaps-proxy.iceskater.workers.dev` (used as `PROXY_BASE_URL` in `api.js`, with `/api/mylaps` appended).
+-   **Account:** Cloudflare free plan (100,000 requests per day, no credit card), account `contact.alexander.evers@gmail.com`.
+-   **Who may use it:** only `https://alexanderevers.github.io`, local test servers and pages opened from a file (`ALLOWED_ORIGINS` in `wrangler.toml`). Other websites get a 403.
+-   **Previous proxy:** a Google Cloud Function (`mylapsProxyFunction`, code in `/proxyserver`). It is replaced by the Worker and can be deleted once the Worker has run without problems: `gcloud functions delete mylapsProxyFunction --gen2 --region us-central1`.
 
 ### Deployment
 
-The proxy is a Cloud Functions **2nd gen** function named `mylapsProxyFunction` in project `proxyapi-475018`, region `us-central1`. Its backing Cloud Run service is `mylapsproxyfunction` (lowercase).
-
-Log in first if your credentials have expired:
+From the `cloudflare-worker` folder:
 
 ```bash
-gcloud auth login
+npm install          # first time only
+npx wrangler login   # first time only: opens a browser, click Allow
+npx wrangler deploy
 ```
 
-To deploy or redeploy, run this from the `webapp` folder that contains `alexanderevers.github.io`:
+To verify (run it twice; `X-Upstream-Cache` changes from `MISS` to `HIT`):
 
 ```bash
-gcloud functions deploy mylapsProxyFunction --gen2 --runtime nodejs22 --region us-central1 --source alexanderevers.github.io/proxyserver --entry-point mylapsProxy --trigger-http --allow-unauthenticated
+curl -i "https://mylaps-proxy.iceskater.workers.dev/api/mylaps/userid/PZ-28583"
 ```
 
-To verify the deployment:
+Other useful commands: `npm test` (checks against a fake MYLAPS), `npx wrangler dev` (run it locally on http://127.0.0.1:8787 without a login) and `npx wrangler tail` (live logs).
 
-```bash
-gcloud functions list
-curl "https://us-central1-proxyapi-475018.cloudfunctions.net/mylapsProxyFunction/api/mylaps/search?term=jaap&count=2"
-```
+### Caching
 
-*(Note: The runtime is Node.js 22. Keep `engines.node` in `proxyserver/package.json` and the `--runtime` flag in sync.)*
+| Data | Kept by Cloudflare for |
+|---|---|
+| Laps of a finished activity (the site adds `?finished=1`) | 30 days |
+| Laps of an activity that may still be recording | 1 minute |
+| Transponder to account, account profile, avatar | 1 day |
+| A rider's activity list, chip activity list | 2 minutes |
+| Activity list of a location | 5 minutes |
+| Name search | 10 minutes |
+
+Error answers are never cached. Browsers keep answers for at most one day (`Cache-Control`).
 
 ### Endpoints
 
@@ -49,10 +56,10 @@ The proxy exposes several endpoints that map to the underlying MYLAPS API:
 -   `/api/mylaps/userid/:transponder`: Fetches the `userId` for a given transponder number.
 -   `/api/mylaps/activities/:userId`: Fetches a list of activities for a user. Supports optional `count` (default 100) and `order` query parameters.
 -   `/api/mylaps/search?term=...`: Searches active profiles by name. Supports `count` and `offset`.
--   `/api/mylaps/laps/:activityId`: Fetches lap data for a specific activity.
+-   `/api/mylaps/laps/:activityId`: Fetches lap data for a specific activity. Add `?finished=1` for an activity that ended a while ago so the laps are cached for a long time.
 -   `/api/mylaps/account/:userId`: Fetches a user's profile information (name, etc.).
 -   `/api/mylaps/avatar/:userId`: Fetches a user's profile image.
--   `/api/mylaps/locations/:locationId`: Fetches a list of activities for a location. Supports `count` and `offset` query parameters.
+-   `/api/mylaps/locations/:locationId`: Fetches a list of activities for a location (`year`, `sport`, `count`, `offset`). A page holds at most 200 activities and the list is sorted by end time, newest first.
 -   `/api/mylaps/chips/:chipCode`: Fetches a list of activities for a specific chip.
 
 ## Frontend Application

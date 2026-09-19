@@ -2,7 +2,9 @@
  * API module for fetching data from the MYLAPS proxy.
  */
 
-const PROXY_BASE_URL = 'https://us-central1-proxyapi-475018.cloudfunctions.net/mylapsProxyFunction/api/mylaps';
+// Cloudflare Worker (see cloudflare-worker/). The old Google Cloud Function was:
+// https://us-central1-proxyapi-475018.cloudfunctions.net/mylapsProxyFunction/api/mylaps
+const PROXY_BASE_URL = 'https://mylaps-proxy.iceskater.workers.dev/api/mylaps';
 
 const FETCH_RETRIES = 2;
 const FETCH_RETRY_DELAY_MS = 500;
@@ -78,8 +80,22 @@ async function fetchActivities(transponder) {
     return { activities, account: accountData, userId: userID };
 }
 
-async function fetchLaps(activityId) {
-    const url = `${PROXY_BASE_URL}/laps/${activityId}`;
+// An activity that ended a while ago can no longer get new laps, so the proxy may keep its laps for a long time.
+const FINISHED_AFTER_MS = 15 * 60 * 1000;
+
+function isFinishedActivity(endTime) {
+    const end = Date.parse(endTime);
+    return Number.isFinite(end) && Date.now() - end > FINISHED_AFTER_MS;
+}
+
+/**
+ * @param {number|string} activityId
+ * @param {string} [endTime] the activity's endTime, when known. Passing it lets the proxy cache the laps
+ *                           of a finished activity for a long time.
+ */
+async function fetchLaps(activityId, endTime) {
+    const finished = endTime && isFinishedActivity(endTime) ? '?finished=1' : '';
+    const url = `${PROXY_BASE_URL}/laps/${activityId}${finished}`;
     const response = await fetchWithRetry(url);
     if (!response.ok) {
         throw new Error(await readErrorMessage(response, 'Laps fetch failed'));

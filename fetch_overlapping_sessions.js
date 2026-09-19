@@ -225,7 +225,7 @@ function setupOverlappingSessionsEventListeners(getActivities, getReferenceRider
             const trackLengthM = location.trackLength || 400;
             let referenceLaps = null;
             try {
-                referenceLaps = normalizeLaps(await fetchLaps(selectedActivity.id));
+                referenceLaps = normalizeLaps(await fetchLaps(selectedActivity.id, selectedActivity.endTime));
             } catch (e) {
                 console.error('Could not fetch the selected activity laps; skipping the "skated together" times', e);
             }
@@ -234,7 +234,7 @@ function setupOverlappingSessionsEventListeners(getActivities, getReferenceRider
             const overlappingWithDetails = await mapInBatches(overlapping, 5, async (activity) => {
                 try {
                     const [sessionDetails, accountDetails] = await Promise.all([
-                        fetchLaps(activity.id),
+                        fetchLaps(activity.id, activity.endTime),
                         fetchAccountDetails(activity.chipCode)
                     ]);
                     const riderLaps = normalizeLaps(sessionDetails);
