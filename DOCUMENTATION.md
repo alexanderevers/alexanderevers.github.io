@@ -14,17 +14,33 @@ The proxy server is essential for this application to work. The MYLAPS Speedhive
 
 -   **Location:** The code for the proxy is located in the `/proxyserver` directory.
 -   **Entry Point File:** The main file for the Cloud Function is `index.js`.
--   **Entry Point Function:** The function that Google Cloud executes is named `mylapsProxy`. This must match the "Entry point" setting in your Google Cloud Function configuration.
+-   **Entry Point Function:** The function that Google Cloud executes is named `mylapsProxy`. This must match the `--entry-point` flag used when deploying.
+-   **Public URL:** `https://us-central1-proxyapi-475018.cloudfunctions.net/mylapsProxyFunction` (used as `PROXY_BASE_URL` in `api.js`, with `/api/mylaps` appended).
 
 ### Deployment
 
-To deploy or redeploy the proxy server, use the `gcloud` CLI from the root of the workspace:
+The proxy is a Cloud Functions **2nd gen** function named `mylapsProxyFunction` in project `proxyapi-475018`, region `us-central1`. Its backing Cloud Run service is `mylapsproxyfunction` (lowercase).
+
+Log in first if your credentials have expired:
 
 ```bash
-gcloud run deploy mylapsproxyfunction --source alexanderevers.github.io/proxyserver --region us-central1 --allow-unauthenticated
+gcloud auth login
 ```
 
-*(Note: While the command uses `gcloud run deploy`, this is the modern way to deploy function-based services, and it correctly deploys to the Cloud Functions environment when configured as such.)*
+To deploy or redeploy, run this from the `webapp` folder that contains `alexanderevers.github.io`:
+
+```bash
+gcloud functions deploy mylapsProxyFunction --gen2 --runtime nodejs20 --region us-central1 --source alexanderevers.github.io/proxyserver --entry-point mylapsProxy --trigger-http --allow-unauthenticated
+```
+
+To verify the deployment:
+
+```bash
+gcloud functions list
+curl "https://us-central1-proxyapi-475018.cloudfunctions.net/mylapsProxyFunction/api/mylaps/search?term=jaap&count=2"
+```
+
+*(Note: Node.js 20 can no longer be deployed after 2026-10-30. Before then, set `engines.node` in `proxyserver/package.json` to `22` and deploy with `--runtime nodejs22`.)*
 
 ### Endpoints
 
