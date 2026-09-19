@@ -1,0 +1,26 @@
+Dit zijn alle Nederlandse schaatsbanen die MYLAPS via de proxy teruggeeft (locatie-id 1 t/m 4200):
+
+Id	Baan	Rondelengte	Track in app
+205	Kunstijsbaan de Westfries (Hoorn)	400	ja
+456	IJsbaan Twente (Enschede)	400	nee
+1052	Triavium Nijmegen	312	nee
+1061	De Vechtsebanen (Utrecht)	400	nee
+2033	Schaatsbaan Rotterdam	400	nee
+2040	Jaap Eden Ijsbaan (Amsterdam)	400	ja
+2052	IJsbaan De Scheg (Deventer)	0 (onbekend)	nee
+2381	Elfstedenhal (Leeuwarden)	400	nee
+2392	De Uithof (Den Haag)	400	nee
+2409	De Meent Bauerfeind (Alkmaar)	400	nee
+2427	IJsbaan Kardinge (Groningen)	400	nee
+2482	LACO Glanerbrook (Geleen)	400	nee
+2497	Thialf Heerenveen	0 (onbekend)	nee
+2822	IJsbaan Haarlem Scoreboard	400	ja
+2838	Ireen Wüst IJsbaan Tilburg	400	ja
+3111	Kunstijsbaan Breda X2	400	ja
+3279	IJssportcentrum Eindhoven	400	nee
+3689	IJsbaan Hoorn X2	400	ja
+3930	Leiden IJshal de Vliet	250	nee
+Steden: die heb ik zelf bij de namen gezet, ze komen niet uit MYLAPS.
+Aangenomen: ik ging uit van locaties met sport IceSkating en land nl. Banen die MYLAPS anders labelt, zoals een verkeerd land, zitten er niet bij.
+Bereik: id's boven 4200 heb ik niet gescand.
+Leiden: die baan is 250 m, dus een 400 m-track past daar niet.
