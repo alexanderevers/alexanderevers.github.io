@@ -26,6 +26,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const lapCtx = lapCanvas.getContext('2d');
     const followSelect = $('followSelect');
     const lapReadout = $('lapReadout');
+    const lapMaxSlider = $('lapMaxSlider');
+    const lapMaxInput = $('lapMaxInput');
+    const lapMaxError = $('lapMaxError');
 
     // ---------- Data ----------
     function loadPayload() {
@@ -63,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
         colors = {
             ice: token('--surface-2'), edge: token('--axis'), grid: token('--grid'),
             surface: token('--surface'), text: token('--text'), muted: token('--text-muted'),
-            secondary: token('--text-secondary'),
+            secondary: token('--text-secondary'), slow: token('--series-muted'),
             series: Array.from({ length: MAX_RIDERS }, (_, i) => token(`--cat-${i + 1}`))
         };
     }
@@ -346,6 +349,43 @@ document.addEventListener('DOMContentLoaded', () => {
     let followRider = null;
     let followPickedByUser = false;   // until the user picks someone, the graph follows the reference rider
 
+    const isSkatingLap = lap => (trackLengthM / (lap.durMs / 1000)) * 3.6 >= MIN_SKATING_KPH;
+
+    // Max lap time: laps at or above it are greyed out and pinned to the top edge of the graph.
+    let lapMaxSeconds = parseFloat(lapMaxSlider.value);
+    const isFastLap = lap => isSkatingLap(lap) && lap.durMs / 1000 < lapMaxSeconds;
+
+    function setLapMax(seconds) {
+        const min = parseFloat(lapMaxSlider.min);
+        const max = parseFloat(lapMaxSlider.max);
+        lapMaxSeconds = Math.min(Math.max(seconds, min), max);
+        lapMaxSlider.value = lapMaxSeconds;
+        lapMaxInput.value = formatSecondsToDuration(lapMaxSeconds);
+        hide(lapMaxError);
+    }
+
+    /** Shows every skating lap of the rider: just above their slowest one. */
+    function showAllLapsMax(rider) {
+        const seconds = rider.laps.filter(isSkatingLap).map(l => l.durMs / 1000);
+        return seconds.length ? Math.ceil(Math.max(...seconds)) + 1 : 60;
+    }
+
+    lapMaxSlider.addEventListener('input', () => setLapMax(parseFloat(lapMaxSlider.value)));
+    lapMaxInput.addEventListener('input', () => {
+        const parsed = parseDurationToSeconds(lapMaxInput.value.trim());
+        const min = parseFloat(lapMaxSlider.min);
+        const max = parseFloat(lapMaxSlider.max);
+        if (isNaN(parsed) || parsed < min || parsed > max) {
+            lapMaxError.textContent = `Enter a time between ${formatSecondsToDuration(min)} and ${formatSecondsToDuration(max)}`;
+            show(lapMaxError);
+            return;
+        }
+        hide(lapMaxError);
+        lapMaxSeconds = parsed;
+        lapMaxSlider.value = parsed;
+    });
+    setLapMax(lapMaxSeconds);
+
     function updateFollowOptions() {
         const candidates = selectedRiders().filter(r => r.laps?.length);
         const previous = followRider;
@@ -355,13 +395,14 @@ document.addEventListener('DOMContentLoaded', () => {
         followRider = (followPickedByUser && kept) || reference || kept || candidates[0] || null;
         if (followRider) followSelect.value = String(followRider.id);
         followSelect.disabled = candidates.length < 2;
+        // A different rider starts fully in view; the slider then zooms in from there.
+        if (followRider && followRider !== previous) setLapMax(showAllLapsMax(followRider));
     }
     followSelect.addEventListener('change', () => {
         followRider = riders.find(r => String(r.id) === followSelect.value) || followRider;
         followPickedByUser = true;
+        setLapMax(showAllLapsMax(followRider));
     });
-
-    const isSkatingLap = lap => (trackLengthM / (lap.durMs / 1000)) * 3.6 >= MIN_SKATING_KPH;
     const trimZeros = text => text.replace(/\.?0+$/, '');
     const secondsLabel = seconds => trimZeros(formatSecondsToDuration(seconds));
 
@@ -380,10 +421,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function lapChartScale() {
         if (!followRider) return null;
         const extent = lapExtent(followRider.laps);
-        const skating = followRider.laps.filter(isSkatingLap);
-        if (!extent || skating.length === 0) return null;
-        const seconds = skating.map(l => l.durMs / 1000);
-        const ticks = niceTicks(Math.min(...seconds), Math.max(...seconds));
+        if (!extent || !followRider.laps.some(isSkatingLap)) return null;
+        // The window runs from the fastest lap in view up to the max lap time.
+        const inView = followRider.laps.filter(isFastLap).map(l => l.durMs / 1000);
+        const low = inView.length ? Math.min(...inView) : Math.max(0, lapMaxSeconds - 10);
+        const ticks = niceTicks(low, lapMaxSeconds);
         const yMin = ticks[0];
         const yMax = ticks[ticks.length - 1];
         const plotW = lapView.w - LAP_PAD.l - LAP_PAD.r;
@@ -447,8 +489,21 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx2.globalAlpha = 1;
         }
 
-        // Lap times as a line. A break (very slow "lap", marked at the top) or a stretch without any
-        // recorded laps interrupts the line, so it never draws across time the rider was not skating.
+        // Greyed-out laps (slower than the max lap time, or a break) are pinned to the top edge when they
+        // do not fit, so no lap disappears from the graph. Drawn first, under the line.
+        const yTop = LAP_PAD.t;
+        const yOf = lap => Math.max(y(lap.durMs / 1000), yTop);
+        const slowDot = laps.length <= 120 ? 3 : 2;
+        ctx2.fillStyle = colors.slow;
+        laps.forEach(lap => {
+            if (isFastLap(lap)) return;
+            ctx2.beginPath();
+            ctx2.arc(x(lap.startMs + lap.durMs), isSkatingLap(lap) ? yOf(lap) : yTop, slowDot, 0, Math.PI * 2);
+            ctx2.fill();
+        });
+
+        // Lap times in view as a line. A greyed-out lap or a stretch without any recorded laps
+        // interrupts the line, so it never draws across time the rider was not skating fast.
         ctx2.strokeStyle = seriesColor;
         ctx2.lineWidth = 2;
         ctx2.lineJoin = 'round';
@@ -457,10 +512,10 @@ document.addEventListener('DOMContentLoaded', () => {
         let connected = false;
         let previousEnd = null;
         laps.forEach(lap => {
-            const px = x(lap.startMs + lap.durMs / 2);
+            const px = x(lap.startMs + lap.durMs);
             if (previousEnd !== null && lap.startMs - previousEnd > LAP_GAP_TOLERANCE_MS) connected = false;
             previousEnd = lap.startMs + lap.durMs;
-            if (!isSkatingLap(lap)) { connected = false; return; }
+            if (!isFastLap(lap)) { connected = false; return; }
             const py = y(lap.durMs / 1000);
             if (connected) ctx2.lineTo(px, py); else ctx2.moveTo(px, py);
             connected = true;
@@ -469,30 +524,23 @@ document.addEventListener('DOMContentLoaded', () => {
         if (laps.length <= 120) {
             ctx2.fillStyle = seriesColor;
             laps.forEach(lap => {
-                if (!isSkatingLap(lap)) return;
+                if (!isFastLap(lap)) return;
                 ctx2.beginPath();
-                ctx2.arc(x(lap.startMs + lap.durMs / 2), y(lap.durMs / 1000), 3, 0, Math.PI * 2);
+                ctx2.arc(x(lap.startMs + lap.durMs), y(lap.durMs / 1000), 3, 0, Math.PI * 2);
                 ctx2.fill();
             });
         }
-        ctx2.strokeStyle = colors.muted;
-        ctx2.lineWidth = 2;
-        laps.forEach(lap => {
-            if (isSkatingLap(lap)) return;
-            const px = x(lap.startMs + lap.durMs / 2);
-            ctx2.beginPath(); ctx2.moveTo(px, LAP_PAD.t); ctx2.lineTo(px, LAP_PAD.t + 8); ctx2.stroke();
-        });
 
-        // The current lap's point, ringed
+        // The current lap's point, ringed (grey when the lap is beyond the max lap time)
         if (state) {
-            const px = x(state.lap.startMs + state.lap.durMs / 2);
-            const py = y(state.lap.durMs / 1000);
+            const px = x(state.lap.startMs + state.lap.durMs);
+            const py = isFastLap(state.lap) ? y(state.lap.durMs / 1000) : yOf(state.lap);
             ctx2.beginPath();
             ctx2.arc(px, py, 6, 0, Math.PI * 2);
-            ctx2.fillStyle = seriesColor;
+            ctx2.fillStyle = isFastLap(state.lap) ? seriesColor : colors.slow;
             ctx2.fill();
             ctx2.lineWidth = 2;
-            ctx2.strokeStyle = colors.surface;
+            ctx2.strokeStyle = isFastLap(state.lap) ? colors.surface : colors.muted;
             ctx2.stroke();
         }
 

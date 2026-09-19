@@ -48,6 +48,12 @@
                 </label>
                 <span id="lapReadout" class="lap-readout"></span>
             </div>
+            <div class="lap-max-controls">
+                <label for="lapMaxSlider">Max lap time</label>
+                <input type="range" id="lapMaxSlider" min="10" max="180" step="0.1" value="60">
+                <input type="text" id="lapMaxInput" value="1:00.000" aria-label="Max lap time, M:SS.mmm">
+                <span id="lapMaxError" class="error-message hidden">Invalid time</span>
+            </div>
             <canvas id="lapCanvas" aria-label="Lap times of the followed rider; a vertical line moves with the replay time"></canvas>
 
             <h2>Riders <small id="riderCount"></small></h2>

@@ -709,11 +709,44 @@ button:disabled {
     color: var(--text-secondary);
 }
 
+.lap-max-controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: -4px 0 8px;
+}
+
+.lap-max-controls label {
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.lap-max-controls input[type="range"] {
+    flex: 1 1 220px;
+    accent-color: var(--accent);
+}
+
+.lap-max-controls input[type="text"] {
+    width: 110px;
+    padding: 8px 10px;
+    text-align: right;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+}
+
+.lap-max-controls .error-message {
+    flex-basis: 100%;
+    font-size: 0.85em;
+}
+
 #lapCanvas {
     display: block;
     width: 100%;
     height: 220px;
-    margin-top: -6px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 12px;
