@@ -30,7 +30,7 @@ gcloud auth login
 To deploy or redeploy, run this from the `webapp` folder that contains `alexanderevers.github.io`:
 
 ```bash
-gcloud functions deploy mylapsProxyFunction --gen2 --runtime nodejs20 --region us-central1 --source alexanderevers.github.io/proxyserver --entry-point mylapsProxy --trigger-http --allow-unauthenticated
+gcloud functions deploy mylapsProxyFunction --gen2 --runtime nodejs22 --region us-central1 --source alexanderevers.github.io/proxyserver --entry-point mylapsProxy --trigger-http --allow-unauthenticated
 ```
 
 To verify the deployment:
@@ -40,7 +40,7 @@ gcloud functions list
 curl "https://us-central1-proxyapi-475018.cloudfunctions.net/mylapsProxyFunction/api/mylaps/search?term=jaap&count=2"
 ```
 
-*(Note: Node.js 20 can no longer be deployed after 2026-10-30. Before then, set `engines.node` in `proxyserver/package.json` to `22` and deploy with `--runtime nodejs22`.)*
+*(Note: The runtime is Node.js 22. Keep `engines.node` in `proxyserver/package.json` and the `--runtime` flag in sync.)*
 
 ### Endpoints
 
