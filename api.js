@@ -2,8 +2,7 @@
  * API module for fetching data from the MYLAPS proxy.
  */
 
-// Cloudflare Worker (see cloudflare-worker/). The old Google Cloud Function was:
-// https://us-central1-proxyapi-475018.cloudfunctions.net/mylapsProxyFunction/api/mylaps
+// Cloudflare Worker (see cloudflare-worker/README.md).
 const PROXY_BASE_URL = 'https://mylaps-proxy.iceskater.workers.dev/api/mylaps';
 
 const FETCH_RETRIES = 2;

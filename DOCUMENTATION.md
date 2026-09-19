@@ -1,10 +1,10 @@
 # MYLAPS Activity Viewer Documentation
 
-This document provides an overview of the project structure, focusing on the Google Cloud Function proxy server and its interaction with the frontend application.
+This document provides an overview of the project structure, focusing on the Cloudflare Worker proxy server and its interaction with the frontend application. For a quick start see `README.md`; for running and verifying everything see `tests/README.md`.
 
 ## Project Overview
 
-The MYLAPS Activity Viewer is a web application that fetches and displays training activity data from the MYLAPS Speedhive platform. It consists of a static frontend (HTML, CSS, JavaScript) and a serverless proxy backend running on Google Cloud Functions.
+The MYLAPS Activity Viewer is a web application that fetches and displays training activity data from the MYLAPS Speedhive platform. It consists of a static frontend (HTML, CSS, JavaScript) and a serverless proxy backend running on Cloudflare Workers.
 
 ## Proxy Server (Cloudflare Worker)
 
@@ -16,7 +16,7 @@ The proxy server is essential for this application to work. The MYLAPS Speedhive
 -   **Public URL:** `https://mylaps-proxy.iceskater.workers.dev` (used as `PROXY_BASE_URL` in `api.js`, with `/api/mylaps` appended).
 -   **Account:** Cloudflare free plan (100,000 requests per day, no credit card), account `contact.alexander.evers@gmail.com`.
 -   **Who may use it:** only `https://alexanderevers.github.io`, local test servers and pages opened from a file (`ALLOWED_ORIGINS` in `wrangler.toml`). Other websites get a 403.
--   **Previous proxy:** a Google Cloud Function (`mylapsProxyFunction`, code in `/proxyserver`). It is replaced by the Worker and can be deleted once the Worker has run without problems: `gcloud functions delete mylapsProxyFunction --gen2 --region us-central1`.
+-   **Previous proxy:** an earlier Google Cloud Function (`mylapsProxyFunction`) was replaced by the Worker. It stopped responding (HTTP 503) and its code has been removed from the repository.
 
 ### Deployment
 
@@ -70,7 +70,7 @@ The frontend is a single-page application that handles user input, makes request
 
 -   **`index.html`**: The main HTML file containing the structure of the page.
 -   **`script.js`**: The core JavaScript file that contains the application logic for fetching data, handling user interactions, and updating the UI.
--   **`api.js`**: This file contains the functions responsible for making `fetch` requests to the proxy server. The `PROXY_BASE_URL` constant in this file must point to your deployed Google Cloud Function URL.
+-   **`api.js`**: This file contains the functions responsible for making `fetch` requests to the proxy server. The `PROXY_BASE_URL` constant in this file must point to your deployed Cloudflare Worker URL (with `/api/mylaps` appended).
 -   **`style.css`**: Contains all the styles for the application.
 
 ### GPX download for Strava
@@ -104,3 +104,10 @@ Shows the riders of overlapping sessions on an oblong 400 m track. It is opened 
 3.  `api.js` makes a request to the proxy's `/userid/:transponder` endpoint to get the `userId`.
 4.  `api.js` then makes parallel requests to the `/activities/:userId` and `/account/:userId` endpoints.
 5.  When the data is returned, `script.js` calls `displayProfileInfo` to show the user's name and avatar, and populates the activities dropdown.
+
+## Testing
+
+Automated tests live in `tests/` (unit tests, a headless-browser end-to-end test on fake data) and `cloudflare-worker/test/`
+(proxy tests). Run `npm test`, `npm run test:worker` and `npm run test:e2e` from the repository root; Node.js 22 or newer,
+no install needed. `tests/README.md` explains how to run them, what output to expect and how to tell a real failure
+from an environment problem.

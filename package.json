@@ -1,0 +1,12 @@
+{
+  "name": "mylaps-activity-viewer",
+  "version": "1.0.0",
+  "description": "Static website (GitHub Pages) that shows MYLAPS Speedhive training data.",
+  "private": true,
+  "scripts": {
+    "test": "node --test \"tests/unit/*.test.js\"",
+    "test:e2e": "node tests/e2e/replay-flow.e2e.js",
+    "test:worker": "npm --prefix cloudflare-worker test",
+    "test:all": "npm test && npm run test:worker"
+  }
+}

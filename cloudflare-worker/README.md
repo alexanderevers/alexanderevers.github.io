@@ -1,6 +1,6 @@
 # MYLAPS proxy on Cloudflare Workers
 
-A small Cloudflare Worker that does what the Google Cloud Function in `../proxyserver` did: it forwards the
+A small Cloudflare Worker that is the proxy of the website (it replaced an earlier Google Cloud Function): it forwards the
 website's requests to the MYLAPS Speedhive API (which does not allow requests straight from a browser) and
 adds the CORS headers. It also **caches** answers, so repeated requests never reach MYLAPS.
 
@@ -47,11 +47,10 @@ the second answer came from Cloudflare's cache and MYLAPS was not asked again.
 In `../api.js`, change `PROXY_BASE_URL` to
 `https://mylaps-proxy.<your-name>.workers.dev/api/mylaps`, then push to GitHub Pages.
 
-### 7. Switch the old Google function off (after a few days without problems)
-```bash
-gcloud functions delete mylapsProxyFunction --gen2 --region us-central1
-```
-and remove the `../proxyserver` folder.
+### 7. The old Google proxy is gone
+The earlier Google Cloud Function proxy stopped responding (HTTP 503) and its code has been removed from the
+repository. If the Google Cloud project `proxyapi-475018` still exists, open its **Cloud Run** and **Cloud Functions**
+pages once to make sure nothing is left running or billing.
 
 ## What gets cached, and for how long
 
@@ -69,7 +68,7 @@ Error answers are never cached. The visitor's browser also keeps answers (at mos
 ## Good to know
 - **Which websites may use it:** only `https://alexanderevers.github.io`, local test servers and pages opened
   from a file. Change the list in `wrangler.toml` (`ALLOWED_ORIGINS`) and deploy again.
-- **Tests:** `npm test` runs 48 checks against a fake MYLAPS. `npx wrangler dev` runs the Worker on your own
+- **Tests:** `npm test` runs the checks in `test/handler.test.mjs` against a fake MYLAPS. `npx wrangler dev` runs the Worker on your own
   computer (`http://127.0.0.1:8787`) without any login.
 - **Logs:** `npx wrangler tail` shows live requests and errors.
 - **Limits:** the free plan allows 100,000 requests a day. Showing the overlapping riders of a busy session

@@ -3,7 +3,7 @@
  *
  * The MYLAPS Speedhive API does not allow requests straight from a browser (CORS) and expects an Origin
  * and Referer header that a browser cannot set. This Worker forwards the website's requests with those
- * headers and adds CORS headers to the answer. It exposes the same paths as the old Google proxy:
+ * headers and adds CORS headers to the answer. It exposes these paths:
  *
  *   /api/mylaps/userid/:transponder     /api/mylaps/laps/:activityId[?finished=1]
  *   /api/mylaps/activities/:userId      /api/mylaps/account/:userId
