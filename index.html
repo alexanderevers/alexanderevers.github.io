@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MYLAPS Activity Viewer</title>
     <link rel="stylesheet" href="style.css">
+    <script src="theme.js"></script>
     <!-- Include Chart.js library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -97,6 +98,15 @@
             <div id="overlappingSessionsTable"></div>
         </div>
     </div>
+
+    <footer class="theme-switch">
+        <span>Light</span>
+        <label class="switch">
+            <input type="checkbox" id="themeToggle" aria-label="Dark mode">
+            <span class="switch-track"></span>
+        </label>
+        <span>Dark</span>
+    </footer>
 
     <!-- Laad alle scripts in de juiste volgorde -->
     <script src="utils.js"></script>

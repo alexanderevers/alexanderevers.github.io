@@ -55,9 +55,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Charts read their colors from CSS tokens, so redraw when the OS theme flips.
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    const redrawForTheme = () => {
         if (currentLapData.length > 0) updateCharts(currentLapData, contextLapChart?.startIndex || 0);
-    });
+    };
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redrawForTheme);
+    document.addEventListener('themechange', redrawForTheme);
 
     function resetUI() {
         hide(loadingDiv); hide(errorDiv); hide(activitiesListDiv); hide(lapsDataDiv);

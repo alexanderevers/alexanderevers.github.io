@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>User Search</title>
     <link rel="stylesheet" href="style.css">
+    <script src="theme.js"></script>
 </head>
 <body>
     <div class="container">
@@ -20,6 +21,15 @@
             <button id="nextButton" disabled>Next</button>
         </div>
     </div>
+
+    <footer class="theme-switch">
+        <span>Light</span>
+        <label class="switch">
+            <input type="checkbox" id="themeToggle" aria-label="Dark mode">
+            <span class="switch-track"></span>
+        </label>
+        <span>Dark</span>
+    </footer>
 
     <script src="utils.js"></script>
     <script src="api.js"></script>

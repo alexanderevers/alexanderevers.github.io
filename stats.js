@@ -120,13 +120,29 @@ function renderSpeedAnalysis(statsContainer, blocksContainer, analysis, trackLen
             <td>${i + 1}</td>
             <td>${b.firstLap}–${b.lastLap}</td>
             <td>${b.count}</td>
+            <td>${((b.count * trackLengthM) / 1000).toFixed(2)}</td>
             <td>${formatSecondsToDuration(b.avg)}</td>
             <td>${formatSecondsToDuration(b.best)}</td>
             <td>${speedKph(b.avg, trackLengthM).toFixed(1)}</td>
         </tr>`).join('');
+    const totalCount = analysis.blocks.reduce((sum, b) => sum + b.count, 0);
+    const totalSeconds = analysis.blocks.reduce((sum, b) => sum + b.totalSeconds, 0);
+    const totalAvg = totalSeconds / totalCount;
+    const totalBest = Math.min(...analysis.blocks.map(b => b.best));
     blocksContainer.innerHTML = `
         <table class="laps-table blocks-table">
-            <thead><tr><th>Block</th><th>Laps</th><th>Count</th><th>Avg lap</th><th>Best lap</th><th>Avg km/h</th></tr></thead>
+            <thead><tr><th>Block</th><th>Laps</th><th>Count</th><th>Distance (km)</th><th>Avg lap</th><th>Best lap</th><th>Avg km/h</th></tr></thead>
             <tbody>${rows}</tbody>
+            <tfoot>
+                <tr>
+                    <td>Total</td>
+                    <td></td>
+                    <td>${totalCount}</td>
+                    <td>${((totalCount * trackLengthM) / 1000).toFixed(2)}</td>
+                    <td>${formatSecondsToDuration(totalAvg)}</td>
+                    <td>${formatSecondsToDuration(totalBest)}</td>
+                    <td>${speedKph(totalAvg, trackLengthM).toFixed(1)}</td>
+                </tr>
+            </tfoot>
         </table>`;
 }
