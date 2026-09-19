@@ -56,7 +56,13 @@
             </div>
             <canvas id="lapCanvas" aria-label="Lap times of the followed rider; a vertical line moves with the replay time"></canvas>
 
-            <h2>Riders <small id="riderCount"></small></h2>
+            <div class="rider-head">
+                <h2>Riders <small id="riderCount"></small></h2>
+                <span class="rider-actions">
+                    <button id="showAllBtn" class="secondary-btn" title="Shows the riders who skated with you (more than 0 min together), not the ones who were not on the ice at the same time">Show all skated together</button>
+                    <button id="hideAllBtn" class="secondary-btn">Hide all</button>
+                </span>
+            </div>
             <div id="riderList" class="rider-list"></div>
         </div>
     </div>

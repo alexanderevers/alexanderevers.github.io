@@ -66,7 +66,7 @@ function displayOverlappingSessions(sessions) {
         const displayName = riderDisplayName(session);
 
         card.innerHTML = `
-            <input type="checkbox" class="replay-select" data-activity-id="${session.id}" aria-label="Include ${escapeHtml(displayName)} in the replay">
+            <input type="checkbox" class="replay-select" data-activity-id="${session.id}" data-together-ms="${session.togetherMs ?? ''}" aria-label="Include ${escapeHtml(displayName)} in the replay">
             <img src="${avatarUrl}" class="session-card-avatar" alt="Rider Avatar" onerror="this.style.display='none'">
             <div class="session-card-main">
                 <div class="session-card-header">
@@ -139,19 +139,35 @@ function setupOverlappingSessionsEventListeners(getActivities, getReferenceRider
 
     const replayCheckboxes = () => [...overlappingSessionsTable.querySelectorAll('.replay-select')];
     const selectedIds = () => replayCheckboxes().filter(cb => cb.checked).map(cb => Number(cb.dataset.activityId));
+    // "Select all" only picks riders who really skated with you (more than 0 min). If none of the riders
+    // could be measured (no lap data for your own activity), it falls back to everyone.
+    const hasTogetherTime = cb => Number(cb.dataset.togetherMs) > 0;
+    function selectAllTargets() {
+        const boxes = replayCheckboxes();
+        const measured = boxes.some(cb => cb.dataset.togetherMs !== '');
+        return measured ? boxes.filter(hasTogetherTime) : boxes;
+    }
     function updateReplaySelection() {
         const boxes = replayCheckboxes();
         const count = selectedIds().length;
         selectedCount.textContent = `${count} of ${boxes.length} selected`;
-        selectAllBtn.textContent = count === boxes.length ? 'Select none' : 'Select all';
+        const targets = selectAllTargets();
+        const allTargetsSelected = targets.length > 0 && targets.every(cb => cb.checked);
+        selectAllBtn.textContent = allTargetsSelected ? 'Select none' : `Select all skated together (${targets.length})`;
+        selectAllBtn.disabled = targets.length === 0;
     }
     document.addEventListener('overlapsrendered', updateReplaySelection);
     overlappingSessionsTable.addEventListener('change', event => {
         if (event.target.classList.contains('replay-select')) updateReplaySelection();
     });
     selectAllBtn.addEventListener('click', () => {
-        const selectAll = selectedIds().length !== replayCheckboxes().length;
-        replayCheckboxes().forEach(cb => { cb.checked = selectAll; });
+        const targets = selectAllTargets();
+        const allTargetsSelected = targets.length > 0 && targets.every(cb => cb.checked);
+        if (allTargetsSelected) {
+            replayCheckboxes().forEach(cb => { cb.checked = false; });
+        } else {
+            targets.forEach(cb => { cb.checked = true; });
+        }
         updateReplaySelection();
     });
     openReplayBtn.addEventListener('click', () => {

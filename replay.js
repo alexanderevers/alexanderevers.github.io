@@ -3,7 +3,8 @@
  * Depends on utils.js, api.js, replay-track.js and replay-model.js.
  */
 document.addEventListener('DOMContentLoaded', () => {
-    const MAX_RIDERS = 8;               // the categorical palette is validated for 8 slots
+    const MAX_RIDERS = 200;             // safety limit on how many riders are shown at once
+    const LABELLED_RIDERS = 10;         // the first riders get a coloured dot with initials, the rest are small blue dots
     const REPLAY_STORAGE_KEY = 'replayData';
     const LANE_STEP = 0.0075;           // sideways spacing between riders so overlapping dots stay visible
     const LANES = 5;
@@ -54,8 +55,8 @@ document.addEventListener('DOMContentLoaded', () => {
     $('replaySubtitle').textContent = `${payload.location.sport} · ${payload.location.name} · ${formatDateTime(payload.riders[0].startTime)}`;
     $('backLink').href = `index.html?transponder=${encodeURIComponent(payload.reference.chipCode || '')}`;
 
-    const riders = payload.riders.map(r => ({
-        ...r, laps: null, loading: false, error: null, selected: false, slot: null, hover: false
+    const riders = payload.riders.map((r, index) => ({
+        ...r, index, laps: null, loading: false, error: null, selected: false, selectedAt: 0, slot: null, hover: false, forceLabel: false, forceSmall: false, labelledAt: 0
     }));
 
     // ---------- Theme colours (read from the CSS tokens) ----------
@@ -67,12 +68,15 @@ document.addEventListener('DOMContentLoaded', () => {
             ice: token('--surface-2'), edge: token('--axis'), grid: token('--grid'),
             surface: token('--surface'), text: token('--text'), muted: token('--text-muted'),
             secondary: token('--text-secondary'), slow: token('--series-muted'),
-            series: Array.from({ length: MAX_RIDERS }, (_, i) => token(`--cat-${i + 1}`))
+            series: Array.from({ length: LABELLED_RIDERS }, (_, i) => token(`--cat-${i + 1}`))
         };
     }
     readColors();
     document.addEventListener('themechange', readColors);
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors);
+
+    // A labelled rider has a palette slot; every other rider is drawn as a small dot in the first (blue) colour.
+    const colorOf = rider => colors.series[rider.slot ?? 0];
 
     // Pick black or white text for the initials, whichever reads better on the rider's colour.
     function inkFor(hex) {
@@ -86,17 +90,52 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---------- Selection ----------
     const selectedRiders = () => riders.filter(r => r.selected);
 
-    function assignSlot(rider) {
-        const used = new Set(selectedRiders().filter(r => r !== rider && r.slot !== null).map(r => r.slot));
-        let slot = rider.isReference && !used.has(0) ? 0 : -1;
-        for (let i = 0; slot < 0 && i < MAX_RIDERS; i++) if (!used.has(i)) slot = i;
-        rider.slot = slot;
+    // The reference rider, then the riders the user gave a colour (by clicking their dot in the list), then the
+    // riders that were shown first are labelled (colour + initials); a rider keeps its colour while shown.
+    // When a labelled rider is hidden, the earliest shown small dot takes over.
+    let selectionCounter = 0;
+    function refreshLabelled() {
+        const rank = r => (r.isReference ? 0 : r.forceLabel ? 1 : 2);
+        const ordered = selectedRiders()
+            .filter(r => r.isReference || !r.forceSmall)
+            .sort((a, b) => (rank(a) - rank(b)) || (rank(a) === 1 ? a.labelledAt - b.labelledAt : a.selectedAt - b.selectedAt));
+        const labelled = ordered.slice(0, LABELLED_RIDERS);
+        const used = new Set();
+        riders.forEach(r => {
+            if (!labelled.includes(r)) r.slot = null;
+            else if (r.slot !== null) used.add(r.slot);
+        });
+        labelled.forEach(r => {
+            if (r.slot !== null) return;
+            let slot = r.isReference && !used.has(0) ? 0 : -1;
+            for (let i = 0; slot < 0 && i < LABELLED_RIDERS; i++) if (!used.has(i)) slot = i;
+            r.slot = slot;
+            used.add(slot);
+        });
+    }
+
+    // Laps are fetched a few at a time so that showing many riders at once does not flood the API.
+    const LAP_FETCH_CONCURRENCY = 5;
+    let activeLapFetches = 0;
+    const lapFetchQueue = [];
+
+    function requestLaps(rider) {
+        rider.loading = true;
+        rider.error = null;
+        lapFetchQueue.push(rider);
+        pumpLapQueue();
+    }
+
+    function pumpLapQueue() {
+        while (activeLapFetches < LAP_FETCH_CONCURRENCY && lapFetchQueue.length) {
+            const rider = lapFetchQueue.shift();
+            if (!rider.selected) { rider.loading = false; continue; }   // hidden again before its turn
+            activeLapFetches++;
+            loadLaps(rider).finally(() => { activeLapFetches--; pumpLapQueue(); });
+        }
     }
 
     async function loadLaps(rider) {
-        rider.loading = true;
-        rider.error = null;
-        updateRows();
         try {
             rider.laps = normalizeLaps(await fetchLaps(rider.id));
             if (rider.laps.length === 0) rider.error = 'No lap data';
@@ -109,15 +148,33 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function setSelected(rider, selected) {
-        if (selected && selectedRiders().length >= MAX_RIDERS) return;
-        rider.selected = selected;
-        if (selected) {
-            assignSlot(rider);
-            if (!rider.laps && !rider.loading) loadLaps(rider);
+    // Click on the dot in front of a rider: give the rider a colour, or make it a small dot again.
+    let labelCounter = 0;
+    function toggleLabel(rider) {
+        if (rider.isReference) return;   // you always have a colour
+        if (!rider.selected || rider.slot === null) {
+            rider.forceSmall = false;
+            rider.forceLabel = true;
+            rider.labelledAt = ++labelCounter;
+            // All colours taken by riders the user picked: the one picked longest ago gives its colour up.
+            const picked = selectedRiders().filter(r => r.forceLabel && !r.isReference && r !== rider).sort((a, b) => a.labelledAt - b.labelledAt);
+            if (picked.length >= LABELLED_RIDERS - 1) picked[0].forceLabel = false;
+            if (!rider.selected) { setSelected(rider, true); return; }
         } else {
-            rider.slot = null;
+            rider.forceLabel = false;
+            rider.forceSmall = true;
         }
+        refreshLabelled();
+        updateRows();
+    }
+
+    function setSelected(rider, selected) {
+        if (selected && !rider.selected && selectedRiders().length >= MAX_RIDERS) return;
+        if (selected && !rider.selected) rider.selectedAt = ++selectionCounter;
+        rider.selected = selected;
+        if (!selected) { rider.forceLabel = false; rider.forceSmall = false; }
+        refreshLabelled();
+        if (selected && !rider.laps && !rider.loading) requestLaps(rider);
         updateTimeline();
         updateRows();
     }
@@ -184,6 +241,12 @@ document.addEventListener('DOMContentLoaded', () => {
             checkbox.addEventListener('change', () => setSelected(rider, checkbox.checked));
             row.addEventListener('mouseenter', () => { rider.hover = true; });
             row.addEventListener('mouseleave', () => { rider.hover = false; });
+            const dot = row.querySelector('.rider-swatch');
+            dot.addEventListener('click', event => {
+                event.preventDefault();    // the row is a label: do not toggle the checkbox
+                event.stopPropagation();
+                toggleLabel(rider);
+            });
             riderList.appendChild(row);
             rows.set(rider, { row, checkbox, swatch: row.querySelector('.rider-swatch'), live: row.querySelector('.rider-live') });
         });
@@ -191,13 +254,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateRows() {
         const full = selectedRiders().length >= MAX_RIDERS;
-        riderCount.textContent = `(${selectedRiders().length} shown, max ${MAX_RIDERS})`;
+        const shownCount = selectedRiders().length;
+        riderCount.textContent = `(${shownCount} shown${shownCount > LABELLED_RIDERS ? `, first ${LABELLED_RIDERS} labelled` : ''})`;
         riders.forEach(rider => {
             const { row, checkbox, swatch } = rows.get(rider);
             checkbox.checked = rider.selected;
             checkbox.disabled = full && !rider.selected;
             row.classList.toggle('selected', rider.selected);
-            swatch.style.background = rider.selected ? colors.series[rider.slot] : 'transparent';
+            const labelled = rider.selected && rider.slot !== null;
+            const small = rider.selected && rider.slot === null;
+            swatch.classList.toggle('small', small);
+            swatch.style.background = labelled ? colorOf(rider) : (small ? '' : 'transparent');
+            swatch.style.setProperty('--dot', colors.series[0]);
+            swatch.title = rider.isReference ? 'You always have a colour'
+                : labelled ? 'Click to make this rider a small dot'
+                : rider.selected ? 'Click to give this rider a colour'
+                : 'Click to show this rider with a colour';
         });
         updateFollowOptions();
     }
@@ -300,27 +372,30 @@ document.addEventListener('DOMContentLoaded', () => {
     function drawRiders() {
         hitTargets = [];
         const shown = selectedRiders().filter(r => r.laps?.length);
-        // The reference rider is drawn last so it stays on top.
-        shown.sort((a, b) => Number(a.isReference) - Number(b.isReference));
+        // Small dots first, labelled dots on top of them, the reference rider on top of all.
+        shown.sort((a, b) => (Number(a.slot !== null) - Number(b.slot !== null)) || (Number(a.isReference) - Number(b.isReference)));
         shown.forEach(rider => {
             const state = riderStateAt(rider.laps, t, trackLengthM);
             if (!state) return;
-            const lane = (rider.slot % LANES) - Math.floor(LANES / 2);
+            const labelled = rider.slot !== null;
+            const lane = ((labelled ? rider.slot : rider.index) % LANES) - Math.floor(LANES / 2);
             const p = toPx(pointOnTrack(state.frac, lane * LANE_STEP));
-            const radius = rider.hover ? 13 : 10;
-            const fill = colors.series[rider.slot];
+            const radius = labelled ? (rider.hover ? 13 : 10) : (rider.hover ? 7 : 4);
+            const fill = colorOf(rider);
             ctx.beginPath();
             ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
             ctx.fillStyle = fill;
             ctx.fill();
-            ctx.lineWidth = 2;
+            ctx.lineWidth = labelled ? 2 : 1.5;
             ctx.strokeStyle = colors.surface;
             ctx.stroke();
-            ctx.fillStyle = inkFor(fill);
-            ctx.font = '600 10px system-ui, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(initials(rider.name), p.x, p.y + 0.5);
+            if (labelled) {
+                ctx.fillStyle = inkFor(fill);
+                ctx.font = '600 10px system-ui, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(initials(rider.name), p.x, p.y + 0.5);
+            }
             hitTargets.push({ rider, state, x: p.x, y: p.y, radius });
         });
     }
@@ -337,7 +412,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const rect = canvas.getBoundingClientRect();
         const x = event.clientX - rect.left;
         const y = event.clientY - rect.top;
-        const hit = hitTargets.find(h => Math.hypot(h.x - x, h.y - y) <= h.radius + 4);
+        // The dot drawn last is on top, so it wins.
+        const hit = [...hitTargets].reverse().find(h => Math.hypot(h.x - x, h.y - y) <= h.radius + 4);
         if (!hit) { hide(tooltip); return; }
         tooltip.innerHTML = `<strong>${escapeHtml(hit.rider.name)}</strong><br>Lap ${hit.state.lap.nr} · ${(hit.state.lap.durMs / 1000).toFixed(2)}s · ${hit.state.speedKph.toFixed(1)} km/h`;
         tooltip.style.left = `${Math.min(x + 14, view.w - 190)}px`;
@@ -455,7 +531,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const { extent, ticks, plotW, plotH, x, y } = scale;
-        const seriesColor = colors.series[followRider.slot];
+        const seriesColor = colorOf(followRider);
         const laps = followRider.laps;
 
         // Grid and axis labels
@@ -615,6 +691,13 @@ document.addEventListener('DOMContentLoaded', () => {
         updateLive(now);
         requestAnimationFrame(frame);
     }
+
+    // "Show all" only shows riders who really skated with you (more than 0 min together). If none of the
+    // riders could be measured, it falls back to everyone.
+    const anyMeasured = riders.some(r => !r.isReference && r.togetherMs !== null && r.togetherMs !== undefined);
+    const skatedTogether = r => r.isReference || !anyMeasured || r.togetherMs > 0;
+    $('showAllBtn').addEventListener('click', () => riders.forEach(r => { if (!r.selected && skatedTogether(r)) setSelected(r, true); }));
+    $('hideAllBtn').addEventListener('click', () => riders.forEach(r => { if (r.selected && !r.isReference) setSelected(r, false); }));
 
     // ---------- Start ----------
     buildRows();
