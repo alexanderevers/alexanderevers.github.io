@@ -683,6 +683,44 @@ button:disabled {
     text-align: right;
 }
 
+.lap-chart-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.lap-chart-head h2 { margin-bottom: 0; }
+
+.lap-chart-head select {
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    max-width: 260px;
+}
+
+.lap-readout {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+#lapCanvas {
+    display: block;
+    width: 100%;
+    height: 220px;
+    margin-top: -6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    cursor: pointer;
+    touch-action: none;
+}
+
 .rider-list {
     display: flex;
     flex-direction: column;

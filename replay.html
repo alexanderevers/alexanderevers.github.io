@@ -41,6 +41,15 @@
                 <span id="clockLabel" class="clock-label">--:--:--</span>
             </div>
 
+            <div class="lap-chart-head">
+                <h2>Lap times</h2>
+                <label class="speed-label">Rider
+                    <select id="followSelect" aria-label="Rider to follow in the lap time graph"></select>
+                </label>
+                <span id="lapReadout" class="lap-readout"></span>
+            </div>
+            <canvas id="lapCanvas" aria-label="Lap times of the followed rider; a vertical line moves with the replay time"></canvas>
+
             <h2>Riders <small id="riderCount"></small></h2>
             <div id="riderList" class="rider-list"></div>
         </div>

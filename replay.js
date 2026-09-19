@@ -22,6 +22,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const riderList = $('riderList');
     const riderCount = $('riderCount');
     const statusEl = $('replayStatus');
+    const lapCanvas = $('lapCanvas');
+    const lapCtx = lapCanvas.getContext('2d');
+    const followSelect = $('followSelect');
+    const lapReadout = $('lapReadout');
 
     // ---------- Data ----------
     function loadPayload() {
@@ -190,6 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
             row.classList.toggle('selected', rider.selected);
             swatch.style.background = rider.selected ? colors.series[rider.slot] : 'transparent';
         });
+        updateFollowOptions();
     }
 
     let lastLiveUpdate = 0;
@@ -216,6 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ---------- Canvas ----------
     let view = { w: 0, h: 0, scale: 1, dpr: 1 };
+    let lapView = { w: 0, h: 0, dpr: 1 };
     function resize() {
         const b = trackBounds();
         const unitsW = b.maxX - b.minX + 2 * MARGIN;
@@ -227,6 +233,10 @@ document.addEventListener('DOMContentLoaded', () => {
         canvas.width = Math.round(w * dpr);
         canvas.height = Math.round(h * dpr);
         view = { w, h, scale: w / unitsW, dpr };
+
+        lapView = { w: lapCanvas.clientWidth, h: lapCanvas.clientHeight, dpr };
+        lapCanvas.width = Math.round(lapView.w * dpr);
+        lapCanvas.height = Math.round(lapView.h * dpr);
     }
     window.addEventListener('resize', resize);
     resize();
@@ -331,6 +341,193 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     canvas.addEventListener('mouseleave', () => hide(tooltip));
 
+    // ---------- Lap time graph of the followed rider ----------
+    const LAP_PAD = { l: 50, r: 16, t: 16, b: 28 };
+    let followRider = null;
+    let followPickedByUser = false;   // until the user picks someone, the graph follows the reference rider
+
+    function updateFollowOptions() {
+        const candidates = selectedRiders().filter(r => r.laps?.length);
+        const previous = followRider;
+        followSelect.innerHTML = candidates.map(r => `<option value="${r.id}">${escapeHtml(r.name)}${r.isReference ? ' (you)' : ''}</option>`).join('');
+        const reference = candidates.find(r => r.isReference);
+        const kept = candidates.find(r => r === previous);
+        followRider = (followPickedByUser && kept) || reference || kept || candidates[0] || null;
+        if (followRider) followSelect.value = String(followRider.id);
+        followSelect.disabled = candidates.length < 2;
+    }
+    followSelect.addEventListener('change', () => {
+        followRider = riders.find(r => String(r.id) === followSelect.value) || followRider;
+        followPickedByUser = true;
+    });
+
+    const isSkatingLap = lap => (trackLengthM / (lap.durMs / 1000)) * 3.6 >= MIN_SKATING_KPH;
+    const trimZeros = text => text.replace(/\.?0+$/, '');
+    const secondsLabel = seconds => trimZeros(formatSecondsToDuration(seconds));
+
+    /** Round tick values (seconds) that cover [min, max] with about 4-5 gridlines. */
+    function niceTicks(min, max) {
+        const steps = [0.5, 1, 2, 5, 10, 15, 20, 30, 60, 120, 300];
+        const step = steps.find(s => (max - min) / s <= 5) || 300;
+        const first = Math.max(0, Math.floor(min / step) * step);
+        const last = Math.max(first + step, Math.ceil(max / step) * step);
+        const ticks = [];
+        for (let v = first; v <= last + 1e-9; v += step) ticks.push(v);
+        return ticks;
+    }
+
+    // Time <-> pixel mapping of the graph; the x axis is the followed rider's own session.
+    function lapChartScale() {
+        if (!followRider) return null;
+        const extent = lapExtent(followRider.laps);
+        const skating = followRider.laps.filter(isSkatingLap);
+        if (!extent || skating.length === 0) return null;
+        const seconds = skating.map(l => l.durMs / 1000);
+        const ticks = niceTicks(Math.min(...seconds), Math.max(...seconds));
+        const yMin = ticks[0];
+        const yMax = ticks[ticks.length - 1];
+        const plotW = lapView.w - LAP_PAD.l - LAP_PAD.r;
+        const plotH = lapView.h - LAP_PAD.t - LAP_PAD.b;
+        return {
+            extent, yMin, yMax, ticks, plotW, plotH,
+            x: ms => LAP_PAD.l + ((ms - extent.startMs) / (extent.endMs - extent.startMs)) * plotW,
+            y: sec => LAP_PAD.t + (1 - (sec - yMin) / (yMax - yMin)) * plotH,
+            timeAt: px => extent.startMs + ((px - LAP_PAD.l) / plotW) * (extent.endMs - extent.startMs)
+        };
+    }
+
+    function drawLapChart() {
+        const ctx2 = lapCtx;
+        ctx2.setTransform(lapView.dpr, 0, 0, lapView.dpr, 0, 0);
+        ctx2.clearRect(0, 0, lapView.w, lapView.h);
+        const scale = lapChartScale();
+        if (!scale) {
+            ctx2.fillStyle = colors.muted;
+            ctx2.font = '13px system-ui, sans-serif';
+            ctx2.textAlign = 'center';
+            ctx2.textBaseline = 'middle';
+            ctx2.fillText(selectedRiders().some(r => r.loading) ? 'Loading laps…' : 'Show a rider to see the lap times', lapView.w / 2, lapView.h / 2);
+            lapReadout.textContent = '';
+            return;
+        }
+        const { extent, ticks, plotW, plotH, x, y } = scale;
+        const seriesColor = colors.series[followRider.slot];
+        const laps = followRider.laps;
+
+        // Grid and axis labels
+        ctx2.font = '11px system-ui, sans-serif';
+        ctx2.lineWidth = 1;
+        ctx2.strokeStyle = colors.grid;
+        ctx2.fillStyle = colors.muted;
+        ctx2.textAlign = 'right';
+        ctx2.textBaseline = 'middle';
+        for (const sec of ticks) {
+            const py = Math.round(y(sec)) + 0.5;
+            ctx2.beginPath(); ctx2.moveTo(LAP_PAD.l, py); ctx2.lineTo(LAP_PAD.l + plotW, py); ctx2.stroke();
+            ctx2.fillText(secondsLabel(sec), LAP_PAD.l - 8, py);
+        }
+        ctx2.textAlign = 'center';
+        ctx2.textBaseline = 'top';
+        const xTicks = Math.max(2, Math.min(6, Math.floor(plotW / 110)));
+        for (let i = 0; i <= xTicks; i++) {
+            const ms = extent.startMs + ((extent.endMs - extent.startMs) * i) / xTicks;
+            ctx2.fillText(new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), x(ms), LAP_PAD.t + plotH + 8);
+        }
+        ctx2.strokeStyle = colors.edge;
+        ctx2.beginPath(); ctx2.moveTo(LAP_PAD.l, LAP_PAD.t + plotH + 0.5); ctx2.lineTo(LAP_PAD.l + plotW, LAP_PAD.t + plotH + 0.5); ctx2.stroke();
+
+        // The lap the replay is in right now, shaded
+        const state = riderStateAt(laps, t, trackLengthM);
+        if (state) {
+            const x0 = x(state.lap.startMs);
+            const x1 = x(state.lap.startMs + state.lap.durMs);
+            ctx2.fillStyle = seriesColor;
+            ctx2.globalAlpha = 0.14;
+            ctx2.fillRect(x0, LAP_PAD.t, Math.max(x1 - x0, 2), plotH);
+            ctx2.globalAlpha = 1;
+        }
+
+        // Lap times as a line. A break (very slow "lap", marked at the top) or a stretch without any
+        // recorded laps interrupts the line, so it never draws across time the rider was not skating.
+        ctx2.strokeStyle = seriesColor;
+        ctx2.lineWidth = 2;
+        ctx2.lineJoin = 'round';
+        ctx2.lineCap = 'round';
+        ctx2.beginPath();
+        let connected = false;
+        let previousEnd = null;
+        laps.forEach(lap => {
+            const px = x(lap.startMs + lap.durMs / 2);
+            if (previousEnd !== null && lap.startMs - previousEnd > LAP_GAP_TOLERANCE_MS) connected = false;
+            previousEnd = lap.startMs + lap.durMs;
+            if (!isSkatingLap(lap)) { connected = false; return; }
+            const py = y(lap.durMs / 1000);
+            if (connected) ctx2.lineTo(px, py); else ctx2.moveTo(px, py);
+            connected = true;
+        });
+        ctx2.stroke();
+        if (laps.length <= 120) {
+            ctx2.fillStyle = seriesColor;
+            laps.forEach(lap => {
+                if (!isSkatingLap(lap)) return;
+                ctx2.beginPath();
+                ctx2.arc(x(lap.startMs + lap.durMs / 2), y(lap.durMs / 1000), 3, 0, Math.PI * 2);
+                ctx2.fill();
+            });
+        }
+        ctx2.strokeStyle = colors.muted;
+        ctx2.lineWidth = 2;
+        laps.forEach(lap => {
+            if (isSkatingLap(lap)) return;
+            const px = x(lap.startMs + lap.durMs / 2);
+            ctx2.beginPath(); ctx2.moveTo(px, LAP_PAD.t); ctx2.lineTo(px, LAP_PAD.t + 8); ctx2.stroke();
+        });
+
+        // The current lap's point, ringed
+        if (state) {
+            const px = x(state.lap.startMs + state.lap.durMs / 2);
+            const py = y(state.lap.durMs / 1000);
+            ctx2.beginPath();
+            ctx2.arc(px, py, 6, 0, Math.PI * 2);
+            ctx2.fillStyle = seriesColor;
+            ctx2.fill();
+            ctx2.lineWidth = 2;
+            ctx2.strokeStyle = colors.surface;
+            ctx2.stroke();
+        }
+
+        // Vertical line that moves with the replay time
+        if (t >= extent.startMs && t <= extent.endMs) {
+            const px = Math.round(x(t)) + 0.5;
+            ctx2.strokeStyle = colors.text;
+            ctx2.lineWidth = 2;
+            ctx2.beginPath(); ctx2.moveTo(px, LAP_PAD.t - 6); ctx2.lineTo(px, LAP_PAD.t + plotH); ctx2.stroke();
+        }
+
+        const readout = state
+            ? `Lap ${state.lap.nr} · ${(state.lap.durMs / 1000).toFixed(1)}s · ${state.speedKph.toFixed(1)} km/h`
+            : 'Off the ice';
+        if (lapReadout.textContent !== readout) lapReadout.textContent = readout;
+    }
+
+    // Click or drag on the graph to jump to that moment.
+    let draggingLapChart = false;
+    function seekFromLapChart(event) {
+        const scale = lapChartScale();
+        if (!scale || !timelineReady) return;
+        const px = event.clientX - lapCanvas.getBoundingClientRect().left;
+        const clamped = Math.min(Math.max(px, LAP_PAD.l), LAP_PAD.l + scale.plotW);
+        t = Math.min(Math.max(scale.timeAt(clamped), tMin), tMax);
+    }
+    lapCanvas.addEventListener('pointerdown', event => {
+        draggingLapChart = true;
+        lapCanvas.setPointerCapture(event.pointerId);
+        seekFromLapChart(event);
+    });
+    lapCanvas.addEventListener('pointermove', event => { if (draggingLapChart) seekFromLapChart(event); });
+    lapCanvas.addEventListener('pointerup', () => { draggingLapChart = false; });
+    lapCanvas.addEventListener('pointercancel', () => { draggingLapChart = false; });
+
     // ---------- Playback ----------
     let playing = false;
     let lastFrame = null;
@@ -364,6 +561,7 @@ document.addEventListener('DOMContentLoaded', () => {
             timeSlider.value = Math.round((t - tMin) / 1000);
         }
         draw();
+        drawLapChart();
         updateLive(now);
         requestAnimationFrame(frame);
     }
