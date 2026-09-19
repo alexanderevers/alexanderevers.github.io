@@ -7,8 +7,6 @@
     <link rel="stylesheet" href="style.css">
     <!-- Include Chart.js library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Include Chart.js Data Labels plugin -->
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
 </head>
 <body>
     <div class="container">
@@ -20,7 +18,7 @@
             <datalist id="transponder-list"></datalist>
         </div>
 
-        <div id="profile-info" class="hidden" style="display: none;">
+        <div id="profile-info" style="display: none;">
             <img id="profile-avatar" src="" alt="User Avatar">
             <div class="profile-details">
                 <span id="profile-name"></span>
@@ -62,8 +60,26 @@
                 <span id="maxFastLapValueError" class="error-message hidden">Invalid time format</span>
                 <button id="toggleLapsBtn">Show Speed Laps</button>
             </div>
+            <h2>Lap times</h2>
             <div class="chart-container" id="mainChartContainer">
                 <canvas id="mainLapChart"></canvas>
+            </div>
+
+            <div id="speedAnalysis">
+                <h2>Speed lap analysis</h2>
+                <div id="speedStats" class="stat-grid"></div>
+                <div class="analysis-grid">
+                    <div id="distributionSection">
+                        <h3>Lap time distribution</h3>
+                        <div class="chart-container" id="distributionChartContainer">
+                            <canvas id="distributionChart"></canvas>
+                        </div>
+                    </div>
+                    <div>
+                        <h3>Speed blocks <small>(consecutive speed laps)</small></h3>
+                        <div id="speedBlocks"></div>
+                    </div>
+                </div>
             </div>
             <div class="table-and-context-section hidden" id="tableAndContextSection">
                 <h2>Laps Data Analysis</h2>
@@ -87,6 +103,7 @@
     <script src="gpx-generator.js"></script>
     <script src="api.js"></script>
     <script src="chart-factory.js"></script>
+    <script src="stats.js"></script>
     <script src="fetch_overlapping_sessions.js"></script>
     <script src="script.js"></script>
 </body>

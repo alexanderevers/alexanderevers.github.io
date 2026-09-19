@@ -1,79 +1,228 @@
 /**
  * Chart Factory module for creating chart configurations.
- * Depends on functions from utils.js
+ * Depends on functions from utils.js. Colors come from the CSS tokens in style.css,
+ * so charts follow the light/dark theme.
  */
 
-function prepareChartData(data, maxFastTime) {
-    const lapNumbers = [];
-    const lapTimesInSeconds = [];
-    const backgroundColors = [];
-    const borderColors = [];
-    const borderWidths = [];
-    
-    let minLapTime = Infinity;
-    data.forEach(lap => {
-        const lapTime = parseDurationToSeconds(lap.duration);
-        if (lapTime < minLapTime) minLapTime = lapTime;
-    });
-    const yAxisMin = Math.max(0, minLapTime - 5);
-
-    data.forEach(lap => {
-        lapNumbers.push(`Lap ${lap.nr}`);
-        const lapTime = parseDurationToSeconds(lap.duration);
-        lapTimesInSeconds.push(lapTime);
-
-        if (lapTime <= maxFastTime) {
-            backgroundColors.push('rgba(0, 123, 255, 0.8)');
-            if (lap.status === 'FASTER') {
-                borderColors.push('rgba(46, 204, 113, 0.9)');
-                borderWidths.push(3);
-            } else if (lap.status === 'SLOWER') {
-                borderColors.push('rgba(231, 76, 60, 0.9)');
-                borderWidths.push(3);
-            } else {
-                borderColors.push('rgba(0, 123, 255, 1)');
-                borderWidths.push(1);
-            }
-        } else {
-            backgroundColors.push('rgba(173, 216, 230, 0.6)');
-            borderColors.push('rgba(173, 216, 230, 0.8)');
-            borderWidths.push(1);
-        }
-    });
-    return { lapNumbers, lapTimesInSeconds, backgroundColors, borderColors, borderWidths, yAxisMin };
+function chartTheme() {
+    const styles = getComputedStyle(document.documentElement);
+    const token = name => styles.getPropertyValue(name).trim();
+    return {
+        fast: token('--series-1'),
+        avg: token('--series-2'),
+        slow: token('--series-muted'),
+        text: token('--text-secondary'),
+        muted: token('--text-muted'),
+        grid: token('--grid'),
+        axis: token('--axis'),
+        surface: token('--surface')
+    };
 }
 
-function getChartOptions(yAxisMin, showDataLabels, fullLapData, hoveredRowIndex, maxFastTime, mainChartInstance, contextChartInstance, currentFullLapData, startIndex = 0) {
+function applyChartDefaults() {
+    const t = chartTheme();
+    Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+    Chart.defaults.color = t.text;
+    return t;
+}
+
+function withAlpha(hex, alpha) {
+    const n = parseInt(hex.replace('#', ''), 16);
+    return `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+function timeAxis(t, position = 'bottom', extra = {}) {
+    return {
+        position,
+        grid: { color: t.grid, lineWidth: 1 },
+        border: { color: t.axis },
+        ticks: { color: t.muted, callback: value => formatSecondsToDuration(value).replace(/\.?0+$/, '') },
+        ...extra
+    };
+}
+
+function lapTooltipLines(lap) {
+    if (!lap) return '';
+    const lines = [`Lap ${lap.nr}: ${lap.duration}`];
+    if (lap.dateTimeStart) lines.push(`Lap start: ${formatTime(lap.dateTimeStart)}`);
+    if (lap.diffPrevLap) lines.push(`Diff: ${lap.status === 'SLOWER' ? '+' : '-'}${lap.diffPrevLap}`);
+    lines.push(`Session: ${lap.sessionDuration || 'N/A'}`);
+    lines.push(`Speed: ${lap.speed?.kph?.toFixed(1) || 'N/A'} km/h`);
+    return lines;
+}
+
+/**
+ * Lap times over the session: speed laps as a line, slower laps as muted dots,
+ * plus a reference line at the average speed-lap time.
+ */
+function buildOverviewChartConfig(lapData, maxFastTime, avgFastTime) {
+    const t = applyChartDefaults();
+    const times = lapData.map(lap => parseDurationToSeconds(lap.duration));
+    const validTimes = times.filter(x => !isNaN(x));
+    const yMin = Math.max(0, Math.floor(Math.min(...validTimes) - 2));
+    const yMax = Math.ceil(maxFastTime + 1);
+
+    const fastData = times.map(x => (x < maxFastTime ? x : null));
+    // Real values are kept: laps slower than the window are drawn as bars that run off the top of the axis.
+    const slowData = times.map(x => (x >= maxFastTime ? x : null));
+    const barStyle = { type: 'bar', grouped: false, borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: 'bottom', maxBarThickness: 24 };
+
+    const datasets = [
+        { ...barStyle, label: 'Speed laps', data: fastData, backgroundColor: withAlpha(t.fast, 0.35) },
+        { ...barStyle, label: 'Slower laps', data: slowData, backgroundColor: t.slow },
+        {
+            type: 'line',
+            label: 'Speed lap line',
+            data: fastData,
+            borderColor: t.fast,
+            backgroundColor: t.fast,
+            borderWidth: 2,
+            tension: 0,
+            spanGaps: false,
+            pointRadius: 3,
+            pointHoverRadius: 6,
+            pointBorderColor: t.surface,
+            pointBorderWidth: 2
+        }
+    ];
+    if (avgFastTime) {
+        datasets.push({
+            type: 'line',
+            label: `Avg speed lap (${formatSecondsToDuration(avgFastTime)})`,
+            isAverage: true,
+            data: times.map(() => avgFastTime),
+            borderColor: t.avg,
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHoverRadius: 0
+        });
+    }
+
+    return {
+        type: 'bar',
+        data: { labels: lapData.map(lap => lap.nr), datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: { mode: 'nearest', axis: 'x', intersect: false },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    border: { color: t.axis },
+                    ticks: { color: t.muted, maxTicksLimit: 20 },
+                    title: { display: true, text: 'Lap', color: t.muted }
+                },
+                y: timeAxis(t, 'left', { min: yMin, max: yMax, reverse: false })
+            },
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        usePointStyle: true,
+                        boxWidth: 8,
+                        color: t.text,
+                        // The line over the bars shares the "Speed laps" entry.
+                        filter: item => item.text !== 'Speed lap line'
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        title: () => '',
+                        label: context => {
+                            if (context.dataset.isAverage) return context.dataset.label;
+                            return lapTooltipLines(lapData[context.dataIndex]);
+                        }
+                    }
+                }
+            }
+        }
+    };
+}
+
+/** Histogram of speed-lap times. Bars start at zero and grow from the baseline. */
+function buildDistributionChartConfig(times) {
+    const t = applyChartDefaults();
+    const min = Math.min(...times);
+    const max = Math.max(...times);
+    const widths = [0.1, 0.2, 0.25, 0.5, 1, 2, 5];
+    const width = widths.find(w => (max - min) / w <= 14) || 5;
+    const start = Math.floor(min / width) * width;
+    const binCount = Math.floor((max - start) / width) + 1;
+    const counts = new Array(binCount).fill(0);
+    times.forEach(x => { counts[Math.min(binCount - 1, Math.floor((x - start) / width))]++; });
+    const labels = counts.map((_, i) => formatSecondsToDuration(start + i * width).replace(/0+$/, '').replace(/\.$/, ''));
+
+    return {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Laps',
+                data: counts,
+                backgroundColor: t.fast,
+                borderRadius: { topLeft: 4, topRight: 4 },
+                borderSkipped: 'bottom',
+                maxBarThickness: 24
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            scales: {
+                x: {
+                    grid: { display: false },
+                    border: { color: t.axis },
+                    ticks: { color: t.muted },
+                    title: { display: true, text: 'Lap time (s)', color: t.muted }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: t.grid },
+                    border: { display: false },
+                    ticks: { color: t.muted, precision: 0 }
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        title: items => `${items[0].label} – ${formatSecondsToDuration(start + (items[0].dataIndex + 1) * width)}`,
+                        label: context => `${context.parsed.y} lap${context.parsed.y === 1 ? '' : 's'}`
+                    }
+                }
+            }
+        }
+    };
+}
+
+function prepareChartData(data, maxFastTime) {
+    const t = chartTheme();
+    const lapTimesInSeconds = data.map(lap => parseDurationToSeconds(lap.duration));
+    const backgroundColors = lapTimesInSeconds.map(x => (x < maxFastTime ? t.fast : t.slow));
+    const minLapTime = Math.min(...lapTimesInSeconds.filter(x => !isNaN(x)));
+    return { lapTimesInSeconds, backgroundColors, yAxisMin: Math.max(0, minLapTime - 5) };
+}
+
+/** Options for the horizontal 10-lap context chart next to the laps table. */
+function getContextChartOptions(yAxisMin, hoveredRowIndex, maxFastTime, currentFullLapData, startIndex = 0) {
+    const t = applyChartDefaults();
     return {
         indexAxis: 'y',
         responsive: true,
         maintainAspectRatio: false,
         animation: false,
         scales: {
-            x: { 
-                beginAtZero: false, min: yAxisMin, max: maxFastTime + 0,
-                ticks: { callback: value => formatSecondsToDuration(value) }
-            },
-            xTop: {
-                position: 'top', beginAtZero: false, min: yAxisMin, max: maxFastTime + 0,
-                ticks: { callback: value => formatSecondsToDuration(value) },
-                grid: { drawOnChartArea: false }
-            },
-            y: { 
+            x: timeAxis(t, 'bottom', { min: yAxisMin, max: maxFastTime }),
+            y: {
+                grid: { display: false },
+                border: { color: t.axis },
                 ticks: {
-                    font: function(context) {
-                        let indexToMatch;
-                        // Use showDataLabels to distinguish between the main chart (true) and context chart (false)
-                        if (showDataLabels) { // This is the main chart
-                            indexToMatch = hoveredRowIndex;
-                        } else { // This is the context chart
-                            indexToMatch = hoveredRowIndex - startIndex;
-                        }
-                        if (context.index === indexToMatch) {
-                            return { weight: 'bold', size: '14px' };
-                        }
-                        return { weight: 'normal', size: '12px' };
-                    }
+                    color: t.text,
+                    font: context => (context.index === hoveredRowIndex - startIndex
+                        ? { weight: 'bold', size: 14 }
+                        : { weight: 'normal', size: 12 })
                 }
             }
         },
@@ -81,51 +230,8 @@ function getChartOptions(yAxisMin, showDataLabels, fullLapData, hoveredRowIndex,
             legend: { display: false },
             tooltip: {
                 callbacks: {
-                    label: function(context) {
-                        const dataIndex = context.dataIndex;
-                        let lap;
-                        if (showDataLabels) { // This is the main chart
-                            lap = currentFullLapData[dataIndex];
-                        } else { // This is the context chart
-                            lap = currentFullLapData[startIndex + dataIndex];
-                        }
-                        if (!lap) return '';
-                        const tooltipLines = [];
-                        tooltipLines.push(`Duration: ${lap.duration}`);
-                        if (lap.dateTimeStart) {
-                            tooltipLines.push(`Lap Start: ${formatTime(lap.dateTimeStart)}`);
-                        }
-                        if (lap.diffPrevLap) {
-                            const sign = lap.status === 'SLOWER' ? '+' : '-';
-                            tooltipLines.push(`Diff: ${sign}${lap.diffPrevLap}`);
-                        }
-                        tooltipLines.push(`Session: ${lap.sessionDuration || 'N/A'}`);
-                        const speed = lap.speed?.kph?.toFixed(1) || 'N/A';
-                        tooltipLines.push(`Speed: ${speed} km/h`);
-                        return tooltipLines;
-                    }
-                }
-            },
-            datalabels: {
-                display: showDataLabels ? function(context) {
-                    const lap = fullLapData[context.dataIndex];
-                    const lapTime = context.dataset.data[context.dataIndex];
-                    if (lapTime > 90 || lapTime > maxFastTime || !lap || !lap.diffPrevLap) return false;
-                    const absoluteDiffString = lap.diffPrevLap.replace(/^[+-]/, '');
-                    if (parseDurationToSeconds(absoluteDiffString) > 30) return false;
-                    return true;
-                } : false,
-                anchor: 'end',
-                align: 'left',
-                offset: 4,
-                color: 'black',
-                font: { weight: 'bold' },
-                formatter: function(value, context) {
-                    const lap = fullLapData[context.dataIndex];
-                    const sign = lap.status === 'SLOWER' ? '+' : '-';
-                    const absoluteDiffString = lap.diffPrevLap.replace(/^[+-]/, '');
-                    const diffSeconds = parseDurationToSeconds(absoluteDiffString);
-                    return `${sign}${diffSeconds.toFixed(1)}`;
+                    title: () => '',
+                    label: context => lapTooltipLines(currentFullLapData[startIndex + context.dataIndex])
                 }
             }
         }

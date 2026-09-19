@@ -28,6 +28,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const fetchOverlappingBtn = document.getElementById('fetchOverlappingBtn');
     const overlappingSessions = document.getElementById('overlappingSessions');
     const overlappingSessionsTable = document.getElementById('overlappingSessionsTable');
+    const speedStatsContainer = document.getElementById('speedStats');
+    const speedBlocksContainer = document.getElementById('speedBlocks');
+    const distributionSection = document.getElementById('distributionSection');
+    const distributionChartCanvas = document.getElementById('distributionChart');
 
     const TRANSPONDER_COOKIE_KEY = 'savedTransponders';
 
@@ -35,6 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentUserId = null;
     let mainLapChart = null;
     let contextLapChart = null;
+    let distributionChart = null;
     let currentLapData = [];
     let currentTrackLength = 400; // Standaardwaarde, wordt bijgewerkt bij activiteitselectie
     let estimatedRowHeight = 28;
@@ -43,8 +48,17 @@ document.addEventListener('DOMContentLoaded', () => {
     let generatedGpxFilename = 'training_session.gpx'; // Variabele voor de bestandsnaam
     let showOnlySpeedLaps = false;
 
-    Chart.register(ChartDataLabels);
-    
+    function destroyCharts() {
+        if (mainLapChart) { mainLapChart.destroy(); mainLapChart = null; }
+        if (contextLapChart) { contextLapChart.destroy(); contextLapChart = null; }
+        if (distributionChart) { distributionChart.destroy(); distributionChart = null; }
+    }
+
+    // Charts read their colors from CSS tokens, so redraw when the OS theme flips.
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        if (currentLapData.length > 0) updateCharts(currentLapData, contextLapChart?.startIndex || 0);
+    });
+
     function resetUI() {
         hide(loadingDiv); hide(errorDiv); hide(activitiesListDiv); hide(lapsDataDiv);
         hide(maxFastLapControls); hide(tableAndContextSection); hide(sessionSummaryContainer);
@@ -63,9 +77,9 @@ document.addEventListener('DOMContentLoaded', () => {
         profileNickname.textContent = '';
         profileAvatar.src = '';
         generatedGpxFilename = 'training_session.gpx'; // Reset de bestandsnaam
-        if (mainChartContainer) mainChartContainer.style.height = '';
-        if (mainLapChart) { mainLapChart.destroy(); mainLapChart = null; }
-        if (contextLapChart) { contextLapChart.destroy(); contextLapChart = null; }
+        destroyCharts();
+        speedStatsContainer.innerHTML = '';
+        speedBlocksContainer.innerHTML = '';
     }
     
     function updateSpeedLapDistance() {
@@ -96,32 +110,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
         updateMainLapChart(dataToDisplay);
         updateContextLapChart(dataToDisplay, startIndex);
+        updateSpeedAnalysis();
+    }
+
+    function updateSpeedAnalysis() {
+        const analysis = analyzeSpeedLaps(currentLapData, MAX_FAST_LAP_TIME_SECONDS, currentTrackLength);
+        renderSpeedAnalysis(speedStatsContainer, speedBlocksContainer, analysis, currentTrackLength);
+        if (distributionChart) { distributionChart.destroy(); distributionChart = null; }
+        distributionSection.classList.toggle('hidden', !analysis);
+        if (analysis) {
+            distributionChart = new Chart(distributionChartCanvas, buildDistributionChartConfig(analysis.times));
+        }
     }
 
     function updateMainLapChart(lapData) {
-        const numberOfLaps = lapData.length;
-        const heightPerLap = 25;
-        const minChartHeight = 300;
-        const calculatedHeight = Math.max(minChartHeight, numberOfLaps * heightPerLap);
-        mainChartContainer.style.height = `${calculatedHeight}px`;
-        const { lapNumbers, lapTimesInSeconds, backgroundColors, borderColors, borderWidths, yAxisMin } = prepareChartData(lapData, MAX_FAST_LAP_TIME_SECONDS);
+        const analysis = analyzeSpeedLaps(currentLapData, MAX_FAST_LAP_TIME_SECONDS, currentTrackLength);
         if (mainLapChart) mainLapChart.destroy();
-        mainLapChart = new Chart(mainLapChartCanvas, {
-            type: 'bar',
-            data: { labels: lapNumbers, datasets: [{ data: lapTimesInSeconds, backgroundColor: backgroundColors, borderColor: borderColors, borderWidth: borderWidths }] },
-            options: getChartOptions(yAxisMin, true, lapData, hoveredRowIndex, MAX_FAST_LAP_TIME_SECONDS, mainLapChart, contextLapChart, currentLapData, 0)
-        });
+        mainLapChart = new Chart(mainLapChartCanvas, buildOverviewChartConfig(lapData, MAX_FAST_LAP_TIME_SECONDS, analysis?.avg));
     }
 
     function updateContextLapChart(lapData, startIndex = 0) {
         const dataSlice = lapData.slice(startIndex, startIndex + 10);
-        const { lapTimesInSeconds, backgroundColors, borderColors, borderWidths, yAxisMin } = prepareChartData(dataSlice, MAX_FAST_LAP_TIME_SECONDS);
+        const { lapTimesInSeconds, backgroundColors, yAxisMin } = prepareChartData(dataSlice, MAX_FAST_LAP_TIME_SECONDS);
         const contextLapNumbers = dataSlice.map(lap => `Lap ${lap.nr}`);
         if (contextLapChart) contextLapChart.destroy();
         contextLapChart = new Chart(contextLapChartCanvas, {
             type: 'bar',
-            data: { labels: contextLapNumbers, datasets: [{ data: lapTimesInSeconds, backgroundColor: backgroundColors, borderColor: borderColors, borderWidth: borderWidths }] },
-            options: getChartOptions(yAxisMin, false, dataSlice, hoveredRowIndex, MAX_FAST_LAP_TIME_SECONDS, mainLapChart, contextLapChart, currentLapData, startIndex)
+            data: {
+                labels: contextLapNumbers,
+                datasets: [{
+                    data: lapTimesInSeconds,
+                    backgroundColor: backgroundColors,
+                    borderRadius: { topRight: 4, bottomRight: 4 },
+                    borderSkipped: 'start',
+                    maxBarThickness: 24
+                }]
+            },
+            options: getContextChartOptions(yAxisMin, hoveredRowIndex, MAX_FAST_LAP_TIME_SECONDS, lapData, startIndex)
         });
         contextLapChart.startIndex = startIndex;
     }
@@ -380,8 +405,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             hide(fetchOverlappingBtn);
         }
-        if (mainLapChart) { mainLapChart.destroy(); mainLapChart = null; }
-        if (contextLapChart) { contextLapChart.destroy(); contextLapChart = null; }
+        destroyCharts();
         currentLapData = [];
         const selectedActivityId = activitySelect.value;
         if (selectedActivityId) {
