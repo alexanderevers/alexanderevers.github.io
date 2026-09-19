@@ -2,7 +2,7 @@
  * Helpers for the browser test: a static server for the project (with the fake API injected into the
  * HTML pages) and a headless Chrome/Edge that is driven through the DevTools protocol. No extra packages.
  */
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const http = require('node:http');
 const os = require('node:os');
@@ -47,13 +47,43 @@ function findBrowser() {
     return candidates.find(candidate => fs.existsSync(candidate));
 }
 
+/**
+ * Stops the browser AND every helper process it started (renderer, GPU, network).
+ *  1. the process we started, with its children, when it is still running;
+ *  2. every process whose command line contains this run's unique profile folder name. This second step is
+ *     needed because Edge/Chrome sometimes hand over to a separate browser process and the process we
+ *     started exits at once; killing "our" process would then stop nothing. Killing only the main process
+ *     is never enough on Windows: the helpers keep running and keep the profile folder locked.
+ */
+function stopBrowser(child, profile) {
+    if (child.exitCode === null && child.pid) {
+        if (process.platform === 'win32') {
+            spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+        } else {
+            try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); }   // it leads its own process group
+        }
+    }
+    const marker = path.basename(profile);   // "mylaps-e2e-XXXXXX": unique to this run
+    if (process.platform === 'win32') {
+        const script = `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Contains('${marker}') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`;
+        spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { stdio: 'ignore' });
+    } else {
+        spawnSync('pkill', ['-9', '-f', marker], { stdio: 'ignore' });
+    }
+}
+
+function waitForExit(child, timeoutMs = 5000) {
+    if (child.exitCode !== null) return Promise.resolve();
+    return new Promise(resolve => { const timer = setTimeout(resolve, timeoutMs); child.once('exit', () => { clearTimeout(timer); resolve(); }); });
+}
+
 async function launchBrowser(browserPath) {
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'mylaps-e2e-'));
     const port = 9300 + Math.floor(Math.random() * 600);
     const process_ = spawn(browserPath, [
         '--headless', '--disable-gpu', '--no-sandbox', '--no-first-run', '--no-default-browser-check',
         `--user-data-dir=${profile}`, `--remote-debugging-port=${port}`, 'about:blank'
-    ], { stdio: 'ignore' });
+    ], { stdio: 'ignore', detached: process.platform !== 'win32' });
 
     let targets;
     for (let attempt = 0; attempt < 40 && !targets; attempt++) {
@@ -63,7 +93,12 @@ async function launchBrowser(browserPath) {
         } catch { /* not up yet */ }
         if (!targets) await sleep(250);
     }
-    if (!targets) { process_.kill(); throw new Error('The browser did not start.'); }
+    if (!targets) {
+        stopBrowser(process_, profile);
+        await waitForExit(process_);
+        try { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch { /* best effort */ }
+        throw new Error('The browser did not start.');
+    }
 
     const socket = new WebSocket(targets.find(t => t.type === 'page').webSocketDebuggerUrl);
     await new Promise((resolve, reject) => { socket.addEventListener('open', resolve); socket.addEventListener('error', reject); });
@@ -114,11 +149,11 @@ async function launchBrowser(browserPath) {
     }
     async function close() {
         try { socket.close(); } catch { /* already closed */ }
-        process_.kill();
-        await sleep(500);
-        // Best effort: on Windows the browser can keep a file open a little longer. A leftover temp folder
-        // must never turn a passing run into a failing one.
-        try { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch { /* leave it to the OS temp cleanup */ }
+        stopBrowser(process_, profile);
+        await waitForExit(process_);
+        await sleep(500);   // let the operating system release the files
+        // Best effort: a leftover temp folder must never turn a passing run into a failing one.
+        try { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch { /* leave it to the OS temp cleanup */ }
     }
     return { evaluate, waitFor, navigate, send, sleep, problems, close };
 }

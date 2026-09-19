@@ -356,7 +356,7 @@ Understanding these makes the tests (and the code) easy to read.
 - **`test:e2e` prints one `SKIP` line instead of the four chart steps**: Chart.js could not be downloaded. Everything else ran.
 - **`test:e2e` hangs at "waiting for the page to load"**: a page script threw during start-up. Run the manual server command from 5.4 and open the address with the browser's developer tools open.
 - **Time-zone dependent step**: the replay start-clock step compares the page's clock with `new Date(T0).toLocaleTimeString('en-GB')` computed in Node. Both use the machine's time zone, so this only fails if the browser and Node run with different time zones (for example a browser in a container with another `TZ`). Start both with the same `TZ`.
-- **Leftover folder `mylaps-e2e-*` in the temp directory**: the browser held a file open while the test cleaned up (Windows). Safe to delete; it never fails a run.
+- **Leftover folder `mylaps-e2e-*` in the temp directory, or headless browser processes still running after `test:e2e`**: the test stops the whole browser process tree and deletes its temporary profile itself. If a run was interrupted (Ctrl+C, crash) they can stay behind; it is safe to end the browser processes whose command line contains `mylaps-e2e-` and to delete the folders. It never fails a run.
 - **Worker tests pass but the deployed Worker behaves differently**: the tests run the code with a fake MYLAPS and a fake `fetch`; Cloudflare's real cache (`cf` options) is only observable on the deployed Worker (section 9).
 
 ## 13. What is not covered
