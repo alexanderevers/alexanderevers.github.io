@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const nextButton = document.getElementById('nextButton');
     const pageInfo = document.getElementById('pageInfo');
 
-    const PROXY_BASE_URL = 'https://us-central1-proxyapi-475018.cloudfunctions.net/mylapsProxyFunction/api/mylaps';
+    // PROXY_BASE_URL comes from api.js
     let currentPage = 1;
     const count = 25;
 
@@ -44,12 +44,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
 
             if (data && data.length > 0) {
+                const lastActivities = await Promise.all(data.map(user => fetchLastActivity(user.entityId)));
                 resultsContainer.innerHTML = '';
-                data.forEach(async user => {
+                data.forEach((user, index) => {
                     const card = document.createElement('div');
                     card.className = 'session-card';
 
-                    const avatarUrl = user.entityId ? `${PROXY_BASE_URL}/avatar/${user.entityId}` : 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+                    const avatarUrl = user.entityId ? `${PROXY_BASE_URL}/avatar/${encodeURIComponent(user.entityId)}` : 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
                     let displayName;
                     if (user.name && user.nickName) {
@@ -58,15 +59,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         displayName = user.name || user.nickName || 'Unknown User';
                     }
 
-                    const lastActivity = await fetchLastActivity(user.entityId);
+                    const lastActivity = lastActivities[index];
 
                     let activityInfo = '<p>No recent activity found.</p>';
                     if (lastActivity) {
-                        const transponderLink = `index.html?transponder=${lastActivity.chipCode}`;
+                        const transponderLink = `index.html?transponder=${encodeURIComponent(lastActivity.chipCode)}`;
                         activityInfo = `
                             <div class="session-stat">
                                 <span class="label">Transponder</span>
-                                <span class="value"><a href="${transponderLink}" target="_blank">${lastActivity.chipCode || 'N/A'}</a></span>
+                                <span class="value"><a href="${transponderLink}" target="_blank" rel="noopener">${escapeHtml(lastActivity.chipCode || 'N/A')}</a></span>
                             </div>
                             <div class="session-stat">
                                 <span class="label">Last Session</span>
@@ -74,7 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                             <div class="session-stat">
                                 <span class="label">Location</span>
-                                <span class="value">${lastActivity.location.name || 'N/A'}</span>
+                                <span class="value">${escapeHtml(lastActivity.location?.name || 'N/A')}</span>
                             </div>
                         `;
                     }
@@ -83,7 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <img src="${avatarUrl}" class="session-card-avatar" alt="User Avatar" onerror="this.style.display='none'">
                         <div class="session-card-main">
                             <div class="session-card-header">
-                                <span class="session-card-name">${displayName}</span>
+                                <span class="session-card-name">${escapeHtml(displayName)}</span>
                             </div>
                             <div class="session-card-stats">
                                 ${activityInfo}

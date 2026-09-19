@@ -79,7 +79,7 @@ async function ensureValidToken() {
             const newTokenData = await response.json();
             if (newTokenData.access_token) {
                 saveTokens(newTokenData);
-                return newTokenData.accessToken;
+                return newTokenData.access_token;
             } else {
                 throw new Error('Invalid new token data received.');
             }
@@ -149,3 +149,4 @@ function updateStravaButtonUI(buttonElement) {
         buttonElement.onclick = connectWithStrava;
     }
 }
+// NOTE: not loaded by any page yet; fill in the placeholder config above before wiring it up.

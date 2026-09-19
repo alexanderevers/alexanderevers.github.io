@@ -58,6 +58,12 @@ function hide(element) {
     if (element) element.classList.add('hidden');
 }
 
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+}
+
 
 // --- Formatting Functies ---
 

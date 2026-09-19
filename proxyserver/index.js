@@ -24,7 +24,10 @@ exports.mylapsProxy = (req, res) => {
         if (endpoint === 'userid' && param) {
             mylapsUrl = `https://usersandproducts-api.speedhive.com/api/v2/products/chips/code/${param}/account`;
         } else if (endpoint === 'activities' && param) {
-            mylapsUrl = `https://practice-api.speedhive.com/api/v1/accounts/${param}/training/activities?count=100`;
+            const { count = 100, order } = req.query;
+            const activityParams = new URLSearchParams({ count });
+            if (order) activityParams.set('order', order);
+            mylapsUrl = `https://practice-api.speedhive.com/api/v1/accounts/${param}/training/activities?${activityParams.toString()}`;
         } else if (endpoint === 'laps' && param) {
             mylapsUrl = `https://practice-api.speedhive.com/api/v1/training/activities/${param}/sessions`;
         } else if (endpoint === 'account' && param) {

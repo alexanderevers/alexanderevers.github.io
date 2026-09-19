@@ -31,7 +31,8 @@ gcloud run deploy mylapsproxyfunction --source alexanderevers.github.io/proxyser
 The proxy exposes several endpoints that map to the underlying MYLAPS API:
 
 -   `/api/mylaps/userid/:transponder`: Fetches the `userId` for a given transponder number.
--   `/api/mylaps/activities/:userId`: Fetches a list of activities for a user.
+-   `/api/mylaps/activities/:userId`: Fetches a list of activities for a user. Supports optional `count` (default 100) and `order` query parameters.
+-   `/api/mylaps/search?term=...`: Searches active profiles by name. Supports `count` and `offset`.
 -   `/api/mylaps/laps/:activityId`: Fetches lap data for a specific activity.
 -   `/api/mylaps/account/:userId`: Fetches a user's profile information (name, etc.).
 -   `/api/mylaps/avatar/:userId`: Fetches a user's profile image.

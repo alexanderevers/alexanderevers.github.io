@@ -19,8 +19,14 @@ The following endpoints are available:
 ### Get User Activities
 
 - **Endpoint:** `/api/mylaps/activities/{account_id}`
-- **Description:** Fetches the training activities for a specific user account.
-- **Example:** `/api/mylaps/activities/MYLAPS-GA-123456`
+- **Description:** Fetches the training activities for a specific user account. Optional query params: `count` (default 100), `order`.
+- **Example:** `/api/mylaps/activities/MYLAPS-GA-123456?count=1&order=desc`
+
+### Search Profiles
+
+- **Endpoint:** `/api/mylaps/search?term={name}`
+- **Description:** Searches active profiles by name. Optional query params: `count` (default 25), `offset` (default 0).
+- **Example:** `/api/mylaps/search?term=jaap&count=25`
 
 ### Get Session Laps
 

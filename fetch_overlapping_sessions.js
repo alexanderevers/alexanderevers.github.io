@@ -34,10 +34,9 @@ function displayOverlappingSessions(sessions) {
         const card = document.createElement('div');
         card.className = 'session-card';
 
-        const avatarUrl = session.account?.id ? `${PROXY_BASE_URL}/avatar/${session.account.id}` : 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+        const avatarUrl = session.account?.id ? `${PROXY_BASE_URL}/avatar/${encodeURIComponent(session.account.id)}` : 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
-        let displayName = session.chipLabel || 'Unknown Rider';
-        if (session.account) {
+        let displayName = session.chipLabel || 'Unknown Rider';        if (session.account) {
             const givenName = session.account.givenName || (session.account.name && session.account.name.givenName);
             const surName = session.account.name && session.account.name.surName;
             const nickName = session.account.name && session.account.name.nickName;
@@ -54,7 +53,7 @@ function displayOverlappingSessions(sessions) {
             <div class="session-card-main">
                 <div class="session-card-header">
                     <span class="session-card-name">
-                        <a href="?transponder=${session.chipCode}" target="_blank">${displayName}</a>
+                        <a href="?transponder=${encodeURIComponent(session.chipCode)}" target="_blank" rel="noopener">${escapeHtml(displayName)}</a>
                     </span>
                     <small>${formatDateTime(session.startTime)}</small>
                 </div>
@@ -78,6 +77,15 @@ function setupOverlappingSessionsEventListeners(getActivities) {
     const errorDiv = document.getElementById('error');
     const loadingDiv = document.getElementById('loading');
     const overlappingSessions = document.getElementById('overlappingSessions');
+
+    // Fetch details in small batches to avoid flooding the proxy (2 calls per rider).
+    async function mapInBatches(items, batchSize, fn) {
+        const results = [];
+        for (let i = 0; i < items.length; i += batchSize) {
+            results.push(...await Promise.all(items.slice(i, i + batchSize).map(fn)));
+        }
+        return results;
+    }
 
     fetchOverlappingBtn.addEventListener('click', async () => {
         const userActivities = getActivities();
@@ -107,7 +115,7 @@ function setupOverlappingSessionsEventListeners(getActivities) {
                 activity.id !== selectedActivity.id && sessions_overlap(selectedActivity, activity)
             );
 
-            const overlappingWithDetails = await Promise.all(overlapping.map(async (activity) => {
+            const overlappingWithDetails = await mapInBatches(overlapping, 5, async (activity) => {
                 try {
                     const [sessionDetails, accountDetails] = await Promise.all([
                         fetchLaps(activity.id),
@@ -118,7 +126,7 @@ function setupOverlappingSessionsEventListeners(getActivities) {
                     console.error(`Could not fetch details for activity ${activity.id}`, e);
                     return { ...activity, stats: null, account: null };
                 }
-            }));
+            });
 
             displayOverlappingSessions(overlappingWithDetails);
 

@@ -220,6 +220,8 @@ document.addEventListener('DOMContentLoaded', () => {
             throttleTimer = false;
         }, time);
     };
+    // Single stable reference so the listener can actually be removed.
+    const throttledTableScroll = () => throttle(handleTableScroll, 100);
 
     fetchLapsBtn.addEventListener('click', async () => {
         hide(lapsDataDiv); hide(errorDiv); hide(maxFastLapControls);
@@ -228,8 +230,8 @@ document.addEventListener('DOMContentLoaded', () => {
         sessionSummaryContainer.innerHTML = '';
         resetGpxState(downloadGpxBtn);
         generatedGpxFilename = 'training_session.gpx';
-        lapsTableContainer.removeEventListener('scroll', () => throttle(handleTableScroll, 100));
-        
+        lapsTableContainer.removeEventListener('scroll', throttledTableScroll);
+
         const selectedActivityId = activitySelect.value;
         if (!selectedActivityId) {
             errorDiv.textContent = "Please select an activity from the list.";
@@ -238,6 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         show(loadingDiv);
         try {
+            const selectedActivity = userActivities.find(act => act.id === parseInt(selectedActivityId));
             const fullSessionData = await fetchLaps(selectedActivityId);
             currentLapData = [];
             if (fullSessionData?.sessions) {
@@ -332,12 +335,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 show(maxFastLapControls);
                 show(tableAndContextSection);
                 updateCharts(currentLapData, 0);
-                lapsTableContainer.addEventListener('scroll', () => throttle(handleTableScroll, 100));
+                lapsTableContainer.addEventListener('scroll', throttledTableScroll);
                 const firstRow = table.querySelector('tbody tr');
                 if (firstRow) estimatedRowHeight = firstRow.offsetHeight;
 
                 // Bouw de bestandsnaam op
-                const selectedActivity = userActivities.find(act => act.id === parseInt(selectedActivityId));
                 if (selectedActivity) {
                     const sport = selectedActivity.location.sport.replace(/\s+/g, '');
                     const location = selectedActivity.location.name.replace(/\s+/g, '_');
@@ -349,7 +351,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     generatedGpxFilename = `${sport}-${location}-${dateString}-session.gpx`;
                 }
 
-                generateAndPrepareGpxDownload(currentLapData, downloadGpxBtn);
+                generateAndPrepareGpxDownload(currentLapData, downloadGpxBtn, selectedActivity?.location?.name);
             } else {
                 lapsTableContainer.innerHTML = '<p>No lap data found for the selected activity.</p>';
             }
@@ -369,7 +371,7 @@ document.addEventListener('DOMContentLoaded', () => {
     activitySelect.addEventListener('change', () => {
         hide(lapsDataDiv); hide(errorDiv); hide(maxFastLapControls);
         hide(tableAndContextSection); hide(sessionSummaryContainer); hide(overlappingSessions);
-        lapsTableContainer.removeEventListener('scroll', () => throttle(handleTableScroll, 100));
+        lapsTableContainer.removeEventListener('scroll', throttledTableScroll);
         const hasSelection = !!activitySelect.value;
         fetchLapsBtn.disabled = !hasSelection;
         fetchOverlappingBtn.disabled = !hasSelection;
@@ -389,8 +391,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 activityInfoTable.innerHTML = `
                     <table class="activity-info-table">
                         <tbody>
-                            <tr><td>Sport:</td><td>${activity.location.sport}</td></tr>
-                            <tr><td>Location:</td><td>${activity.location.name}</td></tr>
+                            <tr><td>Sport:</td><td>${escapeHtml(activity.location.sport)}</td></tr>
+                            <tr><td>Location:</td><td>${escapeHtml(activity.location.name)}</td></tr>
                             <tr><td>Start Time:</td><td>${formatDateTime(activity.startTime)}</td></tr>
                         </tbody>
                     </table>`;

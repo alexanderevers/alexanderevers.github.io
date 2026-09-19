@@ -46,7 +46,7 @@ async function getMasterTrack() {
     }
 }
 
-function generateGpxString(lapsData, masterTrack) {
+function generateGpxString(lapsData, masterTrack, trackName = 'Jaap Edenbaan') {
     let allTrackpoints = '';
     let lastLapEndTime = null;
 
@@ -73,17 +73,17 @@ function generateGpxString(lapsData, masterTrack) {
     return `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="MYLAPS Activity Viewer" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata><name>Training Session</name></metadata>
-  <trk><name>Jaap Edenbaan</name><trkseg>${allTrackpoints}
+  <trk><name>${escapeHtml(trackName)}</name><trkseg>${allTrackpoints}
   </trkseg></trk>
 </gpx>`;
 }
 
-async function generateAndPrepareGpxDownload(lapsData, downloadButton) {
+async function generateAndPrepareGpxDownload(lapsData, downloadButton, trackName) {
     if (!lapsData || lapsData.length === 0) return;
-    
+
     const masterTrack = await getMasterTrack();
     if (masterTrack) {
-        generatedGpxContent = generateGpxString(lapsData, masterTrack);
+        generatedGpxContent = generateGpxString(lapsData, masterTrack, trackName || undefined);
         show(downloadButton);
     }
 }
