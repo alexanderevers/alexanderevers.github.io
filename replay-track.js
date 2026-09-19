@@ -2,7 +2,9 @@
  * Geometry of an oblong (speed skating) track for the replay page.
  * Everything is in normalized units where the full lap length is 1:
  * two straights of 0.25 each, joined by two semicircles of 0.25 each.
- * Skaters move counter-clockwise; f = 0 is the finish line in the middle of the bottom straight.
+ * Skaters move counter-clockwise. f = 0 is the finish line: the end of the bottom (home) straight,
+ * right before the right-hand corner. A lap is then: corner (0 - 0.25), straight (0.25 - 0.5),
+ * corner (0.5 - 0.75), straight (0.75 - 1), i.e. 100 m each on a 400 m track.
  * Screen coordinates: x to the right, y down.
  */
 
@@ -15,7 +17,8 @@ const TRACK_RADIUS = TRACK_STRAIGHT / Math.PI;   // semicircle length equals a s
  * @returns {{x: number, y: number, angle: number}} angle is the direction of travel
  */
 function pointOnTrack(f, offset = 0) {
-    f = ((f % 1) + 1) % 1;
+    // The path below starts in the middle of the bottom straight; move the start to the end of that straight.
+    f = ((((f % 1) + 1) % 1) + 1 / 8) % 1;
     const L = TRACK_STRAIGHT;
     const r = TRACK_RADIUS + offset;
 
