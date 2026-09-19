@@ -86,15 +86,26 @@ async function fetchLaps(activityId) {
     }
     return await response.json();
 }
+/**
+ * All activities of a location that could overlap a session starting at sessionStartDate.
+ *
+ * Two things about the locations endpoint matter here:
+ *  - A page holds at most 200 activities, even when 250 are requested, so the next offset has to
+ *    advance by the number of activities actually returned (advancing by the requested count
+ *    silently skipped 50 activities per page).
+ *  - The list is sorted by END time, newest first. Once the last activity of a page ended before the
+ *    session started, nothing further down can overlap it. (Comparing start times stops too early:
+ *    someone who started hours before the session but ended after it would not be seen.)
+ */
 async function fetchAllActivitiesFromLocation(locationId, year, sport, sessionStartDate) {
-    let allActivities = [];
+    const MAX_PAGES = 100; // safety net
+    const requestedCount = 250;
+    const activitiesById = new Map(); // ids can repeat if new activities shift the pages while we page through
     let offset = 0;
-    const count = 250;
-    let hasMore = true;
     const sessionDate = new Date(sessionStartDate);
 
-    while (hasMore) {
-        const url = `${PROXY_BASE_URL}/locations/${locationId}?year=${year}&sport=${sport}&count=${count}&offset=${offset}`;
+    for (let page = 0; page < MAX_PAGES; page++) {
+        const url = `${PROXY_BASE_URL}/locations/${locationId}?year=${year}&sport=${sport}&count=${requestedCount}&offset=${offset}`;
         const response = await fetchWithRetry(url);
 
         if (!response.ok) {
@@ -103,23 +114,17 @@ async function fetchAllActivitiesFromLocation(locationId, year, sport, sessionSt
 
         const data = await response.json();
         const newActivities = data.activities || [];
+        if (newActivities.length === 0) break;
 
-        if (newActivities.length > 0) {
-            allActivities = allActivities.concat(newActivities);
+        newActivities.forEach(activity => activitiesById.set(activity.id, activity));
+        offset += newActivities.length;
 
-            // Check if the last activity fetched is older than the session start date
-            const lastActivityDate = new Date(newActivities[newActivities.length - 1].startTime);
-            if (lastActivityDate < sessionDate) {
-                hasMore = false; // Stop fetching if we've gone past the session date
-            } else {
-                offset += count;
-            }
-        } else {
-            hasMore = false;
-        }
+        // Everything after this page ended even earlier than its last activity.
+        const last = newActivities[newActivities.length - 1];
+        if (last.endTime && new Date(last.endTime) < sessionDate) break;
     }
 
-    return allActivities;
+    return [...activitiesById.values()];
 }
 
 async function fetchAccountDetails(transponder) {

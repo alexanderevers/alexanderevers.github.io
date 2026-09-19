@@ -168,10 +168,11 @@ function setupOverlappingSessionsEventListeners(getActivities, getReferenceRider
     });
 
     // Fetch details in small batches to avoid flooding the proxy (2 calls per rider).
-    async function mapInBatches(items, batchSize, fn) {
+    async function mapInBatches(items, batchSize, fn, onProgress) {
         const results = [];
         for (let i = 0; i < items.length; i += batchSize) {
             results.push(...await Promise.all(items.slice(i, i + batchSize).map(fn)));
+            if (onProgress) onProgress(results.length, items.length);
         }
         return results;
     }
@@ -213,6 +214,7 @@ function setupOverlappingSessionsEventListeners(getActivities, getReferenceRider
                 console.error('Could not fetch the selected activity laps; skipping the "skated together" times', e);
             }
 
+            loadingDiv.textContent = `Loading ${overlapping.length} overlapping riders…`;
             const overlappingWithDetails = await mapInBatches(overlapping, 5, async (activity) => {
                 try {
                     const [sessionDetails, accountDetails] = await Promise.all([
@@ -229,6 +231,8 @@ function setupOverlappingSessionsEventListeners(getActivities, getReferenceRider
                     console.error(`Could not fetch details for activity ${activity.id}`, e);
                     return { ...activity, stats: null, account: null, togetherMs: null, groupMs: null };
                 }
+            }, (done, total) => {
+                loadingDiv.textContent = `Loading overlapping riders… ${done} of ${total}`;
             });
 
             // First on time skated together (in the whole minutes shown on the cards), then on time in
@@ -248,6 +252,7 @@ function setupOverlappingSessionsEventListeners(getActivities, getReferenceRider
             show(errorDiv);
         } finally {
             hide(loadingDiv);
+            loadingDiv.textContent = 'Loading...';
         }
     });
 }
