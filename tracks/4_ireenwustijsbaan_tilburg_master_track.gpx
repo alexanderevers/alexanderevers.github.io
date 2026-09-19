@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx creator="StravaGPX" version="1.1" schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd http://www.garmin.com/xmlschemas/GpxExtensions/v3 http://www.garmin.com/xmlschemas/GpxExtensionsv3.xsd http://www.garmin.com/xmlschemas/TrackPointExtension/v1 http://www.garmin.com/xmlschemas/TrackPointExtensionv1.xsd http://www.garmin.com/xmlschemas/PowerExtension/v1 http://www.garmin.com/xmlschemas/PowerExtensionv1.xsd http://www.topografix.com/GPX/gpx_style/0/2 http://www.topografix.com/GPX/gpx_style/0/2/gpx_style.xsd" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1" xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3" xmlns:gpxpx="http://www.garmin.com/xmlschemas/PowerExtension/v1" xmlns:gpx_style="http://www.topografix.com/GPX/gpx_style/0/2">
+  <metadata>
+    <name>Schaatsen_in_Tilburg</name>
+    <author>
+      <name>gpx.studio</name>
+      <link href="https://gpx.studio"/>
+    </author>
+    <time>2022-11-25T19:49:26.000Z</time>
+  </metadata>
+  <trk>
+    <name>Schaatsen in Tilburg</name>
+    <type>IceSkate</type>
+    <trkseg>
+      <trkpt lat="51.541581" lon="5.075175">
+        <ele>15.7</ele>
+        <time>2022-11-25T19:49:26.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541653" lon="5.075187">
+        <ele>15.7</ele>
+        <time>2022-11-25T19:49:28.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541725" lon="5.07519">
+        <ele>15.7</ele>
+        <time>2022-11-25T19:49:29.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541794" lon="5.075161">
+        <ele>15.7</ele>
+        <time>2022-11-25T19:49:31.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541856" lon="5.075102">
+        <ele>15.7</ele>
+        <time>2022-11-25T19:49:33.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541904" lon="5.075018">
+        <ele>15.7</ele>
+        <time>2022-11-25T19:49:35.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541936" lon="5.074915">
+        <ele>15.7</ele>
+        <time>2022-11-25T19:49:36.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541949" lon="5.074802">
+        <ele>15.7</ele>
+        <time>2022-11-25T19:49:38.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541941" lon="5.074687">
+        <ele>15.6</ele>
+        <time>2022-11-25T19:49:40.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541913" lon="5.074581">
+        <ele>15.6</ele>
+        <time>2022-11-25T19:49:42.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541868" lon="5.074492">
+        <ele>15.6</ele>
+        <time>2022-11-25T19:49:43.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541809" lon="5.074427">
+        <ele>15.6</ele>
+        <time>2022-11-25T19:49:45.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541741" lon="5.074391">
+        <ele>15.5</ele>
+        <time>2022-11-25T19:49:47.000Z</time>
+      </trkpt>
+      <trkpt lat="51.54167" lon="5.074378">
+        <ele>15.5</ele>
+        <time>2022-11-25T19:49:48.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541598" lon="5.074366">
+        <ele>15.5</ele>
+        <time>2022-11-25T19:49:50.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541527" lon="5.074353">
+        <ele>15.5</ele>
+        <time>2022-11-25T19:49:52.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541455" lon="5.074341">
+        <ele>15.5</ele>
+        <time>2022-11-25T19:49:54.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541384" lon="5.074329">
+        <ele>15.5</ele>
+        <time>2022-11-25T19:49:55.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541312" lon="5.074317">
+        <ele>15.5</ele>
+        <time>2022-11-25T19:49:57.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541241" lon="5.074305">
+        <ele>15.5</ele>
+        <time>2022-11-25T19:49:59.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541169" lon="5.074293">
+        <ele>15.5</ele>
+        <time>2022-11-25T19:50:01.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541097" lon="5.074281">
+        <ele>15.5</ele>
+        <time>2022-11-25T19:50:02.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541026" lon="5.074269">
+        <ele>15.6</ele>
+        <time>2022-11-25T19:50:04.000Z</time>
+      </trkpt>
+      <trkpt lat="51.540954" lon="5.074257">
+        <ele>15.6</ele>
+        <time>2022-11-25T19:50:06.000Z</time>
+      </trkpt>
+      <trkpt lat="51.540883" lon="5.074245">
+        <ele>15.6</ele>
+        <time>2022-11-25T19:50:07.000Z</time>
+      </trkpt>
+      <trkpt lat="51.540811" lon="5.074233">
+        <ele>15.7</ele>
+        <time>2022-11-25T19:50:09.000Z</time>
+      </trkpt>
+      <trkpt lat="51.54074" lon="5.074221">
+        <ele>15.7</ele>
+        <time>2022-11-25T19:50:11.000Z</time>
+      </trkpt>
+      <trkpt lat="51.540668" lon="5.074218">
+        <ele>15.6</ele>
+        <time>2022-11-25T19:50:13.000Z</time>
+      </trkpt>
+      <trkpt lat="51.540599" lon="5.074247">
+        <ele>15.5</ele>
+        <time>2022-11-25T19:50:14.000Z</time>
+      </trkpt>
+      <trkpt lat="51.540537" lon="5.074306">
+        <ele>15.4</ele>
+        <time>2022-11-25T19:50:16.000Z</time>
+      </trkpt>
+      <trkpt lat="51.540488" lon="5.07439">
+        <ele>15.2</ele>
+        <time>2022-11-25T19:50:18.000Z</time>
+      </trkpt>
+      <trkpt lat="51.540456" lon="5.074493">
+        <ele>15</ele>
+        <time>2022-11-25T19:50:19.000Z</time>
+      </trkpt>
+      <trkpt lat="51.540444" lon="5.074606">
+        <ele>14.8</ele>
+        <time>2022-11-25T19:50:21.000Z</time>
+      </trkpt>
+      <trkpt lat="51.540452" lon="5.07472">
+        <ele>14.6</ele>
+        <time>2022-11-25T19:50:23.000Z</time>
+      </trkpt>
+      <trkpt lat="51.540479" lon="5.074826">
+        <ele>14.4</ele>
+        <time>2022-11-25T19:50:25.000Z</time>
+      </trkpt>
+      <trkpt lat="51.540524" lon="5.074916">
+        <ele>14.2</ele>
+        <time>2022-11-25T19:50:26.000Z</time>
+      </trkpt>
+      <trkpt lat="51.540583" lon="5.074981">
+        <ele>14.2</ele>
+        <time>2022-11-25T19:50:28.000Z</time>
+      </trkpt>
+      <trkpt lat="51.540651" lon="5.075017">
+        <ele>14.2</ele>
+        <time>2022-11-25T19:50:30.000Z</time>
+      </trkpt>
+      <trkpt lat="51.540723" lon="5.07503">
+        <ele>14.3</ele>
+        <time>2022-11-25T19:50:32.000Z</time>
+      </trkpt>
+      <trkpt lat="51.540794" lon="5.075042">
+        <ele>14.4</ele>
+        <time>2022-11-25T19:50:33.000Z</time>
+      </trkpt>
+      <trkpt lat="51.540866" lon="5.075054">
+        <ele>14.6</ele>
+        <time>2022-11-25T19:50:35.000Z</time>
+      </trkpt>
+      <trkpt lat="51.540938" lon="5.075066">
+        <ele>14.8</ele>
+        <time>2022-11-25T19:50:37.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541009" lon="5.075078">
+        <ele>15.1</ele>
+        <time>2022-11-25T19:50:38.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541081" lon="5.07509">
+        <ele>15.3</ele>
+        <time>2022-11-25T19:50:40.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541152" lon="5.075102">
+        <ele>15.5</ele>
+        <time>2022-11-25T19:50:42.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541224" lon="5.075114">
+        <ele>15.8</ele>
+        <time>2022-11-25T19:50:44.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541295" lon="5.075126">
+        <ele>16.1</ele>
+        <time>2022-11-25T19:50:45.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541367" lon="5.075138">
+        <ele>16.2</ele>
+        <time>2022-11-25T19:50:47.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541438" lon="5.075151">
+        <ele>16.4</ele>
+        <time>2022-11-25T19:50:49.000Z</time>
+      </trkpt>
+      <trkpt lat="51.54151" lon="5.075163">
+        <ele>16.5</ele>
+        <time>2022-11-25T19:50:51.000Z</time>
+      </trkpt>
+      <trkpt lat="51.541581" lon="5.075175">
+        <ele>16.5</ele>
+        <time>2022-11-25T19:50:52.000Z</time>
+      </trkpt>
+    </trkseg>
+  </trk>
+</gpx>

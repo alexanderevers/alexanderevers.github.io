@@ -73,6 +73,19 @@ The frontend is a single-page application that handles user input, makes request
 -   **`api.js`**: This file contains the functions responsible for making `fetch` requests to the proxy server. The `PROXY_BASE_URL` constant in this file must point to your deployed Google Cloud Function URL.
 -   **`style.css`**: Contains all the styles for the application.
 
+### GPX download for Strava
+
+`gpx-generator.js` turns the laps of a session into a GPX file. It needs a **master track** per ice rink: one lap of the rink as a GPX file in `/tracks`, whose points are spread over every lap of the session. The rinks are listed in `MASTER_TRACKS` at the top of `gpx-generator.js` and matched by MYLAPS location id (or by name):
+
+| File | Rink | MYLAPS location ids |
+|---|---|---|
+| `tracks/1_jaapeden_amsterdam_master_track.gpx` | Jaap Eden ijsbaan, Amsterdam | 2040 |
+| `tracks/2_westfries_hoorn_master_track.gpx` | Kunstijsbaan de Westfries, Hoorn | 205, 3689 |
+| `tracks/3_breda_master_track.gpx` | Kunstijsbaan Breda | 3111 |
+| `tracks/4_ireenwustijsbaan_tilburg_master_track.gpx` | Ireen Wüst IJsbaan, Tilburg | 2838 |
+
+For a rink without a track file the download button is not shown. To add a rink: record one lap (about 400 m, starting and ending at the finish line) as a GPX file, put it in `/tracks` and add a line to `MASTER_TRACKS`.
+
 ### Race replay (`replay.html`)
 
 Shows the riders of overlapping sessions on an oblong 400 m track. It is opened from the main page: fetch an activity, press **Find Overlapping Sessions**, tick the riders and press **Open replay**.

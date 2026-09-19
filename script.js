@@ -384,7 +384,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     generatedGpxFilename = `${sport}-${location}-${dateString}-session.gpx`;
                 }
 
-                generateAndPrepareGpxDownload(currentLapData, downloadGpxBtn, selectedActivity?.location?.name);
+                generateAndPrepareGpxDownload(currentLapData, downloadGpxBtn, selectedActivity?.location);
             } else {
                 lapsTableContainer.innerHTML = '<p>No lap data found for the selected activity.</p>';
             }
