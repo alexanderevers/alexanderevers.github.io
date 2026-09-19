@@ -84,6 +84,14 @@ document.addEventListener('DOMContentLoaded', () => {
         speedBlocksContainer.innerHTML = '';
     }
     
+    // Average of a transponder data attribute (VOLTAGE / TEMPERATURE) over all laps that report it.
+    function averageDataAttribute(laps, type) {
+        const values = laps
+            .map(lap => lap.dataAttributes?.find(a => a.type === type)?.value)
+            .filter(v => typeof v === 'number');
+        return values.length ? (values.reduce((sum, v) => sum + v, 0) / values.length).toFixed(1) : 'N/A';
+    }
+
     function updateSpeedLapDistance() {
         if (currentLapData.length === 0) return;
     
@@ -309,7 +317,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         </span>
                     </div>
                     <div class="stat-card"><span class="label">Avg Speed</span><span class="value">${stats.averageSpeed?.kph?.toFixed(1) || 'N/A'}</span><span class="sub-value"> km/h</span></div>
-                    <div class="stat-card"><span class="label">Top Speed</span><span class="value">${stats.fastestSpeed?.kph?.toFixed(1) || 'N/A'}</span><span class="sub-value"> km/h</span></div>`;
+                    <div class="stat-card"><span class="label">Top Speed</span><span class="value">${stats.fastestSpeed?.kph?.toFixed(1) || 'N/A'}</span><span class="sub-value"> km/h</span></div>
+                    <div class="stat-card">
+                        <span class="label">Avg Transponder</span>
+                        <span class="value">${averageDataAttribute(currentLapData, 'VOLTAGE')} <span class="sub-value">V</span></span>
+                        <br><span class="speed-laps-distance-value">${averageDataAttribute(currentLapData, 'TEMPERATURE')} <span class="sub-value">°C</span></span>
+                    </div>`;
                 show(sessionSummaryContainer);
             }
             show(lapsDataDiv);
@@ -318,7 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 table.className = 'laps-table';
                 const thead = table.createTHead();
                 const headerRow = thead.insertRow();
-                const headers = ['Lap', 'Duration', 'S. Duration', 'Diff Prev', 'Speed (km/h)', 'Voltage (V)', 'Temp (°C)'];
+                const headers = ['Lap', 'Duration', 'S. Duration', 'Diff Prev', 'Speed (km/h)'];
                 headers.forEach(text => {
                     const th = document.createElement('th');
                     th.textContent = text;
@@ -341,11 +354,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             updateContextLapChart(currentLapData, contextLapChart.startIndex || 0);
                         }
                     });
-                    const findDataAttribute = (lap, type) => {
-                        if (!lap?.dataAttributes) return 'N/A';
-                        const attr = lap.dataAttributes.find(a => a.type === type);
-                        return attr ? attr.value.toFixed(1) : 'N/A';
-                    };
                     row.insertCell().textContent = lap.nr;
                     row.insertCell().textContent = lap.duration;
                     row.insertCell().textContent = lap.sessionDuration || 'N/A';
@@ -355,8 +363,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     row.insertCell().textContent = diff;
                     row.insertCell().textContent = lap.speed?.kph?.toFixed(1) || 'N/A';
-                    row.insertCell().textContent = findDataAttribute(lap, 'VOLTAGE');
-                    row.insertCell().textContent = findDataAttribute(lap, 'TEMPERATURE');
                 });
                 lapsTableContainer.appendChild(table);
                 show(maxFastLapControls);
