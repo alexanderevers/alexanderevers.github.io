@@ -25,7 +25,7 @@ needs the real MYLAPS API, a Cloudflare account or a personal transponder.
 Run from the repository root (the folder that contains `package.json` and `index.html`):
 
 ```bash
-npm test               # unit tests            -> expect 109 tests, 32 suites, 0 failures  (~1.5 s)
+npm test               # unit tests            -> expect 121 tests, 34 suites, 0 failures  (~1.5 s)
 npm run test:worker    # Cloudflare Worker     -> expect the last line "ALL PASS"           (~2 s)
 npm run test:e2e       # real browser          -> expect the last line "ALL PASSED"         (~11 s)
 npm run test:all       # unit + worker (does not start a browser)
@@ -40,9 +40,9 @@ to *deploy* or run the Worker locally, never for the tests.)
 ```
 npm test
   ...
-  # tests 109
-  # suites 32
-  # pass 109
+  # tests 121
+  # suites 34
+  # pass 121
   # fail 0
 
 npm run test:worker
@@ -106,6 +106,7 @@ Which source file is covered by which test:
 | `replay-track.js` | geometry of the oblong ice track, distances along it | `unit/replay-track.test.js` |
 | `replay-model.js` | laps to positions over time, "skated together", "in your group" | `unit/replay-model.test.js` |
 | `api.js` | calls to the proxy, retries, paging through a rink's activities | `unit/api.test.js` |
+| `fetch_overlapping_sessions.js` (sorting only) | the order of the overlapping riders | `unit/overlap-sort.test.js` |
 | `gpx-generator.js` | GPX file for Strava, which rink gets which track file | `unit/gpx-generator.test.js` |
 | `cloudflare-worker/src/index.js` | the proxy: routing, validation, CORS, caching rules | `cloudflare-worker/test/handler.test.mjs` |
 | `script.js`, `fetch_overlapping_sessions.js`, `replay.js`, `chart-factory.js`, `theme.js`, `style.css`, the HTML pages | user interface | `e2e/replay-flow.e2e.js` |
@@ -128,8 +129,9 @@ node --test --test-name-pattern="break lap" "tests/unit/*.test.js"  # tests whos
 | `utils.test.js` | time parsing round-trips, `formatDurationShort` ("<1 min", "12 min", "1 h 05 min", "N/A"), `parseTrainingTimeToSeconds`, transponder format, HTML escaping, **activities per year** (counts, filter), **remembered settings** (load/save with fallback, damaged text, storage that is blocked or missing) | display, input handling and the year filter and settings helpers are consistent |
 | `stats.test.js` | 8 tests on a fixed set of 10 laps, plus `activeTimeShare` | counts, average 41.129, median 41.0, best-5 average 40.88, consistency 0.459, fade 0.433, blocks laps 2-4 and 6-9, `null` when no lap is fast enough; **active time as a share of the total time** (82% for a real session, capped at 100%, `null` when a time is missing) |
 | `replay-track.test.js` | geometry | the lap has length 1 and no jumps; the finish line is at the end of the bottom straight, before the right-hand corner; 100/200/300 m land on the corner/straight joins; heading matches the direction of travel; `trackDelta` is the signed shortest distance |
-| `replay-model.test.js` | positions and the two ranking numbers | interpolation inside a lap, lap boundaries, small gaps, long pauses, **break laps** (< 8 km/h) are off the ice, overlap time is symmetric and ignores breaks, group time is ~all for a rider 20 m behind, 0 for 100 m/200 m, ~0 at chance level |
+| `replay-model.test.js` | positions and the two ranking numbers | interpolation inside a lap, lap boundaries, small gaps, long pauses, **break laps** (< 8 km/h) are off the ice, overlap time is symmetric and ignores breaks, **group membership**: crossing within 1 s of you, chains of riders 1 s apart, the quarter-lap window, break laps, drifting riders |
 | `api.test.js` | retries, paging and the activity list | retries only on 5xx/network errors (max 3 tries), readable error messages for non-JSON error bodies, `?finished=1` only for activities that ended > 15 min ago, **paging through a rink advances by what was received (page cap 200) and stops based on END time** | **`fetchActivities` asks for `count=500`** (the whole list, not only the newest 100), still works without a profile, readable errors for an unknown transponder |
+| `overlap-sort.test.js` | order of the overlapping riders | longest time in your group first, ties (in particular 0 min) by time skated together, whole minutes before exact times, unmeasured riders last |
 | `gpx-generator.test.js` | rinks and files | id and name matching to a track file, unknown rinks get none, **every `.gpx` in `/tracks` is registered and is a closed ~400 m lap with increasing timestamps**, GPX output has strictly increasing times and no duplicate finish-line point |
 
 ### 4.2 Worker tests: `npm run test:worker`
@@ -159,7 +161,7 @@ The steps, in order:
 | 2 | activity list | the list is requested with `count=500`; the **year filter** shows "All years (25)" and the years with their counts; choosing a year narrows the list; a selected activity stays selected when it is in the chosen year and is cleared (laps hidden, button disabled) when it is not |
 | 3-6 | main page (needs Chart.js) | 9 summary cards including **Active Time** with "% of total time", lap table without voltage/temperature columns, 7 speed-lap cards, blocks table with a total row, the max-fast-lap slider changes the analysis, **GPX download appears** and contains a valid GPX starting at the Amsterdam master track's first point |
 | 7 | overlapping riders | exactly 17 cards; the rider from 5 hours later and the old session are not listed; you are not listed |
-| 8 | overlapping riders | sorted by whole minutes "Skated together" (most first); every card also shows an "In your group" estimate (`~`); the all-day rider shows `0 min`, is dimmed and is last |
+| 8 | overlapping riders | sorted by "In your group" (longest first) and, at equal group minutes, by "Skated together"; several riders share the same group minutes but not the same time together, so the tie-break is really tested; every card also shows an "In your group" estimate (`~`); the all-day rider shows `0 min`, is dimmed and is last |
 | 9 | overlapping riders | "Select all skated together" picks exactly the 16 riders with more than 0 min, not the all-day rider; toggles to "Select none" and back |
 | 10 | open replay | address `replay.html?activity=1`; stored data has 18 riders, 16 selected, 400 m track, `togetherMs`/`groupMs` on every rider |
 | 11 | replay | 17 riders shown: **10 with a colour, 7 small dots**; header "(17 shown, first 10 labelled)"; the all-day rider is listed but not shown ("together 0 min") |
@@ -192,14 +194,14 @@ The steps, in order:
 
 | Suite | Expected |
 |---|---|
-| unit | `# tests 109`, `# suites 32`, `# pass 109`, `# fail 0`, `# cancelled 0`, `# skipped 0` |
+| unit | `# tests 121`, `# suites 34`, `# pass 121`, `# fail 0`, `# cancelled 0`, `# skipped 0` |
 | Worker | 49 `PASS` lines, no `FAIL`, last line `ALL PASS` |
 | browser | 27 `PASS` lines, no `FAIL`, no `SKIP`, last line `ALL PASSED`. Without access to the Chart.js CDN, the four chart steps are replaced by one `SKIP` line (23 `PASS` lines) and the last line reads `ALL PASSED (1 skipped)` |
 
 Quick machine check:
 
 ```bash
-npm test 2>&1 | grep -E "^# (tests|pass|fail)"                          # tests 109 / pass 109 / fail 0 (piped output is TAP;
+npm test 2>&1 | grep -E "^# (tests|pass|fail)"                          # tests 121 / pass 121 / fail 0 (piped output is TAP;
                                                                         # in a terminal the same lines start with "ℹ" instead of "#")
 npm run test:worker 2>&1 | grep -c "^PASS"                              # 49
 npm run test:e2e 2>&1 | grep -cE "^PASS"                                # 27
@@ -305,12 +307,12 @@ npm test; git checkout -- replay-model.js
 sed -i 's|f = ((((f % 1) + 1) % 1) + 1 / 8) % 1;|f = (((f % 1) + 1) % 1);|' replay-track.js
 npm test; git checkout -- replay-track.js
 
-npm test                                                         # green again: 109 passed
+npm test                                                         # green again: 121 passed
 ```
 
 (`sed -i` is GNU sed, as in Git Bash or Linux. On macOS use `sed -i ''`. On plain PowerShell, edit the line by hand.)
 
-The results seen when this was written: 106 pass / 3 fail, 107 pass / 2 fail, 106 pass / 3 fail, then 109 pass / 0 fail.
+The results seen when this was written: 106 pass / 3 fail, 107 pass / 2 fail, 106 pass / 3 fail, then 109 pass / 0 fail (before the group rule was rewritten).
 
 The same idea works for the newer features (make a change, expect the named test to fail, restore the file): setting `ACTIVITIES_COUNT` in `api.js` to 100 fails the `fetchActivities` test; making `saveSetting` do nothing fails the two "remembers ..." browser steps; removing the `yearFilter` change handler in `script.js` fails the year filter step.
 
@@ -343,8 +345,8 @@ Understanding these makes the tests (and the code) easy to read.
 - **Break laps.** Real sessions contain "laps" of 5-10 minutes (someone stepped off the ice). A lap slower than **8 km/h** is a break: the rider is off the ice, is ignored in overlap and group calculations, and appears as a grey dot pinned to the top of the lap graph.
 - **Small gaps.** A gap of up to 5 s between two laps keeps the rider at the finish line instead of making them disappear.
 - **Skated together** = total time both riders were skating at the same moment (overlap of their lap intervals, breaks excluded). It is 0 for someone whose activity window merely covers yours (an all-day recording).
-- **In your group (estimate)** = time within 50 m of you along the track while both skated, corrected for chance: two unrelated skaters are within 50 m about 25% of the time on a 400 m track (`2 * 50 / 400`); only the part above that counts. Exactly at chance gives 0; always together gives all the shared time.
-- **Sorting of overlapping riders**: first by "skated together" in **whole minutes** (as displayed), then by "in your group", then by exact time. Riders that could not be measured come last.
+- **In your group** = riders who cross the finish line within 1 second of you, and then each next rider who crosses within 1 second of the one before (forwards and backwards), as far as a quarter of your lap time before and after you (about 100 m). Each such crossing counts as one of your laps for that rider. It is decided from everyone's finish crossings together (`groupMembership`), so it is not a per-rider measurement.
+- **Sorting of overlapping riders**: first by "in your group" in **whole minutes** (as displayed, longest first), then by "skated together" (whole minutes), and only then by the exact values. So everyone at 0 min in the group is ordered by time together. Riders that could not be measured come last.
 - **"Select all" / "Show all"** only pick riders with more than 0 min together (fallback: everyone, when nobody could be measured).
 - **Colours.** The reference rider and the first riders that were shown (10 in total) get a coloured dot with initials; every other rider is a small blue dot. Clicking the dot in the rider list gives or takes away a colour; when all 10 colours are taken, the rider picked longest ago gives one up. Ten colours are validated for both themes.
 - **The rink activity list** (`/locations/:id`): a page holds **at most 200** activities even if 250 are requested, so the next offset must advance by the number received; the list is sorted by **end time**, newest first, so paging stops when the last activity of a page ended before the session started (comparing start times stops too early).

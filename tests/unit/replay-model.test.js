@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { loadBrowserScripts, hostCopy } = require('../helpers/browser-scripts');
 const { CAST, lapsResponseOf, T0, MINUTE } = require('../fixtures/fake-mylaps-data');
 
-const { normalizeLaps, lapExtent, riderStateAt, onIceOverlapMs, groupTimeMs } =
+const { normalizeLaps, lapExtent, riderStateAt, onIceOverlapMs, groupMembership, finishCrossings } =
     loadBrowserScripts(['utils.js', 'replay-track.js', 'replay-model.js']).sandbox;
 
 const TRACK = 400;
@@ -120,30 +120,61 @@ describe('onIceOverlapMs', () => {
     });
 });
 
-describe('groupTimeMs: skating as a group', () => {
-    const reference = laps(0);
+describe('finishCrossings', () => {
+    it('is the start of every skating lap plus the end of the last one', () => {
+        const crossings = finishCrossings(laps(0, 3, 40), TRACK);
+        assert.deepEqual(hostCopy(crossings), [0, 40000, 80000, 120000].map(ms => t0 + ms));
+    });
+    it('ignores break laps (slower than 8 km/h)', () => {
+        const withBreak = [lap(0, 40, 1), lap(40, 300, 2), lap(340, 40, 3)];
+        assert.deepEqual(hostCopy(finishCrossings(withBreak, TRACK)), [0, 40000, 340000, 380000].map(ms => t0 + ms));
+    });
+});
 
-    it('counts nearly all the shared time for a rider 20 m behind you', () => {
-        const result = groupTimeMs(reference, laps(2), TRACK);      // 2 s behind = 20 m
-        assert.ok(result.groupMs > result.bothMs * 0.98, JSON.stringify(result));
+describe('groupMembership: riders crossing the finish line right after each other', () => {
+    const reference = laps(0, 30);                                    // 40 s laps, so the window is 10 s either side
+    const group = (riders, ref = reference) => {
+        const result = groupMembership(ref, riders.map(([id, offset, count = 30, seconds = 40]) => ({ id, laps: laps(offset, count, seconds) })), TRACK);
+        return Object.fromEntries(result);
+    };
+    const WHOLE = 30 * 40000;
+
+    it('a rider crossing within 1 second of you is in your group for every lap', () => {
+        assert.deepEqual(group([['a', 0.5], ['b', -1], ['c', 1]]), { a: WHOLE, b: WHOLE, c: WHOLE });
     });
-    it('counts nothing for a rider 100 m or 200 m away', () => {
-        assert.equal(groupTimeMs(reference, laps(10), TRACK).groupMs, 0);     // 100 m
-        assert.equal(groupTimeMs(reference, laps(20), TRACK).groupMs, 0);     // opposite side
+    it('a rider more than 1 second away is not, when nobody bridges the gap', () => {
+        assert.deepEqual(group([['a', 1.5], ['b', -1.5]]), { a: 0, b: 0 });
     });
-    it('depends on the radius: 60 m apart is in a group at 100 m but not at 50 m', () => {
-        assert.equal(groupTimeMs(reference, laps(6), TRACK).groupMs, 0);
-        assert.ok(groupTimeMs(reference, laps(6), TRACK, 100).groupMs > 0);
+    it('the next rider counts when he crosses within 1 second of the rider before him, forwards and backwards', () => {
+        const result = group([['a', 0.9], ['b', 1.8], ['c', 3.5], ['d', -0.8], ['e', -1.7], ['f', 9.9]], laps(0, 3));
+        assert.deepEqual(result, { a: 120000, b: 120000, c: 0, d: 120000, e: 120000, f: 0 });
     });
-    it('gives almost no credit to a rider who only drifts past (chance level, about 25% close)', () => {
-        const slower = Array.from({ length: 25 }, (_, i) => lap(i * 47, 47, i + 1));   // 47 s laps against 40 s
-        const result = groupTimeMs(reference.slice(0, 29), slower, TRACK);
-        const closeShare = result.closeMs / result.bothMs;
-        assert.ok(Math.abs(closeShare - 0.25) < 0.06, `close share ${closeShare}`);
-        assert.ok(result.groupMs < result.bothMs * 0.08, `${result.groupMs} of ${result.bothMs}`);
+    it('the chain stops at a quarter of your lap time (10 s of a 40 s lap, about 100 m)', () => {
+        const riders = Array.from({ length: 14 }, (_, k) => [`r${k + 1}`, 0.9 * (k + 1), 2]);
+        const result = group(riders, laps(0, 2));
+        for (let k = 1; k <= 14; k++) assert.equal(result[`r${k}`], 0.9 * k <= 10 ? 80000 : 0, `rider ${k} at ${(0.9 * k).toFixed(1)} s`);
     });
-    it('is 0 without overlap or without laps', () => {
-        assert.equal(groupTimeMs(laps(0, 5), laps(1000, 5), TRACK).groupMs, 0);
-        assert.equal(groupTimeMs([], reference, TRACK).groupMs, 0);
+    it('the window follows your own lap time', () => {
+        const slow = laps(0, 10, 80);                                   // 80 s laps: 20 s either side
+        const riders = Array.from({ length: 24 }, (_, k) => [`r${k + 1}`, 0.9 * (k + 1), 10, 80]);
+        const result = group(riders, slow);
+        assert.equal(result.r22 > 0, true);                             // 19.8 s
+        assert.equal(result.r23, 0);                                    // 20.7 s
+    });
+    it('only counts the crossings where the rider is close: a rider who drifts past is barely in the group', () => {
+        const result = group([['slow', 0, 25, 47]]);
+        assert.ok(result.slow <= 3 * 40000, String(result.slow));
+    });
+    it('a rider who was not skating at the same time gets 0', () => {
+        assert.deepEqual(group([['late', 5000]]), { late: 0 });
+    });
+    it('a break lap of yours gives no credit', () => {
+        const ref = [lap(0, 40, 1), lap(40, 300, 2), lap(340, 40, 3)];
+        const rider = [{ id: 'a', laps: [lap(0.5, 40, 1), lap(40.5, 300, 2), lap(340.5, 40, 3)] }];
+        assert.equal(groupMembership(ref, rider, TRACK).get('a'), 80000);   // the two skating laps only
+    });
+    it('a rider without laps, and no riders at all, are fine', () => {
+        assert.equal(groupMembership(reference, [{ id: 'x', laps: [] }], TRACK).get('x'), 0);
+        assert.equal(groupMembership(reference, [], TRACK).size, 0);
     });
 });

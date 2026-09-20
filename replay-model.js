@@ -82,34 +82,71 @@ function onIceOverlapMs(lapsA, lapsB, trackLengthM) {
     return total;
 }
 
+// A group: riders who cross the finish line one after the other, each at most this long after the previous one.
+const GROUP_GAP_MS = 1000;
+// Only riders crossing within this share of your lap time before or after you count (1/4 lap is about 100 m).
+const GROUP_WINDOW_SHARE = 0.25;
+
+const lapIsSkating = (lap, trackLengthM) => (trackLengthM / (lap.durMs / 1000)) * 3.6 >= MIN_SKATING_KPH;
+
 /**
- * Estimated time (ms) two riders skated as a group: the time they were within radiusM of each other
- * along the track while both were skating, corrected for chance. Two unrelated skaters end up within
- * radiusM of each other a fraction 2 * radiusM / trackLength of the time (25% for 50 m on 400 m), so
- * only the part above that counts: exactly at chance gives 0, always together gives all the shared time.
- * Positions come from riderStateAt (even speed within a lap), sampled every second.
- * Depends on trackDelta from replay-track.js.
+ * The moments a rider crossed the finish line: the start of every skating lap, plus the end of a skating
+ * lap that no skating lap follows straight away (the last lap of a run).
  */
-function groupTimeMs(lapsA, lapsB, trackLengthM, radiusM = 50) {
-    const extentA = lapExtent(lapsA);
-    const extentB = lapExtent(lapsB);
-    if (!extentA || !extentB) return { bothMs: 0, closeMs: 0, groupMs: 0 };
-    const from = Math.max(extentA.startMs, extentB.startMs);
-    const to = Math.min(extentA.endMs, extentB.endMs);
-    let both = 0;
-    let close = 0;
-    for (let t = from; t < to; t += 1000) {
-        const a = riderStateAt(lapsA, t, trackLengthM);
-        const b = riderStateAt(lapsB, t, trackLengthM);
-        if (!a || !b) continue;
-        both++;
-        if (Math.abs(trackDelta(a.frac, b.frac)) * trackLengthM <= radiusM) close++;
-    }
-    const chance = Math.min((2 * radiusM) / trackLengthM, 0.99);
-    const excess = both ? Math.max(0, (close / both - chance) / (1 - chance)) : 0;
-    return { bothMs: both * 1000, closeMs: close * 1000, groupMs: both * 1000 * excess };
+function finishCrossings(laps, trackLengthM) {
+    const times = [];
+    laps.forEach((lap, i) => {
+        if (!lapIsSkating(lap, trackLengthM)) return;
+        times.push(lap.startMs);
+        const next = laps[i + 1];
+        const followedBySkating = next && lapIsSkating(next, trackLengthM) && next.startMs - (lap.startMs + lap.durMs) <= LAP_GAP_TOLERANCE_MS;
+        if (!followedBySkating) times.push(lap.startMs + lap.durMs);
+    });
+    return times;
+}
+
+/**
+ * How long each rider skated in your group, worked out from the moments everyone crossed the finish line.
+ * At every finish crossing of the reference rider, the riders crossing within a quarter of that lap time
+ * before or after (about 100 m) are looked at. A rider is in the group when they cross within gapMs of you,
+ * and so is the next rider crossing within gapMs after them, and so on, forwards and backwards, for as long
+ * as the chain of riders is unbroken. Every crossing where a rider is in the group counts as one lap of the
+ * reference rider (its duration) for that rider. Only skating laps count.
+ *
+ * @param {Array} referenceLaps  the reference rider's normalized laps
+ * @param {Array<{id, laps}>} riders  the other riders, with normalized laps
+ * @returns {Map} id -> milliseconds in your group (0 for riders who never were)
+ */
+function groupMembership(referenceLaps, riders, trackLengthM, gapMs = GROUP_GAP_MS, windowShare = GROUP_WINDOW_SHARE) {
+    const result = new Map(riders.map(rider => [rider.id, 0]));
+    const crossings = riders.map(rider => ({ id: rider.id, times: finishCrossings(rider.laps || [], trackLengthM) }));
+
+    referenceLaps.filter(lap => lapIsSkating(lap, trackLengthM)).forEach(lap => {
+        const window = lap.durMs * windowShare;
+        const offsets = [];   // { id, d }: when the rider crossed, relative to you
+        crossings.forEach(({ id, times }) => {
+            let best = null;
+            times.forEach(time => {
+                const d = time - lap.startMs;
+                if (Math.abs(d) <= window && (best === null || Math.abs(d) < Math.abs(best))) best = d;
+            });
+            if (best !== null) offsets.push({ id, d: best });
+        });
+
+        const chain = candidates => {
+            let previous = 0;
+            for (const { id, d } of candidates) {
+                if (Math.abs(d - previous) > gapMs) break;
+                result.set(id, result.get(id) + lap.durMs);
+                previous = d;
+            }
+        };
+        chain(offsets.filter(o => o.d >= 0).sort((a, b) => a.d - b.d));
+        chain(offsets.filter(o => o.d < 0).sort((a, b) => b.d - a.d));
+    });
+    return result;
 }
 
 if (typeof module !== 'undefined') {
-    module.exports = { normalizeLaps, lapExtent, riderStateAt, onIceOverlapMs, groupTimeMs };
+    module.exports = { normalizeLaps, lapExtent, riderStateAt, onIceOverlapMs, groupMembership, finishCrossings, GROUP_GAP_MS, GROUP_WINDOW_SHARE };
 }

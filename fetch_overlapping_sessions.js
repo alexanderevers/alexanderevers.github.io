@@ -20,6 +20,20 @@ function sessions_overlap(activity1, activity2) {
 
 const REPLAY_STORAGE_KEY = 'replayData';
 
+/**
+ * Order of the overlapping riders, by what the cards show: longest time in your group first (whole minutes).
+ * Riders with the same group minutes, in particular everyone at 0 min, go by time skated together (whole
+ * minutes). Exact times only break the remaining ties. Riders we could not measure (null) come last.
+ */
+function compareOverlappingRiders(a, b) {
+    const shownMinutes = ms => (ms === null || ms === undefined ? -1 : Math.round(ms / 60000));
+    const exact = ms => (ms === null || ms === undefined ? -1 : ms);
+    return (shownMinutes(b.groupMs) - shownMinutes(a.groupMs))
+        || (shownMinutes(b.togetherMs) - shownMinutes(a.togetherMs))
+        || (exact(b.groupMs) - exact(a.groupMs))
+        || (exact(b.togetherMs) - exact(a.togetherMs));
+}
+
 /** Estimated durations get a "~" in front; N/A stays N/A. */
 function formatEstimate(ms) {
     const text = formatDurationShort(ms);
@@ -77,7 +91,7 @@ function displayOverlappingSessions(sessions) {
                 </div>
                 <div class="session-card-stats">
                     <div class="session-stat together"><span class="label">Skated together</span><span class="value">${formatDurationShort(session.togetherMs)}</span></div>
-                    <div class="session-stat together" title="Estimated time within 50 m of you while both were skating, corrected for the time unrelated skaters would be that close by chance"><span class="label">In your group</span><span class="value">${formatEstimate(session.groupMs)}</span></div>
+                    <div class="session-stat together" title="Time you skated in the same group: riders crossing the finish line within 1 second of you, or within 1 second of the rider before them in that chain, up to a quarter of a lap before and after you"><span class="label">In your group</span><span class="value">${formatEstimate(session.groupMs)}</span></div>
                     <div class="session-stat"><span class="label">Best Lap</span><span class="value">${stats?.fastestTime || 'N/A'}</span></div>
                     <div class="session-stat"><span class="label">Laps</span><span class="value">${stats?.lapCount || 'N/A'}</span></div>
                     <div class="session-stat"><span class="label">Duration</span><span class="value">${stats ? formatTotalTrainingTime(stats.totalTrainingTime) : 'N/A'}</span></div>
@@ -239,25 +253,28 @@ function setupOverlappingSessionsEventListeners(getActivities, getReferenceRider
                     ]);
                     const riderLaps = normalizeLaps(sessionDetails);
                     const togetherMs = referenceLaps ? onIceOverlapMs(referenceLaps, riderLaps, trackLengthM) : null;
-                    // Only riders who really shared the ice with you can have skated in your group.
-                    const groupMs = togetherMs === null ? null
-                        : (togetherMs > 0 ? groupTimeMs(referenceLaps, riderLaps, trackLengthM).groupMs : 0);
-                    return { ...activity, stats: sessionDetails.stats, account: accountDetails, togetherMs, groupMs };
+                    // riderLaps is only kept until the group times are worked out below
+                    return { ...activity, stats: sessionDetails.stats, account: accountDetails, togetherMs, groupMs: null, riderLaps };
                 } catch (e) {
                     console.error(`Could not fetch details for activity ${activity.id}`, e);
-                    return { ...activity, stats: null, account: null, togetherMs: null, groupMs: null };
+                    return { ...activity, stats: null, account: null, togetherMs: null, groupMs: null, riderLaps: null };
                 }
             }, (done, total) => {
                 loadingDiv.textContent = `Loading overlapping riders… ${done} of ${total}`;
             });
 
-            // First on time skated together (in the whole minutes shown on the cards), then on time in
-            // your group; riders we could not measure go last.
-            const shownMinutes = session => (session.togetherMs === null ? -1 : Math.round(session.togetherMs / 60000));
-            overlappingWithDetails.sort((a, b) =>
-                (shownMinutes(b) - shownMinutes(a))
-                || ((b.groupMs ?? -1) - (a.groupMs ?? -1))
-                || ((b.togetherMs ?? -1) - (a.togetherMs ?? -1)));
+            // Who skated in your group is decided from everyone's finish crossings together.
+            if (referenceLaps) {
+                const groupById = groupMembership(referenceLaps,
+                    overlappingWithDetails.filter(session => session.riderLaps).map(session => ({ id: session.id, laps: session.riderLaps })),
+                    trackLengthM);
+                overlappingWithDetails.forEach(session => {
+                    session.groupMs = session.riderLaps ? (groupById.get(session.id) ?? 0) : null;
+                });
+            }
+            overlappingWithDetails.forEach(session => { delete session.riderLaps; });
+
+            overlappingWithDetails.sort(compareOverlappingRiders);
 
             lastOverlap = { reference: selectedActivity, sessions: overlappingWithDetails };
             displayOverlappingSessions(overlappingWithDetails);

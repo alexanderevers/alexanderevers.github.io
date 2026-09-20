@@ -145,7 +145,7 @@ function skip(name, reason) {
             assert.ok(!ids.includes(9), 'the old session is listed');
             assert.ok(!ids.includes(REFERENCE.id), 'you are listed as your own overlapping rider');
         });
-        await step('overlapping riders: sorted by whole minutes skated together, most first; each card shows both values', async () => {
+        await step('overlapping riders: sorted by time in your group, then by time skated together; each card shows both values', async () => {
             const cards = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll("#overlappingSessionsTable .session-card")].map(card => ({
                 id: Number(card.querySelector(".replay-select").dataset.activityId),
                 together: card.querySelectorAll(".session-stat.together .value")[0].textContent,
@@ -153,7 +153,13 @@ function skip(name, reason) {
                 dimmed: card.classList.contains("no-overlap")
             })))`));
             const minutes = value => (value === '0 min' ? 0 : value === '<1 min' ? 0.5 : Number(/(\d+) min/.exec(value)[1]) + (/(\d+) h/.test(value) ? 60 * Number(/(\d+) h/.exec(value)[1]) : 0));
-            for (let i = 1; i < cards.length; i++) assert.ok(minutes(cards[i].together) <= minutes(cards[i - 1].together), `card ${i} is out of order`);
+            const groupMinutes = card => minutes(card.group.replace('~', ''));
+            for (let i = 1; i < cards.length; i++) {
+                const [before, after] = [cards[i - 1], cards[i]];
+                assert.ok(groupMinutes(after) <= groupMinutes(before), `card ${i}: in your group is out of order`);
+                if (groupMinutes(after) === groupMinutes(before)) assert.ok(minutes(after.together) <= minutes(before.together), `card ${i}: skated together is out of order`);
+            }
+            assert.ok(cards.some((c, i) => i > 0 && groupMinutes(c) === groupMinutes(cards[i - 1]) && minutes(c.together) < minutes(cards[i - 1].together)), 'the fake data has no riders with the same group minutes and different time together; the tie-break is not tested');
             assert.ok(cards.every(c => /^~/.test(c.group) || c.group === 'N/A'), 'the group value should be marked as an estimate (~)');
             const allDay = cards.find(c => c.id === ALL_DAY_ID);
             assert.equal(allDay.together, '0 min');
