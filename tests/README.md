@@ -25,7 +25,7 @@ needs the real MYLAPS API, a Cloudflare account or a personal transponder.
 Run from the repository root (the folder that contains `package.json` and `index.html`):
 
 ```bash
-npm test               # unit tests            -> expect 121 tests, 34 suites, 0 failures  (~1.5 s)
+npm test               # unit tests            -> expect 125 tests, 35 suites, 0 failures  (~1.5 s)
 npm run test:worker    # Cloudflare Worker     -> expect the last line "ALL PASS"           (~2 s)
 npm run test:e2e       # real browser          -> expect the last line "ALL PASSED"         (~11 s)
 npm run test:all       # unit + worker (does not start a browser)
@@ -40,9 +40,9 @@ to *deploy* or run the Worker locally, never for the tests.)
 ```
 npm test
   ...
-  # tests 121
-  # suites 34
-  # pass 121
+  # tests 125
+  # suites 35
+  # pass 125
   # fail 0
 
 npm run test:worker
@@ -165,7 +165,7 @@ The steps, in order:
 | 9 | overlapping riders | "Select all skated together" picks exactly the 16 riders with more than 0 min, not the all-day rider; toggles to "Select none" and back |
 | 10 | open replay | address `replay.html?transponder=AB-12345&activity=1&riders=<the 16 riders>`; stored data has 18 riders, 16 selected, 400 m track, `togetherMs`/`groupMs` on every rider |
 | 11 | replay | 17 riders shown: **10 with a colour, 7 small dots**; header "(17 shown, first 10 labelled)"; the all-day rider is listed but not shown ("together 0 min") |
-| 12 | replay | riders with 0 min together are greyed out in the list (only the all-day rider), the others are not |
+| 12 | replay | riders with 0 min together are not in the list at all (the all-day rider), and no listed rider says "together 0 min" |
 | 13 | replay | the clock starts at the reference rider's first lap start **even though the other riders' laps arrive first** (the fake API delays the reference rider's laps by 800 ms on purpose) |
 | 14-16 | replay | play/speed sit under the track, the lap graph under them, and there is no time slider; the lap graph follows "you" and the readout shows `Lap 1 · <s>s · <km/h> km/h`; every rider row shows lap, time, speed and the gap in metres to you |
 | 17 | replay | the back link returns to `index.html?transponder=...&activity=...` (the same activity) |
@@ -200,14 +200,14 @@ The steps, in order:
 
 | Suite | Expected |
 |---|---|
-| unit | `# tests 121`, `# suites 34`, `# pass 121`, `# fail 0`, `# cancelled 0`, `# skipped 0` |
+| unit | `# tests 125`, `# suites 35`, `# pass 125`, `# fail 0`, `# cancelled 0`, `# skipped 0` |
 | Worker | 49 `PASS` lines, no `FAIL`, last line `ALL PASS` |
 | browser | 27 `PASS` lines, no `FAIL`, no `SKIP`, last line `ALL PASSED`. Without access to the Chart.js CDN, the four chart steps are replaced by one `SKIP` line (23 `PASS` lines) and the last line reads `ALL PASSED (1 skipped)` |
 
 Quick machine check:
 
 ```bash
-npm test 2>&1 | grep -E "^# (tests|pass|fail)"                          # tests 121 / pass 121 / fail 0 (piped output is TAP;
+npm test 2>&1 | grep -E "^# (tests|pass|fail)"                          # tests 125 / pass 125 / fail 0 (piped output is TAP;
                                                                         # in a terminal the same lines start with "ℹ" instead of "#")
 npm run test:worker 2>&1 | grep -c "^PASS"                              # 49
 npm run test:e2e 2>&1 | grep -cE "^PASS"                                # 27
@@ -313,7 +313,7 @@ npm test; git checkout -- replay-model.js
 sed -i 's|f = ((((f % 1) + 1) % 1) + 1 / 8) % 1;|f = (((f % 1) + 1) % 1);|' replay-track.js
 npm test; git checkout -- replay-track.js
 
-npm test                                                         # green again: 121 passed
+npm test                                                         # green again: 125 passed
 ```
 
 (`sed -i` is GNU sed, as in Git Bash or Linux. On macOS use `sed -i ''`. On plain PowerShell, edit the line by hand.)

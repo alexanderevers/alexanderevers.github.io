@@ -833,8 +833,6 @@ button:disabled {
 
 .rider-row.selected { border-color: var(--axis); }
 
-/* Riders who were not on the ice at the same time as you (0 min together) */
-.rider-row.no-overlap { opacity: 0.55; }
 
 .rider-row input[type="checkbox"] {
     width: 18px;

@@ -99,7 +99,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('replaySubtitle').textContent = `${payload.location.sport} · ${payload.location.name} · ${formatDateTime(payload.riders[0].startTime)}`;
     $('backLink').href = `index.html?transponder=${encodeURIComponent(payload.reference.chipCode || '')}&activity=${encodeURIComponent(payload.reference.id)}`;
 
-    const riders = payload.riders.map((r, index) => ({
+    // Riders who were not on the ice at the same time as you (0 min together) are left out of the replay.
+    const riders = payload.riders.filter(r => r.isReference || r.togetherMs !== 0).map((r, index) => ({
         ...r, index, laps: null, loading: false, error: null, selected: false, selectedAt: 0, slot: null, hover: false, forceLabel: false, forceSmall: false, labelledAt: 0
     }));
 
@@ -311,7 +312,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         riders.forEach(rider => {
             const row = document.createElement('label');
             row.className = 'rider-row';
-            if (!rider.isReference && rider.togetherMs === 0) row.classList.add('no-overlap');   // 0 min together: greyed out
             const avatar = rider.accountId ? `${PROXY_BASE_URL}/avatar/${encodeURIComponent(rider.accountId)}` : '';
             const session = `${formatTime(rider.startTime).slice(0, 5)}${rider.endTime ? '–' + formatTime(rider.endTime).slice(0, 5) : ''}`;
             const hasTimes = !rider.isReference && rider.togetherMs !== null && rider.togetherMs !== undefined;

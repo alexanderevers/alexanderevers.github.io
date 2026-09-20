@@ -96,7 +96,7 @@ Nothing is sent to a server; a browser that blocks storage just forgets the sett
 ### Comparing lap times and riders who were not on the ice with you
 
 - **Compare (replay):** every rider row has a **Compare** button (not on the rider the graph follows). One rider at a time is drawn in the lap graph in a second colour at 55% opacity, at the moments he really crossed the line, so the laps of riders skating together line up. Next to the graph a line shows his current lap and the difference to your lap (`+0.31s` = he is slower). The graph's time window makes room for his laps. Comparing a hidden rider shows him first; hiding him, or following him instead, ends the comparison.
-- **Greyed out:** riders with 0 min together (they were not on the ice at the same time as you, for example an all-day recording) are dimmed in the rider list, as on the main page. They can still be shown with the checkbox.
+- **Left out:** riders with 0 min together (they were not on the ice at the same time as you, for example an all-day recording) are not in the replay's rider list at all. The main page's overlap list still shows them, dimmed. Riders whose time together could not be measured (no lap data) stay.
 
 ### Sharing a replay
 

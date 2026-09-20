@@ -213,19 +213,17 @@ function skip(name, reason) {
 
         await step('replay: you and the riders you selected are shown, 10 with a colour and the rest as small dots', async () => {
             const states = await rowStates();
-            assert.equal(states.length, OVERLAPPING.length + 1);
+            assert.equal(states.length, SKATED_WITH_YOU.length + 1);   // the all-day rider (0 min together) is not listed at all
             assert.deepEqual(summary(states), { shown: SKATED_WITH_YOU.length + 1, label: 10, small: SKATED_WITH_YOU.length + 1 - 10 });
             assert.equal(states[0].kind, 'label', 'you are always coloured');
             assert.equal(await text('#riderCount'), `(${SKATED_WITH_YOU.length + 1} shown, first 10 labelled)`);
-            const allDay = states.find(s => s.name.includes('Allday'));
-            assert.equal(allDay.checked, false, 'the all-day rider must not be shown');
-            assert.match(await page.evaluate('[...document.querySelectorAll(".rider-row")].find(r => r.textContent.includes("Allday")).querySelector("small").textContent'), /together 0 min/);
         });
-        await step('replay: riders with 0 min together are greyed out in the list, the others are not', async () => {
-            const dimmed = JSON.parse(await page.evaluate('JSON.stringify([...document.querySelectorAll(".rider-row.no-overlap .rider-name")].map(n => n.textContent.trim()))'));
-            assert.deepEqual(dimmed, ['Daan Allday']);
-            assert.ok(Number(await page.evaluate('getComputedStyle(document.querySelector(".rider-row.no-overlap")).opacity')) < 1);
-            assert.equal(await page.evaluate('getComputedStyle(document.querySelector(".rider-row:not(.no-overlap)")).opacity'), '1');
+        await step('replay: riders with 0 min together are not in the list at all', async () => {
+            const names = (await rowStates()).map(s => s.name);
+            assert.equal(names.some(name => name.includes('Allday')), false, 'the all-day rider is listed');
+            const details = JSON.parse(await page.evaluate('JSON.stringify([...document.querySelectorAll(".rider-row:not(:first-child) small")].map(s => s.textContent))'));
+            assert.ok(details.length > 0 && details.every(text => !/together 0 min/.test(text)), 'a rider with 0 min together is listed');
+            assert.match(await text('#riderCount'), new RegExp(`^\\(${SKATED_WITH_YOU.length + 1} shown`));
         });
         await step('replay: the clock starts when you entered the ice, although other riders loaded first', async () => {
             assert.equal((await text('#clockLabel')).trim(), new Date(data.T0).toLocaleTimeString('en-GB'));
@@ -283,14 +281,14 @@ function skip(name, reason) {
             await page.waitFor(allLapsLoaded, 'all laps to load again');
             const states = await rowStates();
             assert.equal(summary(states).shown, SKATED_WITH_YOU.length + 1);
-            assert.equal(states.find(s => s.name.includes('Allday')).checked, false);
+            assert.equal(states.some(s => s.name.includes('Allday')), false);
         });
-        await step('replay: a rider can be added and removed with the checkbox', async () => {
-            const index = (await rowStates()).find(s => s.name.includes('Allday')).i;
+        await step('replay: a rider can be removed and added again with the checkbox', async () => {
+            const index = (await rowStates()).find(s => s.name.includes('Eva')).i;
             await page.evaluate(`document.querySelectorAll(".rider-row")[${index}].querySelector("input").click()`);
-            await page.waitFor(allLapsLoaded, 'the added rider to load');
-            assert.equal(summary(await rowStates()).shown, SKATED_WITH_YOU.length + 2);
+            assert.equal(summary(await rowStates()).shown, SKATED_WITH_YOU.length);
             await page.evaluate(`document.querySelectorAll(".rider-row")[${index}].querySelector("input").click()`);
+            await page.waitFor(allLapsLoaded, 'the rider to be shown again');
             assert.equal(summary(await rowStates()).shown, SKATED_WITH_YOU.length + 1);
         });
 
@@ -461,9 +459,9 @@ function skip(name, reason) {
             await page.waitFor(allLapsLoaded, 'all laps to load');
             assert.match(await text('#replaySubtitle'), /Jaap Eden/);
             const states = await rowStates();
-            assert.equal(states.length, OVERLAPPING.length + 1);
+            assert.equal(states.length, SKATED_WITH_YOU.length + 1);
             assert.equal(states.filter(s => s.checked).length, SKATED_WITH_YOU.length + 1);
-            assert.equal(states.find(s => s.name.includes('Allday')).checked, false);
+            assert.equal(states.some(s => s.name.includes('Allday')), false);
             assert.match(await text('#riderList .rider-row small'), /AB-12345/);
             assert.equal(await page.evaluate('localStorage.getItem("replayData")'), null, 'the rebuilt replay should not depend on stored data');
             assert.equal((await text('#clockLabel')).trim(), new Date(data.T0).toLocaleTimeString('en-GB'));
