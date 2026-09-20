@@ -629,6 +629,115 @@ function skip(name, reason) {
             assert.equal(await visible('#replayEmpty'), true);
             assert.equal(await visible('#replayApp'), false);
         });
+        // ------------------------------------------------------------------ installable app (PWA)
+        await step('app: every page is called Icesights, links the manifest, and the manifest and its icons are served', async () => {
+            const pages = [['index.html', /^Icesights$/], ['replay.html', /Icesights$/], ['search_user.html', /Icesights$/]];
+            for (const [file, title] of pages) {
+                await page.navigate(`${base}/${file}`);
+                assert.match(await page.evaluate('document.title'), title, file);
+                const href = await page.evaluate('document.querySelector("link[rel=manifest]").href');
+                const manifest = JSON.parse(await page.evaluate(`fetch(${JSON.stringify(href)}).then(r => r.text())`));
+                assert.equal(manifest.short_name, 'Icesights');
+                for (const icon of manifest.icons) {
+                    const type = await page.evaluate(`fetch(new URL(${JSON.stringify(icon.src)}, ${JSON.stringify(href)})).then(r => r.ok ? r.headers.get("content-type") : "missing")`);
+                    assert.equal(type, 'image/png', `${icon.src} was not served as an image`);
+                }
+            }
+            await page.navigate(`${base}/index.html`);
+            assert.match(await text('.topbar .brand'), /^\s*Icesights/);
+        });
+
+        await step('app: the service worker takes over, keeps the app shell, and the app opens without a connection', async () => {
+            await page.navigate(`${base}/index.html`);
+            await page.waitFor('navigator.serviceWorker.controller !== null', 'the service worker to take over');
+            const cached = JSON.parse(await page.evaluate('caches.keys().then(async names => { const cache = await caches.open(names.find(n => n.startsWith("icesights-shell"))); return JSON.stringify({ names, count: (await cache.keys()).length }); })'));
+            assert.ok(cached.names.some(name => /^icesights-shell-v\d+$/.test(name)), JSON.stringify(cached));
+            assert.ok(cached.count >= 20, `only ${cached.count} files were kept`);
+            await page.send('Network.emulateNetworkConditions', { offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+            try {
+                await page.navigate(`${base}/index.html`);
+                assert.equal(await page.evaluate('document.title'), 'Icesights');
+                assert.equal(await count('#transponderInput'), 1, 'the app did not open offline');
+                assert.equal(await page.evaluate('typeof formatTransponderInput'), 'function', 'the scripts were not available offline');
+                await page.navigate(`${base}/replay.html?transponder=${data.referenceChip}&activity=${REFERENCE.id}&riders=none`);
+                assert.match(await page.evaluate('document.title'), /Race replay/);
+            } finally {
+                await page.send('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+            }
+        });
+
+        await step('app: the Install button appears when the browser offers the install, and starts it when clicked', async () => {
+            await page.navigate(`${base}/index.html`);
+            // (a real Chrome may already have offered the install itself, as it finds the app installable; the test sends its own offer)
+            const prevented = await page.evaluate(`(() => {
+                const event = new Event("beforeinstallprompt", { cancelable: true });
+                window.__installPrompted = 0;
+                event.prompt = () => { window.__installPrompted++; return Promise.resolve(); };
+                window.dispatchEvent(event);
+                return event.defaultPrevented;
+            })()`);
+            assert.equal(prevented, true, 'the browser install banner should be replaced by the button');
+            assert.equal(await visible('#installBtn'), true);
+            await click('#installBtn');
+            assert.equal(await page.evaluate('window.__installPrompted'), 1);
+            assert.equal(await visible('#installBtn'), false, 'the button stays after the install was started');
+            await page.evaluate('window.dispatchEvent(new Event("appinstalled"))');
+            assert.equal(await visible('#installBtn'), false);
+        });
+
+        await step('app: a page with a transponder finishes loading, also when the avatar cannot be loaded (otherwise no service worker, no install)', async () => {
+            await page.navigate(`${base}/index.html?transponder=${data.referenceChip}`);
+            await page.waitFor('document.readyState === "complete"', 'the page to finish loading', 10000);
+            assert.equal(await page.evaluate('document.getElementById("profile-avatar").hasAttribute("src")'), false, 'the avatar that failed to load should be removed');
+        });
+
+        await step('app: every transponder gets its own app (own id, starts on that transponder), and Chrome accepts and offers it', async () => {
+            const appManifest = async () => {
+                const result = await page.send('Page.getAppManifest');
+                return { url: result.url || '', errors: (result.errors || []).map(e => e.message), data: result.data ? JSON.parse(result.data) : {} };
+            };
+            const installErrors = async () => ((await page.send('Page.getInstallabilityErrors')).installabilityErrors || []).map(e => e.errorId);
+
+            await page.navigate(`${base}/index.html?transponder=${data.referenceChip}`);
+            await page.waitFor(`Pwa.currentTransponder() === "${data.referenceChip}"`, 'the manifest of the transponder');
+            let manifest = await appManifest();
+            assert.deepEqual(manifest.errors, []);
+            assert.match(manifest.url, /^blob:/);
+            assert.equal(manifest.data.start_url, `${base}/index.html?transponder=${data.referenceChip}`);
+            assert.equal(manifest.data.id, `${base}/?transponder=${data.referenceChip}`);
+            assert.equal(manifest.data.name, `Icesights ${data.referenceChip}`);
+            assert.equal(manifest.data.short_name, data.referenceChip);
+            assert.deepEqual(await installErrors(), [], 'Chrome sees problems with the manifest of the transponder app');
+            assert.equal((await text('#installBtn')).trim(), `Install ${data.referenceChip}`);
+            await page.waitFor('!document.getElementById("installBtn").classList.contains("hidden")', 'Chrome to offer the install of the transponder app', 15000);
+
+            // another transponder, typed in on the page: the manifest follows
+            await page.evaluate('Pwa.useTransponder("cd-11111")');
+            await page.waitFor('Pwa.currentTransponder() === "CD-11111"', 'the other transponder');
+            for (let attempt = 0; attempt < 40 && !(await appManifest()).data.id?.endsWith('CD-11111'); attempt++) await page.sleep(150);
+            manifest = await appManifest();
+            assert.equal(manifest.data.id, `${base}/?transponder=CD-11111`);
+            assert.equal(manifest.data.start_url, `${base}/index.html?transponder=CD-11111`);
+            assert.equal((await text('#installBtn')).trim(), 'Install CD-11111');
+
+            // something that is not a transponder: the general app again
+            await page.evaluate('Pwa.useTransponder("nonsense")');
+            await page.waitFor('Pwa.currentTransponder() === null', 'the general app');
+            for (let attempt = 0; attempt < 40 && !(await appManifest()).url.endsWith('manifest.webmanifest'); attempt++) await page.sleep(150);
+            manifest = await appManifest();
+            assert.match(manifest.url, /manifest\.webmanifest$/);
+            assert.equal(manifest.data.name, 'Icesights');
+            assert.equal((await text('#installBtn')).trim(), 'Install app');
+        });
+
+        await step('app: loading a transponder on the main page makes "Install" the app of that transponder', async () => {
+            await page.navigate(`${base}/index.html`);
+            assert.equal(await page.evaluate('Pwa.currentTransponder()'), null);
+            await page.evaluate(`(() => { const field = document.getElementById("transponderInput"); field.value = "${data.referenceChip}"; document.getElementById("fetchActivitiesBtn").click(); })()`);
+            await page.waitFor(`Pwa.currentTransponder() === "${data.referenceChip}"`, 'the app of the loaded transponder', 15000);
+            assert.equal((await text('#installBtn')).trim(), `Install ${data.referenceChip}`);
+        });
+
         await step('no script errors or console errors on any page', async () => {
             assert.deepEqual(page.problems, []);
         });

@@ -25,7 +25,7 @@ needs the real MYLAPS API, a Cloudflare account or a personal transponder.
 Run from the repository root (the folder that contains `package.json` and `index.html`):
 
 ```bash
-npm test               # unit tests            -> expect 137 tests, 37 suites, 0 failures  (~1.5 s)
+npm test               # unit tests            -> expect 154 tests, 41 suites, 0 failures  (~1.5 s)
 npm run test:worker    # Cloudflare Worker     -> expect the last line "ALL PASS"           (~2 s)
 npm run test:e2e       # real browser          -> expect the last line "ALL PASSED"         (~11 s)
 npm run test:all       # unit + worker (does not start a browser)
@@ -40,9 +40,9 @@ to *deploy* or run the Worker locally, never for the tests.)
 ```
 npm test
   ...
-  # tests 137
-  # suites 37
-  # pass 137
+  # tests 154
+  # suites 41
+  # pass 154
   # fail 0
 
 npm run test:worker
@@ -130,6 +130,7 @@ node --test --test-name-pattern="break lap" "tests/unit/*.test.js"  # tests whos
 | `stats.test.js` | 8 tests on a fixed set of 10 laps, plus `activeTimeShare` | counts, average 41.129, median 41.0, best-5 average 40.88, consistency 0.459, fade 0.433, blocks laps 2-4 and 6-9, `null` when no lap is fast enough; **active time as a share of the total time** (82% for a real session, capped at 100%, `null` when a time is missing) |
 | `replay-track.test.js` | geometry | the lap has length 1 and no jumps; the finish line is at the end of the bottom straight, before the right-hand corner; 100/200/300 m land on the corner/straight joins; heading matches the direction of travel; `trackDelta` is the signed shortest distance |
 | `replay-model.test.js` | positions and the two ranking numbers | interpolation inside a lap, lap boundaries, small gaps, long pauses, **break laps** (< 8 km/h) are off the ice, overlap time is symmetric and ignores breaks, **group membership**: crossing within 1 s of you, chains of riders 1 s apart, the quarter-lap window, break laps, drifting riders |
+| `pwa.test.js` | the installable app | the manifest (name Icesights, standalone, start page and scope, hex colours), real PNG icons of the right sizes (192, 512, maskable 512, iOS 180), every page links manifest/icons/theme colour and loads `pwa.js`, the service worker lists only existing files and **every script, stylesheet and icon the pages load**, versioned cache names, and it never touches the proxy; **the manifest made for one transponder** (own id and name, starts on `index.html?transponder=...`, inside the site, same icons with full addresses) |
 | `chart-factory.test.js` | the session chart's tooltip | one item per lap (bar kept, line dropped), the average line never listed, slower laps and different laps kept, and the chart really uses the filter and describes the hovered lap |
 | `api.test.js` | retries, paging and the activity list | retries only on 5xx/network errors (max 3 tries), readable error messages for non-JSON error bodies, `?finished=1` only for activities that ended > 15 min ago, **paging through a rink advances by what was received (page cap 200) and stops based on END time** | **`fetchActivities` asks for `count=500`** (the whole list, not only the newest 100), still works without a profile, readable errors for an unknown transponder |
 | `overlap-sort.test.js` | order of the overlapping riders | longest time in your group first, ties (in particular 0 min) by time skated together, whole minutes before exact times, unmeasured riders last |
@@ -152,7 +153,7 @@ File: `tests/e2e/replay-flow.e2e.js` (helpers in `tests/e2e/browser.js`). What h
 
 1. A tiny web server serves the repository folder on a random port and injects the **fake API** (`fixtures/fake-api-stub.js`) into every HTML page. The pages therefore never talk to the real proxy.
 2. A headless Chrome/Edge is started in a temporary profile and controlled through the DevTools protocol. Requests to `*.workers.dev` (the avatar images) are blocked, so the test does not depend on the real proxy at all.
-3. The scenario runs as 47 named steps; each prints `PASS` or `FAIL` (with the reason). When Chart.js cannot be downloaded, a `SKIP` line replaces the four chart-dependent steps (3 to 6 below), and another one the three deep link steps.
+3. The scenario runs as 53 named steps; each prints `PASS` or `FAIL` (with the reason). When Chart.js cannot be downloaded, a `SKIP` line replaces the four chart-dependent steps (3 to 6 below), and another one the three deep link steps.
 
 The steps, in order:
 
@@ -193,7 +194,13 @@ The steps, in order:
 | 44 | replay | the **share button** is a small icon button in the top right corner and copies the link (the clipboard holds the address of the replay) |
 | 45 | replay link | `riders=none` shows only you; a link to an unknown activity gives the message "Activity ... was not found" |
 | 46 | replay | without stored data the page explains how to open a replay |
-| 47 | whole run | **no exception and no `console.error` on any page** |
+| 47 | app | every page is called Icesights, links the manifest, and the manifest and each of its icons are served as PNG images |
+| 48 | app | the **service worker** takes over the page and keeps the app shell (20 or more files); with the network switched off the app (and a replay link) still opens, scripts included |
+| 49 | app | the **Install app** button appears when the browser offers the install (the default install banner is replaced), starts the install when clicked, and hides again |
+| 50 | app | a page with a transponder in the address **finishes loading** (the `load` event fires) even though the profile picture cannot be loaded, and the failed picture is removed |
+| 51 | app | **one app per transponder**: with `?transponder=` the manifest is the transponder's own (own `id`, `start_url` on that transponder, name and short name), Chrome accepts it (no manifest or installability errors) and offers it, the button reads "Install XX-12345"; another transponder changes the manifest, something that is not a transponder gives the general app again |
+| 52 | app | loading a transponder on the main page makes "Install" the app of that transponder |
+| 53 | whole run | **no exception and no `console.error` on any page** |
 
 ## 5. How to verify the output
 
@@ -209,14 +216,14 @@ The steps, in order:
 
 | Suite | Expected |
 |---|---|
-| unit | `# tests 137`, `# suites 37`, `# pass 137`, `# fail 0`, `# cancelled 0`, `# skipped 0` |
+| unit | `# tests 154`, `# suites 41`, `# pass 154`, `# fail 0`, `# cancelled 0`, `# skipped 0` |
 | Worker | 49 `PASS` lines, no `FAIL`, last line `ALL PASS` |
 | browser | 27 `PASS` lines, no `FAIL`, no `SKIP`, last line `ALL PASSED`. Without access to the Chart.js CDN, the four chart steps are replaced by one `SKIP` line (23 `PASS` lines) and the last line reads `ALL PASSED (1 skipped)` |
 
 Quick machine check:
 
 ```bash
-npm test 2>&1 | grep -E "^# (tests|pass|fail)"                          # tests 137 / pass 137 / fail 0 (piped output is TAP;
+npm test 2>&1 | grep -E "^# (tests|pass|fail)"                          # tests 154 / pass 154 / fail 0 (piped output is TAP;
                                                                         # in a terminal the same lines start with "ℹ" instead of "#")
 npm run test:worker 2>&1 | grep -c "^PASS"                              # 49
 npm run test:e2e 2>&1 | grep -cE "^PASS"                                # 27
@@ -322,7 +329,7 @@ npm test; git checkout -- replay-model.js
 sed -i 's|f = ((((f % 1) + 1) % 1) + 1 / 8) % 1;|f = (((f % 1) + 1) % 1);|' replay-track.js
 npm test; git checkout -- replay-track.js
 
-npm test                                                         # green again: 137 passed
+npm test                                                         # green again: 154 passed
 ```
 
 (`sed -i` is GNU sed, as in Git Bash or Linux. On macOS use `sed -i ''`. On plain PowerShell, edit the line by hand.)

@@ -1,0 +1,19 @@
+{
+    "id": "./",
+    "name": "Icesights",
+    "short_name": "Icesights",
+    "description": "Get insights in your ice-skating activities: lap times, speed laps, who skated with you, and a race replay.",
+    "lang": "en",
+    "start_url": "./index.html",
+    "scope": "./",
+    "display": "standalone",
+    "orientation": "any",
+    "background_color": "#12121a",
+    "theme_color": "#12121a",
+    "categories": ["sports", "health", "fitness"],
+    "icons": [
+        { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+        { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+        { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    ]
+}

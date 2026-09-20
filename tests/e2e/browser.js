@@ -11,7 +11,10 @@ const { PROJECT_ROOT } = require('../helpers/browser-scripts');
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.gpx': 'application/gpx+xml', '.txt': 'text/plain' };
+const MIME = {
+    '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.gpx': 'application/gpx+xml', '.txt': 'text/plain',
+    '.webmanifest': 'application/manifest+json', '.png': 'image/png'
+};
 
 /** Serves the project folder. HTML pages get `injectIntoHead` (the fake API script) right after <head>. */
 function startStaticServer(injectIntoHead) {

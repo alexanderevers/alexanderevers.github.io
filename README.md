@@ -1,4 +1,6 @@
-# MYLAPS Activity Viewer
+# Icesights (MYLAPS insights)
+
+*Icesights = ice + insights.* The app was called "MYLAPS Activity Viewer" before; the repository keeps its name.
 
 A static website that shows training data from the MYLAPS Speedhive ice-skating timing system: lap times,
 speed-lap statistics, who else was on the ice with you, a race replay on an ice-track drawing, and a GPX
@@ -19,6 +21,10 @@ The site is a row of full-screen **dashboards** (racing look, dark or light): th
 | `replay.html` | **race replay**: the chosen riders on an oblong 400 m ice track, driven by their real lap times; play/pause/speed, and click or drag the lap graph (under the play controls) to jump to a moment; up to 10 riders with a colour and initials, the rest as small dots (click a rider's dot in the list to give or take a colour); a lap-time graph of one rider with a moving line and a max-lap-time slider, and a **Compare** button on every rider to draw that rider's lap times in the same graph (paler, other colour); riders with 0 min together are left out of the replay; show/hide riders one by one or "all who skated with you" |
 | `search_user.html` | search riders by name and see their last session |
 | all pages | works on a phone (one column, big touch targets); the main page address can be shared as a **deep link**: `index.html?transponder=XX-12345&activity=123` opens straight on that session. A replay can be shared too: its address (`replay.html?transponder=...&activity=...&riders=...`) rebuilds the whole replay on any computer, and the share button in the top right corner of the replay page copies it. Light/dark theme switch (follows the OS until you choose). The theme, the "lap time threshold", the replay speed and the rider you followed last are remembered in your browser |
+
+## Install it as an app
+
+Icesights is an installable web app (PWA). In Chrome on Android open the site and choose **Install app** (or press the **Install app** button in the top bar when it appears); it then opens in its own window with its own icon. **One app per transponder:** once a transponder is loaded (or the address has `?transponder=XX-12345`) the button reads **Install XX-12345**; that installs a separate app with its own name and icon that opens on that transponder's activities, so the number is filled in and loaded when you start it. Every transponder can have its own app. It works on desktop Chrome and Edge too, and iPhones can use "Add to Home Screen". The app opens without a connection (the shell), but the lap data still needs the internet. Details in [DOCUMENTATION.md](DOCUMENTATION.md#installable-app-pwa).
 
 ## Architecture
 
@@ -43,6 +49,8 @@ index.html  script.js  chart-factory.js  stats.js  gpx-generator.js   main page 
 fetch_overlapping_sessions.js                                        overlapping riders, sorting, "Open replay"
 replay.html  replay.js  replay-model.js  replay-track.js             race replay, lap model, track geometry
 dashboards.js  dashboards.css                                        the full-screen dashboards: snap scrolling, navigation, racing look
+manifest.webmanifest  sw.js  pwa.js  icons/                          installable app: manifest, service worker, install button, app icons
+tools/generate-icons.js                                              draws the app icons (icons/*.png)
 search_user.html  search_user.js                                     name search
 api.js  utils.js  theme.js  style.css                                proxy calls (retries, paging), helpers, theme, styles
 strava.js                                                            unfinished Strava upload module (not loaded by any page)
@@ -87,7 +95,7 @@ node -e "const {buildFakeData}=require('./tests/fixtures/fake-mylaps-data');cons
 Node.js 22 or newer. No `npm install` is needed.
 
 ```bash
-npm test               # 137 unit tests (about 1.5 s)
+npm test               # 154 unit tests (about 1.5 s)
 npm run test:worker    # the proxy's tests against a fake MYLAPS
 npm run test:e2e       # a real headless Chrome/Edge clicking through the whole flow on fake data (about 11 s)
 npm run test:all       # unit + worker

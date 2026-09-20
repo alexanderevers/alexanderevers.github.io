@@ -1,4 +1,4 @@
-# MYLAPS Activity Viewer Documentation
+# Icesights Documentation (formerly MYLAPS Activity Viewer)
 
 This document provides an overview of the project structure, focusing on the Cloudflare Worker proxy server and its interaction with the frontend application. For a quick start see `README.md`; for running and verifying everything see `tests/README.md`.
 
@@ -98,6 +98,20 @@ Both pages are a row of **full-screen dashboards** (`<section class="dash">`, on
 - **Replay page:** Replay (title, track, play controls, lap graph; the track is drawn as large as fits the space, see `resize()` in `replay.js`) and Riders (list with Compare buttons). Loading and error messages have their own screen (`#replayMessage`).
 - **Hovering the lap chart:** the bars and the line of a speed lap are drawn at the same place, so the tooltip would list the lap twice (and the average line as a third item). `overviewTooltipFilter` in `chart-factory.js` keeps one item per lap and leaves the average line out. There is no separate lap table any more; the tooltip shows the lap number, time, start time, difference, session time and speed.
 - **Look:** `dashboards.css` (layout, top bar, navigation, tiles, timing tower) on top of `style.css` (the colour tokens: near-black surfaces and a racing red accent `--accent`; `--accent-text` is the shade used for text). The data colours (`--cat-*`, `--series-*`) did not change; they were validated again against the new surfaces (`validate_palette.js`). Loading and error banners float above the dashboards (`.status-banner`).
+
+### Installable app (PWA)
+
+The site can be installed as an app ("Install app" in Chrome on Android, desktop Chrome and Edge; "Add to Home Screen" on iOS). Chrome's requirements are met by:
+
+- **`manifest.webmanifest`:** name and short name `Icesights`, `display: standalone`, start page `index.html`, dark colours (`#12121a`), and the icons: 192 and 512 for any use plus a 512 **maskable** icon (Android cuts it to its own shape, so the mark stays inside the safe zone). Every page links it, plus `theme-color`, the icons and `viewport-fit=cover` (`env(safe-area-inset-*)` keeps the top bar and navigation inside notches and rounded corners).
+- **`icons/`:** a slanted "i" with a red dot, drawn by `tools/generate-icons.js` with the headless browser of the tests (`node tools/generate-icons.js`); change the drawing there and run it again.
+- **`sw.js` (service worker):** pages, scripts and styles of this site are **network first** (a new deploy shows up at once) with the cached copy used only when there is no connection, so the app opens offline. Chart.js from the CDN is kept and refreshed in the background. The MYLAPS proxy and avatars are never touched: the Cloudflare Worker already caches those. Change `VERSION` in `sw.js` when its file list changes; old caches are removed when the new worker activates. A unit test checks that every script, stylesheet and icon the pages load is in the list.
+- **`pwa.js`:** registers the service worker (on https or localhost) and shows the **Install app** button in the top bar when Chrome offers the install (`beforeinstallprompt`), hiding it again after the install.
+
+- **One app per transponder:** `pwa.js` makes the manifest of a transponder in the browser (`transponderManifest`, a Blob address): its own `id` (`<site>/?transponder=XX-12345`, so Chrome treats it as a different app), name `Icesights XX-12345`, short name `XX-12345` and `start_url=index.html?transponder=XX-12345`, which the main page loads straight away (deep link). `Pwa.useTransponder(...)` is called with the transponder of the address and again by `script.js` when a transponder was loaded; the button then reads "Install XX-12345". Chrome only offers the install again for a manifest that was swapped **after** its first offer, so the swap waits for that offer (or 3 seconds after the page has loaded). The general app (no transponder) is unchanged. All apps share the browser storage of the site, so remembered settings are shared.
+- **Why the page must finish loading:** the service worker is registered, and Chrome makes its install offer, only after the `load` event. The profile picture used to keep `load` from ever firing when it could not be loaded (its error handler set `src = ""`, which failed again, over and over); it now removes the picture instead. A browser test checks that a page with a transponder finishes loading.
+
+The installed app opens the site at its normal address, so deep links and shared replay links work in it as well. Not included: a Play Store app (a Trusted Web Activity), notifications, and offline lap data.
 
 ### The transponder field
 

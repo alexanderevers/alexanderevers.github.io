@@ -2,18 +2,26 @@
 <html lang="en" class="dashboards">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MYLAPS Activity Viewer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#12121a" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#ececef" media="(prefers-color-scheme: light)">
+    <meta name="description" content="Icesights: get insights in your ice-skating activities.">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <title>Icesights</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="dashboards.css">
     <script src="theme.js"></script>
+    <script src="pwa.js"></script>
     <!-- Include Chart.js library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="dashboards-page">
     <header class="topbar">
-        <a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true"></span>MYLAPS <em>Activity Viewer</em></a>
+        <a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true"></span>Icesights <em>MYLAPS insights</em></a>
         <div class="topbar-actions">
+            <button id="installBtn" class="install-btn hidden" type="button" title="Install Icesights as an app on this device">Install app</button>
             <a class="topbar-link" href="search_user.html">Search riders</a>
             <div class="theme-switch">
                 <span>Light</span>

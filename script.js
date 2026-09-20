@@ -99,7 +99,8 @@ document.addEventListener('DOMContentLoaded', () => {
         userActivities = []; currentLapData = []; currentUserId = null;
         profileName.textContent = '';
         profileNickname.textContent = '';
-        profileAvatar.src = '';
+        profileAvatar.onerror = null;
+        profileAvatar.removeAttribute('src');   // (src = "" would make the browser try to load a picture again)
         generatedGpxFilename = 'training_session.gpx'; // Reset de bestandsnaam
         destroyCharts();
         speedStatsContainer.innerHTML = '';
@@ -187,7 +188,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
 
                 profileAvatar.onerror = () => {
-                    profileAvatar.src = ''; // Clear src on error to avoid broken image icon
+                    // No picture: remove it. Setting src to "" here would fail again, over and over, and the page would never finish loading.
+                    profileAvatar.onerror = null;
+                    profileAvatar.removeAttribute('src');
                     profileAvatar.style.display = 'none'; // Keep avatar hidden on error
                 };
 
@@ -240,6 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
             currentUserId = userId;
 
             displayProfileInfo(account, userId);
+            if (typeof Pwa !== 'undefined') Pwa.useTransponder(transponder);   // "Install" now installs the app of this transponder
             saveTransponder(transponder, TRANSPONDER_COOKIE_KEY);
             loadSavedTransponders(TRANSPONDER_COOKIE_KEY, transponderDatalist);
             hide(loadingDiv);

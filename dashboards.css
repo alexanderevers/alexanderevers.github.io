@@ -122,12 +122,27 @@ body.dashboards-page {
 }
 
 .topbar-link:hover { color: var(--text); }
+
+/* Phones with a notch or rounded corners (and the installed app): keep the bar and the navigation inside them */
+.topbar {
+    padding-left: max(20px, env(safe-area-inset-left));
+    padding-right: max(20px, env(safe-area-inset-right));
+}
+
+.install-btn {
+    padding: 6px 12px;
+    font-size: 0.72rem;
+    background-color: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--accent);
+    white-space: nowrap;
+}
 .topbar .theme-switch { margin: 0; }
 
 /* ---------- Navigation between the dashboards ---------- */
 .dash-nav {
     position: fixed;
-    right: 14px;
+    right: max(14px, env(safe-area-inset-right));
     top: 50%;
     transform: translateY(-50%);
     z-index: 55;
