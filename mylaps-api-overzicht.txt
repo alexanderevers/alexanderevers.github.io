@@ -1,0 +1,410 @@
+MYLAPS SPEEDHIVE API - HET OVERZICHT VOOR MENSEN
+================================================
+
+Alle 110 opdrachten (calls) van de twee API's van MYLAPS Speedhive, in gewone taal:
+wat doet de opdracht, wat stuur je mee, en wat krijg je terug.
+
+De volledige technische lijst (met alle type-namen en foutcodes) staat in mylaps-api-reference.txt.
+Dit overzicht is gemaakt uit dezelfde Swagger-bestanden, maar dan leesbaar. Hoe het bestand opnieuw
+gemaakt wordt: zie de laatste alinea.
+
+
+HOE LEES JE DIT
+---------------
+Elke opdracht ziet er zo uit:
+
+  GET  /api/v1/locations/{id}/activities          <- de methode en het adres
+  Wat:     wat de opdracht doet
+  Stuur:   wat je moet of kunt meegeven (in het adres, als vraag erachter, of als los pakketje)
+  Krijg:   wat er terugkomt
+
+- GET betekent "geef mij iets" (er verandert niets). POST/PUT/DELETE veranderen gegevens.
+- Wat tussen {accolades} staat vul je zelf in, bijvoorbeeld {id} wordt 2040.
+- "Vraag erachter" betekent achter het adres met een vraagteken: ...?year=2026&count=50
+- Het adres begint bij de Practice API met   https://practice-api.speedhive.com
+  en bij de Users and Products API met       https://usersandproducts-api.speedhive.com
+- Een browser mag deze adressen niet zomaar aanroepen; ze willen de kopregels
+  "Origin: https://speedhive.mylaps.com" en "Referer: https://speedhive.mylaps.com/" zien.
+  Icesights laat de Cloudflare Worker dat doen (cloudflare-worker/src/index.js).
+- Merktekens:
+    [ICESIGHTS]   Icesights gebruikt deze opdracht (getest en werkend)
+    [LOGIN]       de Swagger-lijst zegt dat je ingelogd moet zijn (kopregel "Authorization" met een
+                  toegangssleutel van een MYLAPS-account). Icesights kan dit niet.
+    zonder merkteken: de lijst noemt geen login. Dat is niet uitgeprobeerd, behalve bij [ICESIGHTS].
+
+Wat de woorden betekenen:
+  activiteit   een trainingsmoment van een transponder op een baan (van binnenkomen tot vertrek)
+  sessie       een aaneengesloten stuk daarin, met alle rondes
+  transponder  het chipje dat de rondes meet, met een code zoals PZ-28583 (ook "chip" genoemd)
+  baan         een locatie, bijvoorbeeld Jaap Eden IJsbaan (nummer 2040)
+  account      de persoon achter een transponder; het account-id ("userId") is een lange tekst
+
+
+================================================================================================
+DEEL 1  WAT ICESIGHTS NU GEBRUIKT
+================================================================================================
+Zes opdrachten worden door de website gebruikt; een zevende (activiteiten per transponder) kent de
+Worker wel, maar de pagina's roepen hem niet aan.
+
+
+1.1  Welk account hoort bij een transponder?   [ICESIGHTS]
+     GET  /api/v2/products/chips/code/{chipCode}/account          (Users and Products API)
+     Wat:    zoekt de eigenaar van een transponder op.
+     Stuur:  chipCode in het adres, bijvoorbeeld PZ-28583.
+     Krijg:  userId (het account-id, een tekst).
+     Daarna: dit id is nodig voor bijna alle andere opdrachten hieronder.
+     Zelfde met het chipnummer (een getal): GET /api/v2/products/chips/{chipNumber}/account
+
+1.2  Naam van een account   [ICESIGHTS]
+     GET  /api/v2/accounts/{userId}/profiles
+     Wat:    geeft het profiel van een persoon.
+     Stuur:  userId in het adres. (De kopregel Authorization mag erbij, is niet verplicht.)
+     Krijg:  userId en accountstatus; de naam (voornaam, achternaam, titel, bijnaam); adres
+             (straat, postcode, plaats, land); contact (e-mail, telefoon); geboortedatum;
+             voorkeuren (taal, tijdzone). Icesights gebruikt alleen voornaam, achternaam en bijnaam.
+             Welke velden bij andere mensen echt ingevuld zijn, is niet onderzocht.
+
+1.3  Profielfoto   [ICESIGHTS]
+     GET  /api/v2/image/id/{userId}
+     Wat:    geeft de foto van een account.
+     Stuur:  userId in het adres; optioneel ?width= (gewenste breedte in beeldpunten).
+     Krijg:  een plaatje (geen tekst). Heeft iemand geen foto, dan komt er een foutmelding.
+     Zelfde via transponder: GET /api/v2/image/tx/{transponder}   (?width= optioneel)
+
+1.4  Alle activiteiten van een persoon   [ICESIGHTS]
+     GET  /api/v1/accounts/{id}/training/activities               (Practice API)
+     Wat:    de lijst met trainingsmomenten van een account, nieuwste eerst.
+     Stuur:  id = het account-id (userId). Optioneel achter het adres:
+               count     hoeveel resultaten je wilt. Zonder count komen er maar 100; Icesights
+                         vraagt count=500 en krijgt dan de hele lijst (bij Alexander 144, terug tot 2011)
+               offset    hoeveel je overslaat (om door de lijst te bladeren)
+               year      alleen dit jaar, bijvoorbeeld 2026
+               sport     alleen deze sport: IceSkating, Cycling, Running, InlineSkating, Swimming,
+                         Karting, MX, Car, Bike, RC, ModelBoatRacing, StockCar, Equine, Other, Unknown
+               locationId  alleen deze baan
+               order     asc (oudste eerst) of desc (nieuwste eerst)
+     Krijg:  activityCount (hoeveel er zijn) en per activiteit: id, naam, starttijd, eindtijd,
+             transponder (chipCode en chipLabel), account (accountId, userId) en de baan
+             (naam, nummer, sport, rondelengte in meters, land, tussenmeetpunten).
+
+1.5  De rondes van een activiteit   [ICESIGHTS]
+     GET  /api/v1/training/activities/{id}/sessions
+     Wat:    alle rondetijden van een trainingsmoment. Dit is het hart van Icesights.
+     Stuur:  id = het activiteitsnummer (uit 1.4). Twee opties bestaan (format en numlaps); die
+             gebruikt Icesights niet en zijn niet uitgeprobeerd.
+     Krijg:  - bestLap: de snelste ronde (rondenummer, tijd, snelheid)
+             - stats: samenvatting: aantal rondes, snelste, gemiddelde en mediane tijd, totale
+               trainingstijd (eerste tot laatste ronde), actieve trainingstijd (alleen de rondes),
+               gemiddelde en hoogste snelheid (km/u en m/s), en de transponder
+             - sessions: per sessie het begin, snelste ronde, gemiddelde en mediane ronde, duur, en
+               de lijst rondes. Per ronde: nummer, starttijd, rondetijd, snelheid, verschil met de
+               vorige ronde, tijd sinds de start van de sessie, of hij sneller of langzamer was
+               (FASTER/SLOWER), tussentijden, en meetwaarden van de transponder (spanning, temperatuur)
+             - sections: de tussenmeetpunten van de baan
+     Let op: heeft de activiteit nog niet geëindigd, dan kan het antwoord nog wijzigen. Icesights
+             laat de Worker afgeronde activiteiten daarom 30 dagen onthouden.
+
+1.6  Iedereen die op een baan schaatste   [ICESIGHTS]
+     GET  /api/v1/locations/{id}/activities
+     Wat:    de lijst met trainingsmomenten van ALLE mensen op één baan. Daarmee vindt Icesights wie er
+             tegelijk op het ijs stond.
+     Stuur:  id = het baannummer (2040 = Jaap Eden Amsterdam). Optioneel: year, sport, count, offset,
+             order (zoals bij 1.4). Meer dan 200 per keer geeft de API niet, hoeveel je ook vraagt:
+             blader met offset. De lijst is gesorteerd op EINDtijd, nieuwste eerst.
+     Krijg:  de baan (naam, sport, rondelengte, meetpunten), activityCount, en per activiteit: id,
+             naam, start, einde, transponder (chipCode, chipLabel) en accountId (een getal). Het
+             userId van 1.1 (een tekst) staat hier niet bij; dat zoek je per transponder op met 1.1.
+
+1.7  Activiteiten van één transponder   (de Worker kent hem, de pagina's gebruiken hem niet)
+     GET  /api/v1/chips/code/{chipCode}/training/activities
+     Wat:    de trainingsmomenten van één transponder, op code.
+     Stuur:  chipCode in het adres. Optioneel: locationId, year, sport, count, offset, order.
+     Krijg:  hetzelfde als 1.4 (activityCount + de lijst activiteiten met baan).
+     Andere versies: op chipnummer   GET /api/v1/chips/{chipNumber}/training/activities
+                     met auto-nummer GET /api/v1/chips/{chipNumber}/carId/{carId}/training/activities
+                                     GET /api/v1/chips/code/{chipCode}/carId/{carId}/training/activities
+             (het auto-nummer is voor motorsport; bij schaatsen niet nodig).
+
+De naamzoeker van Icesights (zoek een rijder op naam) gebruikt een derde dienst,
+https://search.speedhive.com/api/search, die niet in deze twee lijsten staat.
+
+
+================================================================================================
+DEEL 2  MEER TRAININGSGEGEVENS OPHALEN  (Practice API)
+================================================================================================
+
+2.1  Aantal activiteiten per jaar
+     GET  /api/v1/accounts/{id}/training/activities/years
+     Wat:    telt per jaar hoeveel trainingsmomenten een account heeft.
+     Stuur:  id = het account-id.
+     Krijg:  total, en per jaar: jaartal en aantal (year, count).
+     Handig: voor het jaarfilter, zonder eerst alle activiteiten op te halen.
+
+2.2  Alle banen
+     GET  /api/v1/locations
+     Wat:    de lijst met alle banen en circuits die MYLAPS kent.
+     Stuur:  optioneel achter het adres: sportCategory (Motorized of Active), sport, country (land),
+             status (UNKNOWN, OFFLINE, ONLINE, ACTIVE).
+     Krijg:  per baan: naam, nummer, omschrijving, website, rondelengte in meters, status, sport,
+             land, tussenmeetpunten (naam, lengte, snelheidsmeting ja/nee).
+     Handig: voor de lijst met schaatsbanen en de rondelengte van elke baan (ijsbanen_list.txt).
+
+2.3  Eén baan
+     GET  /api/v1/locations/{id}
+     Stuur:  id = het baannummer.
+     Krijg:  dezelfde baangegevens als 2.2, voor die ene baan.
+
+2.4  Alle trainingssessies van één transponder op één baan
+     GET  /api/v1/locations/{id}/{chipCode}
+     Stuur:  id = baannummer, chipCode = de transponder. Optioneel: order (asc of desc).
+     Krijg:  een lijst sessies: sessienummer, baannummer en begin- en eindtijd (in UTC en in lokale
+             tijd, als getal).
+
+2.5  Activiteiten op een baan, met abonnementstype
+     GET  /api/v1/locations/{id}/activitieswithsubscriptiontype
+     Stuur:  hetzelfde als 1.6 (id, year, sport, count, offset, order).
+     Krijg:  hetzelfde antwoord als 1.6. Wat het "abonnementstype" in de naam toevoegt is niet
+             uitgeprobeerd.
+
+2.6  Trainingsmomenten zoeken
+     GET  /api/v1/training/activities
+     Stuur:  locationId (verplicht, het baannummer). Optioneel: accountId, year, sport, count,
+             offset, order.
+     Krijg:  de baan en de lijst activiteiten, zoals 1.6.
+
+2.7  Eén activiteit
+     GET  /api/v1/training/activities/{id}
+     Stuur:  id = het activiteitsnummer. Optioneel: chips=true (neem de transponders mee),
+             sessions=true (neem de sessies mee), order.
+     Krijg:  de activiteit: id, naam, start, einde, transponder, account, baan, en als je erom vroeg
+             de transponders en de sessies.
+
+2.8  Samenvatting van een activiteit
+     GET  /api/v1/training/activities/{id}/statistics
+     Stuur:  id = het activiteitsnummer.
+     Krijg:  alleen de samenvatting uit 1.5, zonder alle rondes: aantal rondes, snelste, gemiddelde
+             en mediane tijd, totale en actieve trainingstijd, gemiddelde en hoogste snelheid.
+     Handig: veel lichter dan 1.5 als je alleen de cijfers wilt (bijvoorbeeld voor een lijst).
+
+2.9  Welke transponders deden mee aan een activiteit
+     GET  /api/v1/training/activities/{id}/chips
+     Stuur:  id = het activiteitsnummer.
+     Krijg:  een lijst transponders: code, chipnummer, auto-nummer en id.
+
+2.10 Alle sporten
+     GET  /api/v1/sports
+     Krijg:  de lijst met namen van sporten (IceSkating, Cycling, ...).
+
+2.11 Beheerdersversies van 1.4 en 1.7 (bedoeld voor MYLAPS-medewerkers; toegang niet getest)
+     GET  /api/v1/admin/accountId/{accountId}
+     GET  /api/v1/admin/chipNumber/{chipNumber}
+     GET  /api/v1/admin/chipCode/{chipCode}
+     Stuur/Krijg: zoals 1.4: optioneel locationId, year, sport, count, offset, order; de lijst activiteiten.
+
+2.12 Leeft de dienst?
+     GET  /api/health          (staat bij beide API's)
+     Krijg:  "OK".
+
+
+================================================================================================
+DEEL 3  MENSEN, FOTO'S EN PROFIELEN OPZOEKEN  (Users and Products API, zonder login)
+================================================================================================
+Deze staan zonder [LOGIN] in de Swagger-lijst. Niets hiervan is getest, behalve wat in deel 1 staat.
+
+3.1  Gebruiker
+     GET  /api/v2/accounts/{userId}
+     Stuur:  userId (Authorization is optioneel).
+     Krijg:  userId, voornaam, achternaam, bijnaam, e-mailadres en accountstatus.
+
+3.2  Meerdere profielen tegelijk
+     GET  /api/v2/accounts/profiles?userList.ids=...      (en POST met de lijst in het pakketje)
+     Stuur:  een lijst account-id's.
+     Krijg:  een lijst profielen, zoals 1.2.
+     Handig: als je veel namen nodig hebt: dit scheelt een opdracht per persoon.
+
+3.3  Foto's van een account
+     GET  /api/v2/accounts/{userId}/avatars     ?maxWidth= optioneel   -> een plaatje
+     GET  /api/v2/accounts/avatars?userList.ids=...                   -> lijst foto's als tekst (base64)
+     POST /api/v2/accounts/avatars                                    -> hetzelfde met een lijst in het pakketje
+
+3.4  Keuzelijsten voor formulieren
+     GET  /api/v2/accounts/properties/titles          aanspreektitels
+     GET  /api/v2/accounts/properties/timezones       tijdzones
+     GET  /api/v2/accounts/properties/countries       landen
+     GET  /api/v2/accounts/properties/languages       talen
+     Krijg:  telkens een lijst waarden.
+
+3.5  Prestaties en statistieken (vooral voor motorsport; voor schaatsen waarschijnlijk leeg)
+     GET  /api/v2/achievements/{accountId}/overview
+          Krijg: totaal aantal badges en de lijst badges (soort, evenement, baan, beste ronde,
+                 positie, aantal deelnemers, podium).
+     GET  /api/v2/achievements/{accountId}/details            ?achievementType= (0 t/m 5)
+          Krijg: hetzelfde, uitgebreider, per soort prestatie.
+     GET  /api/v2/achievements/{profileId}/statistics         ?lookupYear= (jaartal)
+          Krijg: aantal evenementen, sessies, races, rondes, overwinningen, podiums, top-vijf,
+                 snelste rondes, gemiddelde positie en de totale racetijd.
+     GET  /api/v2/achievements/{profileId}/statistics-filter
+          Krijg: de filters (bijvoorbeeld jaren) waaruit je bij de statistieken kunt kiezen.
+
+3.6  Openbaar Speedhive-profiel
+     GET  /api/v1/speedhiveprofile/public/{profileId}
+     GET  /api/v1/speedhiveprofile/public/tx/{transponder}     (userId in de vraag is verplicht)
+     Stuur:  profileId of transponder. Optioneel achter het adres: userId, friends, videos,
+             timeline, includeAchievement, includeStatistics (ja/nee) en lookupYear.
+     Krijg:  het profiel: naam, of het profiel privé is, en naar keuze de vrienden, video's,
+             tijdlijn, prestaties en statistieken.
+
+3.7  Vrienden, tijdlijn en video's van een profiel
+     GET  /api/v1/speedhiveprofile/friends/{profileId}    ?userId= optioneel
+          Krijg: wie diegene volgt en door wie hij gevolgd wordt (id, naam, of het jouw vriend is).
+     GET  /api/v1/speedhiveprofile/timeline/{profileId}
+          Krijg: berichten (soort, tekst, tijdstip, evenement, coureur, video).
+     GET  /api/v1/speedhiveprofile/videos/{profileId}
+     GET  /api/v1/speedhiveprofile/videos/event/{eventid}
+          Krijg: lijst video's (id, evenement, sessie, coureursnaam, omschrijving).
+
+3.8  Transponders
+     GET  /api/v2/products/chips/types                  alle soorten transponders (lijst)
+     GET  /api/v2/products/chips/{chipCode}/category    de categorie van een transponder
+                                                        (het antwoord is in de lijst niet beschreven)
+
+3.9  Twee teksten vergelijken
+     POST /api/v1/speedhiveprofile/compare
+     Stuur:  twee teksten in het pakketje.
+     Krijg:  een getal: hoe erg ze op elkaar lijken (Dice-coëfficiënt). Bedoeld voor naam-zoeken.
+
+
+================================================================================================
+DEEL 4  ALLEEN LEZEN MET LOGIN  [LOGIN]
+================================================================================================
+Hiervoor is een toegangssleutel van een ingelogd MYLAPS-account nodig, als kopregel "Authorization".
+Icesights heeft die niet; het zijn opdrachten voor de eigenaar van het account.
+
+4.1  Eigen producten
+     GET  /api/v2/accounts/{userId}/products              alle producten van een account
+     GET  /api/v2/accounts/{userId}/products/chips        alle transponders van een account
+     GET  /api/v2/accounts/email/{email}                  een account opzoeken op e-mailadres
+
+4.2  Eigen instellingen
+     GET  /api/v2/accounts/{userId}/privacy/practice      staan je trainingsresultaten op privé? (ja/nee)
+     GET  /api/v1/speedhiveprofile/{userId}               je eigen Speedhive-profiel, inclusief
+                                                          meldingsinstellingen (e-mail, app, video's...)
+
+4.3  Gegevens van een transponder
+     GET  /api/v2/products/chips/{chipNumber}                        informatie over een chip
+     GET  /api/v2/products/chips/code/{chipCode}                     idem, op code
+     GET  /api/v2/products/chips/{chipNumber}/carId/{carId}          idem met auto-nummer
+     GET  /api/v2/products/chips/code/{chipCode}/carId/{carId}       idem, op code
+          Krijg: de chip, of hij flexibel of tijdsgebonden is, de status en het soort.
+     GET  /api/v2/products/chips/{chipNumber}/subscription          abonnement van de chip (op nummer)
+     GET  /api/v2/products/chips/code/{chipCode}/subscription        idem, op code
+          Krijg: wanneer het abonnement afloopt, einddatum van de transponder, tegoed dat je kunt
+                 inwisselen, en het soort.
+
+4.4  Prijzen en bestellingen
+     GET  /api/v2/products/chips/price-list/{transponderId}          ?country= optioneel
+          Krijg: prijslijst: product, valuta, btw, prijs met en zonder btw.
+     GET  /api/v2/products/chips/price-list/{orderId}/status
+          Krijg: de status van een bestelling (orderId, status).
+
+4.5  Controleren of je ingelogd bent
+     POST /auth/validate      Krijg: bevestiging dat de toegangssleutel geldig is
+     POST /auth/claims        Krijg: wat de sleutel over de gebruiker zegt (rechten en gegevens)
+
+
+================================================================================================
+DEEL 5  OPDRACHTEN DIE GEGEVENS VERANDEREN  (POST / PUT / DELETE)
+================================================================================================
+LET OP: dit wijzigt of verwijdert echte gegevens. Icesights doet hier niets van en heeft ook geen
+reden om dat te doen. Ze staan hier alleen zodat de lijst compleet is. Vrijwel alles vraagt [LOGIN];
+waar dat niet zo is, staat het erbij. Bij allemaal krijg je alleen "OK" of een foutmelding terug.
+
+Account
+  POST   /api/v2/accounts                                        maakt een nieuw account (geen login)
+  DELETE /api/v2/accounts/{userId}                    [LOGIN]    verwijdert een account
+  POST   /api/v2/accounts/registration/resendMail                stuurt de bevestigingsmail opnieuw
+  POST   /api/v2/accounts/registration/activate                  activeert een nieuw account
+  PUT    /api/v2/accounts/password/requestReset                  vraagt een nieuw wachtwoord aan
+  POST   /api/v2/accounts/password/requestReset/confirm          bevestigt het nieuwe wachtwoord
+  PUT    /api/v2/accounts/{userId}/password           [LOGIN]    verandert het wachtwoord
+  PUT    /api/v2/accounts/{userId}/requestChange      [LOGIN]    vraagt een wijziging aan (bijv. e-mail)
+  POST   /api/v2/accounts/{userId}/requestChange/activate        bevestigt die wijziging
+  POST   /api/v2/accounts/{userId}/requestChange/cancel          annuleert die wijziging
+  PUT    /api/v2/accounts/email                       [LOGIN]    wijzigt het e-mailadres
+  PUT    /api/v2/accounts/{userId}/profiles           [LOGIN]    wijzigt naam, adres, contact, taal...
+  PUT    /api/v2/accounts/{userId}/privacy/practice   [LOGIN]    zet trainingsresultaten privé of openbaar
+
+Profielfoto
+  PUT    /api/v2/accounts/{userId}/avatars            [LOGIN]    zet een nieuwe foto
+  DELETE /api/v2/accounts/{userId}/avatars            [LOGIN]    verwijdert de foto
+
+Transponders koppelen en benoemen
+  POST   /api/v2/accounts/{userId}/products/chips/{chipNumber}            [LOGIN]  koppelt een chip
+  DELETE /api/v2/accounts/{userId}/products/chips/{chipNumber}            [LOGIN]  ontkoppelt een chip
+  POST   /api/v2/accounts/{userId}/products/chips/code/{chipCode}         [LOGIN]  koppelt op code
+  DELETE /api/v2/accounts/{userId}/products/chips/code/{chipCode}         [LOGIN]  ontkoppelt op code
+  PUT    /api/v2/products/chips/chipnumber/name                           [LOGIN]  geeft een chip een naam (op nummer)
+  PUT    /api/v2/products/chips/chipnumber/carId/name                     [LOGIN]  idem, met auto-nummer
+  PUT    /api/v2/products/chips/chipcode/name                             [LOGIN]  idem, op code
+  PUT    /api/v2/products/chips/code/chipcode/carId/name                  [LOGIN]  idem, op code met auto-nummer
+  DELETE /api/v2/products/chips/{chipNumber}/name                         [LOGIN]  haalt de naam weg (nummer)
+  DELETE /api/v2/products/chips/{chipNumber}/carId/{carId}/name           [LOGIN]  idem, met auto-nummer
+  DELETE /api/v2/products/chips/code/{chipCode}/name                      [LOGIN]  idem, op code
+  DELETE /api/v2/products/chips/code/{chipCode}/carId/{carId}/name        [LOGIN]  idem, op code met auto-nummer
+
+Bestellen
+  POST   /api/v2/products/chips/price-list/order-request                  [LOGIN]  plaatst een bestelling
+                                                                          (krijg: orderId en de gegevens van de bestelling)
+
+Speedhive-profiel en vrienden
+  POST   /api/v1/speedhiveprofile/update/{userId}                         [LOGIN]  wijzigt het Speedhive-profiel
+  POST   /api/v1/speedhiveprofile/privateprofile/{userId}/{privateProfile} [LOGIN] zet het profiel privé/openbaar
+  POST   /api/v1/speedhiveprofile/unsubscribe/{userId}                             schrijft je uit voor e-mails (geen login)
+  POST   /api/v1/speedhiveprofile/friends/follow/{userId}/{friendId}      [LOGIN]  volgt of ontvolgt een vriend
+
+Meldingen aan/uit (allemaal [LOGIN], telkens {userId} en de waarde true/false)
+  POST   /api/v1/speedhiveprofile/emailnotify/{userId}/{emailnotify}                                    e-mailmeldingen
+  POST   /api/v1/speedhiveprofile/appnotify/{userId}/{appnotify}                                        app-meldingen
+  POST   /api/v1/speedhiveprofile/appnotify/eventspublished/{userId}/{eventspublished}                  evenement gepubliceerd
+  POST   /api/v1/speedhiveprofile/appnotify/friendeventspublished/{userId}/{friendeventspublished}      evenement van een vriend
+  POST   /api/v1/speedhiveprofile/appnotify/friendfollowed/{userId}/{friendfollowed}                    een vriend volgt je
+  POST   /api/v1/speedhiveprofile/appnotify/sessionstarted/{userId}/{sessionstarted}                    livetiming van jou gestart
+  POST   /api/v1/speedhiveprofile/appnotify/friendsessionstarted/{userId}/{friendsessionstarted}        livetiming van een vriend
+  POST   /api/v1/speedhiveprofile/appnotify/videouploaded/{userId}/{value}                              video geüpload
+  POST   /api/v1/speedhiveprofile/appnotify/eventvideouploaded/{userId}/{value}                         evenementvideo geüpload
+  POST   /api/v1/speedhiveprofile/appnotify/productexpirewarning/{userId}/{productexpirewarning}        waarschuwing bij aflopend product
+
+Video's
+  POST   /api/v1/speedhiveprofile/videos/add/{userId}/{videoId}           [LOGIN]  voegt een video toe (met id)
+  POST   /api/v1/speedhiveprofile/videos/add/{userId}                     [LOGIN]  voegt een video toe (gegevens in het pakketje)
+  POST   /api/v1/speedhiveprofile/videos/delete/{userId}/{videoId}        [LOGIN]  verwijdert een video (?eventId= optioneel)
+  (bij het toevoegen en verwijderen krijg je de bijgewerkte lijst video's terug)
+
+Foto's van meerdere accounts tegelijk
+  POST   /api/v2/accounts/profiles          (staat bij deel 3.2)  en  POST /api/v2/accounts/avatars (deel 3.3)
+
+
+================================================================================================
+HANDIG OM TE WETEN
+================================================================================================
+- Wat Icesights in de praktijk doet, in volgorde:
+    transponder  -> 1.1 -> account-id  -> 1.4 -> lijst activiteiten  -> kies een activiteit
+    activiteit   -> 1.5 -> alle rondes, de statistieken en de grafieken
+    zelfde baan  -> 1.6 -> wie stond er tegelijk op het ijs  -> per rijder 1.5 (rondes) en 1.2 (naam)
+- Lichtere alternatieven die er zijn maar die Icesights nog niet gebruikt:
+    2.1 (aantal activiteiten per jaar), 2.8 (alleen de cijfers van een activiteit),
+    3.2 (veel namen in één keer) en 2.2 (de lijst met alle banen).
+- Alleen de opdrachten uit deel 1 zijn echt uitgeprobeerd. De rest is beschreven zoals de
+  Swagger-bestanden het zeggen; een opdracht die er "zonder login" staat kan in de praktijk toch
+  een login vragen.
+- De Cloudflare Worker laat bewust alleen de zeven leesopdrachten uit deel 1 door. Een andere
+  opdracht gebruiken betekent eerst een adres bijvoorbeeld in cloudflare-worker/src/index.js
+  toevoegen (en dan ook testen en de Worker opnieuw uitrollen).
+
+Deze lijst is gemaakt op 21 september 2026 uit de Swagger-bestanden op
+https://practice-api.speedhive.com/swagger/ui/index en
+https://usersandproducts-api.speedhive.com/swagger/ui/index .
+Wil je de technische lijst opnieuw maken, na een wijziging bij MYLAPS:
+    node tools/generate-api-reference.js
+Dit leesbare overzicht is met de hand bijgewerkt op basis daarvan; het script controleert (zie hieronder)
+of er nog opdrachten zijn bijgekomen die hier niet in staan.

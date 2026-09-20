@@ -51,7 +51,8 @@ replay.html  replay.js  replay-model.js  replay-track.js             race replay
 dashboards.js  dashboards.css                                        the full-screen dashboards: snap scrolling, navigation, racing look
 manifest.webmanifest  sw.js  pwa.js  icons/                          installable app: manifest, service worker, install button, app icons
 tools/generate-icons.js                                              draws the app icons (icons/*.png)
-tools/generate-api-reference.js  mylaps-api-reference.txt             every operation of the two MYLAPS APIs, from their Swagger files (regenerate with the script)
+mylaps-api-overzicht.txt                                             all 110 MYLAPS API operations in plain Dutch: what it does, what you send, what you get back
+mylaps-api-reference.txt  tools/generate-api-reference.js            the technical version, generated from the Swagger files (the script also checks the overview is complete)
 search_user.html  search_user.js                                     name search
 api.js  utils.js  theme.js  style.css                                proxy calls (retries, paging), helpers, theme, styles
 strava.js                                                            unfinished Strava upload module (not loaded by any page)

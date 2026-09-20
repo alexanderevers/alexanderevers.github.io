@@ -23,7 +23,7 @@ const USED = {
     'GET /api/v1/accounts/{}/training/activities': 'proxy /activities/:userId (the activity list, count=500)',
     'GET /api/v1/training/activities/{}/sessions': 'proxy /laps/:activityId (the laps of an activity)',
     'GET /api/v1/locations/{}/activities': 'proxy /locations/:locationId (everyone on the ice at a rink)',
-    'GET /api/v1/chips/code/{}/training/activities': 'proxy /chips/:chipCode'
+    'GET /api/v1/chips/code/{}/training/activities': 'proxy /chips/:chipCode (the proxy has it, the pages do not call it)'
 };
 
 const HEADERS = { Origin: 'https://speedhive.mylaps.com', Referer: 'https://speedhive.mylaps.com/', Accept: 'application/json' };
@@ -160,4 +160,20 @@ function describeOperation(method, address, operation, pathParameters) {
     const file = path.join(__dirname, '..', 'mylaps-api-reference.txt');
     fs.writeFileSync(file, lines.join('\n') + '\n');
     console.log(`wrote ${path.relative(process.cwd(), file)}: ${total} operations`);
+
+    // The hand-written guide (mylaps-api-overzicht.txt) must mention every operation: report what is missing or unknown.
+    const guideFile = path.join(__dirname, '..', 'mylaps-api-overzicht.txt');
+    if (fs.existsSync(guideFile)) {
+        const normal = text => text.replace(/\{[^}]*\}/g, '{}');
+        const guide = fs.readFileSync(guideFile, 'utf8');
+        const inGuide = new Set([...guide.matchAll(/\b(GET|POST|PUT|PATCH|DELETE)\s+(\/[A-Za-z][^\s?]*)/g)].map(m => normal(`${m[1]} ${m[2]}`)));
+        const inSpecs = new Set(specs.flatMap(({ spec }) => Object.entries(spec.paths).flatMap(([address, item]) =>
+            METHODS.filter(m => item[m]).map(m => normal(`${m.toUpperCase()} ${address}`)))));
+        const missing = [...inSpecs].filter(op => !inGuide.has(op));
+        const unknown = [...inGuide].filter(op => !inSpecs.has(op));
+        console.log(`guide check: ${inSpecs.size - missing.length} of ${inSpecs.size} operations are in mylaps-api-overzicht.txt`);
+        missing.forEach(op => console.log(`  MISSING in the guide: ${op}`));
+        unknown.forEach(op => console.log(`  NOT in the specs (typo, or removed by MYLAPS?): ${op}`));
+        if (missing.length || unknown.length) process.exitCode = 1;
+    }
 })().catch(error => { console.error(error); process.exit(1); });

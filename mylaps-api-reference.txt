@@ -1,0 +1,1767 @@
+MYLAPS SPEEDHIVE API REFERENCE
+==============================
+Generated on 2026-09-21 from the live Swagger files of the two APIs (110 operations):
+  - Practice API (SpeedhivePracticeApi v1.8.58.0 v1): https://practice-api.speedhive.com/swagger/ui/index
+  - Users and Products API (Mel.Motorized.UsersAndProducts.WebApi v1): https://usersandproducts-api.speedhive.com/swagger/ui/index
+
+Regenerate with:  node tools/generate-api-reference.js
+
+HOW THESE APIS ARE CALLED
+-------------------------
+Both APIs are plain HTTPS GET/POST/... calls that answer JSON (or XML). A browser cannot call them directly (CORS),
+and they expect the headers "Origin: https://speedhive.mylaps.com" and "Referer: https://speedhive.mylaps.com/".
+Icesights therefore calls them through its Cloudflare Worker (cloudflare-worker/src/index.js), which adds those
+headers and only exposes the seven read operations marked USED BY ICESIGHTS below.
+The Swagger files declare an "Apikey" header for the whole API, and operations marked "needs a login" also require an
+"Authorization" header with an access token of a MYLAPS account. The operations Icesights uses are public reads that
+work with only the two headers above (checked against the live API); for every other operation the list only shows
+what the Swagger file says, it has not been tried.
+The name search that Icesights also uses (https://search.speedhive.com/api/search) belongs to a third service that has
+no Swagger file here, so it is not in this list.
+
+Legend:  {name} in an address is a value you fill in.  path/query/header/body = where a parameter goes.
+
+====================================================================================================
+1. PRACTICE API  -  https://practice-api.speedhive.com  -  21 operations
+====================================================================================================
+Training activities, sessions and laps, locations (rinks, tracks) and the activities of a location.
+
+Groups: AccountsV1 (2), Admin (3), ChipsV1 (4), Health (1), LocationsV1 (5), SportsV1 (1), TrainingActivitiesV1 (5)
+
+----------------------------------------------------------------------------------------------------
+AccountsV1  (2 operations)
+----------------------------------------------------------------------------------------------------
+GET    /api/v1/accounts/{id}/training/activities
+       [USED BY ICESIGHTS: proxy /activities/:userId (the activity list, count=500)]
+       operationId: AccountsV1_GetByIdLocationidYearSportCountOffsetOrder
+       Parameters:
+         path   id : string, required
+         query  locationId : integer (int32), optional
+         query  year : integer (int32), optional
+         query  sport : string - one of: Unknown, Karting, MX, Car, Bike, RC, Cycling, IceSkating, Running, ModelBoatRacing, InlineSkating, StockCar, Swimming, Other, Equine, optional
+         query  count : integer (int32), optional
+         query  offset : integer (int32), optional
+         query  order : string - one of: asc, desc, optional
+       Answers:
+         200 Retrieves a collection of training activities. -> ActivitiesInfoExclLocationDto
+         400 Bad request
+         401 Unauthorized
+         404 Not found
+
+GET    /api/v1/accounts/{id}/training/activities/years
+       operationId: AccountsV1_YearsById
+       Parameters:
+         path   id : string, required
+       Answers:
+         200 Retrieves a collection of years that contain training activities. -> ActivityYearCountListDto
+         400 Bad request
+         401 Unauthorized
+         404 Not found
+
+----------------------------------------------------------------------------------------------------
+Admin  (3 operations)
+----------------------------------------------------------------------------------------------------
+GET    /api/v1/admin/accountId/{accountId}
+       operationId: Admin_GetByAccountidLocationidYearSportCountOffsetOrder
+       Parameters:
+         path   accountId : string, required
+         query  locationId : integer (int32), optional
+         query  year : integer (int32), optional
+         query  sport : string - one of: Unknown, Karting, MX, Car, Bike, RC, Cycling, IceSkating, Running, ModelBoatRacing, InlineSkating, StockCar, Swimming, Other, Equine, optional
+         query  count : integer (int32), optional
+         query  offset : integer (int32), optional
+         query  order : string - one of: asc, desc, optional
+       Answers:
+         200 Retrieves a collection of training activities. -> ActivitiesInfoExclLocationDto
+         400 Bad request
+         401 Unauthorized
+         404 Not found
+
+GET    /api/v1/admin/chipNumber/{chipNumber}
+       operationId: Admin_GetByNumberByChipnumberLocationidYearSportCountOffsetOrder
+       Parameters:
+         path   chipNumber : integer (int64), required
+         query  locationId : integer (int32), optional
+         query  year : integer (int32), optional
+         query  sport : string - one of: Unknown, Karting, MX, Car, Bike, RC, Cycling, IceSkating, Running, ModelBoatRacing, InlineSkating, StockCar, Swimming, Other, Equine, optional
+         query  count : integer (int32), optional
+         query  offset : integer (int32), optional
+         query  order : string - one of: asc, desc, optional
+       Answers:
+         200 Retrieves a collection of training activities. -> ActivitiesInfoExclLocationDto
+         400 Bad request
+         401 Unauthorized
+         404 Not found
+
+GET    /api/v1/admin/chipCode/{chipCode}
+       operationId: Admin_GetByCodeByChipcodeLocationidYearSportCountOffsetOrder
+       Parameters:
+         path   chipCode : string, required
+         query  locationId : integer (int32), optional
+         query  year : integer (int32), optional
+         query  sport : string - one of: Unknown, Karting, MX, Car, Bike, RC, Cycling, IceSkating, Running, ModelBoatRacing, InlineSkating, StockCar, Swimming, Other, Equine, optional
+         query  count : integer (int32), optional
+         query  offset : integer (int32), optional
+         query  order : string - one of: asc, desc, optional
+       Answers:
+         200 Retrieves a collection of training activities. -> ActivitiesInfoExclLocationDto
+         400 Bad request
+         401 Unauthorized
+         404 Not found
+
+----------------------------------------------------------------------------------------------------
+ChipsV1  (4 operations)
+----------------------------------------------------------------------------------------------------
+GET    /api/v1/chips/{chipNumber}/training/activities
+       operationId: ChipsV1_GetByNumberByChipnumberLocationidYearSportCountOffsetOrder
+       Parameters:
+         path   chipNumber : integer (int64), required
+         query  locationId : integer (int32), optional
+         query  year : integer (int32), optional
+         query  sport : string - one of: Unknown, Karting, MX, Car, Bike, RC, Cycling, IceSkating, Running, ModelBoatRacing, InlineSkating, StockCar, Swimming, Other, Equine, optional
+         query  count : integer (int32), optional
+         query  offset : integer (int32), optional
+         query  order : string - one of: asc, desc, optional
+       Answers:
+         200 Retrieves a collection of training activities. -> ActivitiesInfoExclLocationDto
+         400 Bad request
+         401 Unauthorized
+         404 Not found
+
+GET    /api/v1/chips/{chipNumber}/carId/{carId}/training/activities
+       operationId: ChipsV1_GetByNumberByChipnumberCaridLocationidYearSportCountOffsetOrder
+       Parameters:
+         path   chipNumber : integer (int64), required
+         path   carId : integer (int32), required
+         query  locationId : integer (int32), optional
+         query  year : integer (int32), optional
+         query  sport : string - one of: Unknown, Karting, MX, Car, Bike, RC, Cycling, IceSkating, Running, ModelBoatRacing, InlineSkating, StockCar, Swimming, Other, Equine, optional
+         query  count : integer (int32), optional
+         query  offset : integer (int32), optional
+         query  order : string - one of: asc, desc, optional
+       Answers:
+         200 Retrieves a collection of training activities. -> ActivitiesInfoExclLocationDto
+         400 Bad request
+         401 Unauthorized
+         404 Not found
+
+GET    /api/v1/chips/code/{chipCode}/training/activities
+       [USED BY ICESIGHTS: proxy /chips/:chipCode (the proxy has it, the pages do not call it)]
+       operationId: ChipsV1_GetByCodeByChipcodeLocationidYearSportCountOffsetOrder
+       Parameters:
+         path   chipCode : string, required
+         query  locationId : integer (int32), optional
+         query  year : integer (int32), optional
+         query  sport : string - one of: Unknown, Karting, MX, Car, Bike, RC, Cycling, IceSkating, Running, ModelBoatRacing, InlineSkating, StockCar, Swimming, Other, Equine, optional
+         query  count : integer (int32), optional
+         query  offset : integer (int32), optional
+         query  order : string - one of: asc, desc, optional
+       Answers:
+         200 Retrieves a collection of training activities. -> ActivitiesInfoExclLocationDto
+         400 Bad request
+         401 Unauthorized
+         404 Not found
+
+GET    /api/v1/chips/code/{chipCode}/carId/{carId}/training/activities
+       operationId: ChipsV1_GetByCodeByChipcodeCaridLocationidYearSportCountOffsetOrder
+       Parameters:
+         path   chipCode : string, required
+         path   carId : integer (int32), required
+         query  locationId : integer (int32), optional
+         query  year : integer (int32), optional
+         query  sport : string - one of: Unknown, Karting, MX, Car, Bike, RC, Cycling, IceSkating, Running, ModelBoatRacing, InlineSkating, StockCar, Swimming, Other, Equine, optional
+         query  count : integer (int32), optional
+         query  offset : integer (int32), optional
+         query  order : string - one of: asc, desc, optional
+       Answers:
+         200 Retrieves a collection of training activities. -> ActivitiesInfoExclLocationDto
+         400 Bad request
+         401 Unauthorized
+         404 Not found
+
+----------------------------------------------------------------------------------------------------
+Health  (1 operation)
+----------------------------------------------------------------------------------------------------
+GET    /api/health
+       operationId: Health_IndexBy
+       Parameters: none
+       Answers:
+         200 OK -> object
+
+----------------------------------------------------------------------------------------------------
+LocationsV1  (5 operations)
+----------------------------------------------------------------------------------------------------
+GET    /api/v1/locations
+       operationId: LocationsV1_GetBySportcategorySportCountryStatus
+       Parameters:
+         query  sportCategory : string - one of: Motorized, Active, optional
+         query  sport : string - one of: Unknown, Karting, MX, Car, Bike, RC, Cycling, IceSkating, Running, ModelBoatRacing, InlineSkating, StockCar, Swimming, Other, Equine, optional
+         query  country : string, optional
+         query  status : string - one of: UNKNOWN, OFFLINE, ONLINE, ACTIVE, optional
+       Answers:
+         200 Retrieves a collection of all (practice) locations. -> LocationListDto
+         404 Not found
+
+GET    /api/v1/locations/{id}
+       operationId: LocationsV1_GetById
+       Parameters:
+         path   id : integer (int32), required
+       Answers:
+         200 Retrieve a (practice) location. -> LocationDto
+         404 Not found
+
+GET    /api/v1/locations/{id}/activities
+       [USED BY ICESIGHTS: proxy /locations/:locationId (everyone on the ice at a rink)]
+       operationId: LocationsV1_ActivitiesByIdYearSportCountOffsetOrder
+       Parameters:
+         path   id : integer (int32), required
+         query  year : integer (int32), optional
+         query  sport : string - one of: Unknown, Karting, MX, Car, Bike, RC, Cycling, IceSkating, Running, ModelBoatRacing, InlineSkating, StockCar, Swimming, Other, Equine, optional
+         query  count : integer (int32), optional
+         query  offset : integer (int32), optional
+         query  order : string - one of: asc, desc, optional
+       Answers:
+         200 Retrieves a collection of training activities. -> ActivitiesInfoDto
+         400 Bad request
+         401 Unauthorized
+         404 Not found
+
+GET    /api/v1/locations/{id}/activitieswithsubscriptiontype
+       operationId: LocationsV1_ActivitiesWithSubscriptionTypeByIdYearSportCountOffsetOrder
+       Parameters:
+         path   id : integer (int32), required
+         query  year : integer (int32), optional
+         query  sport : string - one of: Unknown, Karting, MX, Car, Bike, RC, Cycling, IceSkating, Running, ModelBoatRacing, InlineSkating, StockCar, Swimming, Other, Equine, optional
+         query  count : integer (int32), optional
+         query  offset : integer (int32), optional
+         query  order : string - one of: asc, desc, optional
+       Answers:
+         200 Retrieves a collection of training activities. -> ActivitiesInfoDto
+         400 Bad request
+         401 Unauthorized
+         404 Not found
+
+GET    /api/v1/locations/{id}/{chipCode}
+       operationId: LocationsV1_PracticeSessionsByIdChipcodeOrder
+       Parameters:
+         path   id : integer (int32), required
+         path   chipCode : string, required
+         query  order : string - one of: asc, desc, optional
+       Answers:
+         200 Retrieves all practice sessions of a transponder of a specific track -> PracticeSessionsDto
+         400 Bad request
+         401 Unauthorized
+         404 Not found
+
+----------------------------------------------------------------------------------------------------
+SportsV1  (1 operation)
+----------------------------------------------------------------------------------------------------
+GET    /api/v1/sports
+       operationId: SportsV1_GetBy
+       Parameters: none
+       Answers:
+         200 Retrieves a collection of all sports. -> SportListDto
+         404 Not found
+
+----------------------------------------------------------------------------------------------------
+TrainingActivitiesV1  (5 operations)
+----------------------------------------------------------------------------------------------------
+GET    /api/v1/training/activities
+       operationId: TrainingActivitiesV1_GetListByLocationidAccountidYearSportCountOffsetOrder
+       Parameters:
+         query  locationId : integer (int32), required
+         query  accountId : string, optional
+         query  year : integer (int32), optional
+         query  sport : string - one of: Unknown, Karting, MX, Car, Bike, RC, Cycling, IceSkating, Running, ModelBoatRacing, InlineSkating, StockCar, Swimming, Other, Equine, optional
+         query  count : integer (int32), optional
+         query  offset : integer (int32), optional
+         query  order : string - one of: asc, desc, optional
+       Answers:
+         200 Retrieves a collection of training activities. -> ActivitiesInfoDto
+         400 Bad request
+         401 Unauthorized
+         404 Not found
+
+GET    /api/v1/training/activities/{id}
+       operationId: TrainingActivitiesV1_GetByIdChipsSessionsOrder
+       Parameters:
+         path   id : integer (int64), required
+         query  chips : boolean, optional
+         query  sessions : boolean, optional
+         query  order : string - one of: asc, desc, optional
+       Answers:
+         200 Retrieves a training activity. -> ActivityDto
+         400 Bad request
+         401 Unauthorized
+         404 Not found
+
+GET    /api/v1/training/activities/{id}/statistics
+       operationId: TrainingActivitiesV1_GetStatisticsById
+       Parameters:
+         path   id : integer (int64), required
+       Answers:
+         200 Retrieves the statistics of a training activity. -> ActivityStatsDto
+         400 Bad request
+         401 Unauthorized
+         404 Not found
+
+GET    /api/v1/training/activities/{id}/sessions
+       [USED BY ICESIGHTS: proxy /laps/:activityId (the laps of an activity)]
+       operationId: TrainingActivitiesV1_GetSessionsByIdFormatNumlaps
+       Parameters:
+         path   id : integer (int64), required
+         query  format : string, optional
+         query  numlaps : integer (int32), optional
+       Answers:
+         200 Retrieves the results of a training activity grouped by session. -> SessionListDto
+         400 Bad request
+         401 Unauthorized
+         404 Not found
+
+GET    /api/v1/training/activities/{id}/chips
+       operationId: TrainingActivitiesV1_ChipsById
+       Parameters:
+         path   id : integer (int64), required
+       Answers:
+         200 Retrieves the chips that were active in a training activity. -> ChipListDto
+         404 Not found
+
+1b. DATA MODELS OF THE PRACTICE API
+----------------------------------------------------------------------------------------------------
+ActivitiesInfoExclLocationDto
+    activities : array of ActivityDto
+    activityCount : integer (int32)
+
+ActivityDto
+    id : integer (int64)
+    name : string
+    startTime : string (date-time)
+    endTime : string (date-time)
+    frameType : integer (int32)
+    location : LocationDto
+    accountId : integer (int64)
+    gaUId : string
+    userId : string
+    chipLabel : string
+    chipCode : string
+    chipListDto : ChipListDto
+    practiceSessionsDto : PracticeSessionsDto
+
+LocationDto
+    name : string
+    id : integer (int32)
+    description : string
+    url : string
+    trackLength : integer (int32)
+    status : string - one of: UNKNOWN, OFFLINE, ONLINE, ACTIVE
+    sport : string - one of: Unknown, Karting, MX, Car, Bike, RC, Cycling, IceSkating, Running, ModelBoatRacing, InlineSkating, StockCar, Swimming, Other, Equine
+    country : string
+    x2ServiceId : integer (int32)
+    ipAddress : string
+    sections : array of SectionDto
+
+ChipListDto
+    chips : array of ChipDto
+
+PracticeSessionsDto
+    locations : array of PracticeSessionDto
+
+SectionDto
+    name : string
+    length : integer (int64)
+    speedTrap : boolean
+
+ChipDto
+    code : string
+    codeNr : integer (int64)
+    carId : integer (int64)
+    id : integer (int64)
+
+PracticeSessionDto
+    id : integer (int64)
+    locationId : integer (int32)
+    starttimeutc : integer (int64)
+    endtimeutc : integer (int64)
+    starttimelocal : integer (int64)
+    endtimelocal : integer (int64)
+
+ActivityYearCountListDto
+    yearCounts : array of ActivityYearCountDto
+    total : integer (int32)
+
+ActivityYearCountDto
+    year : integer (int32)
+    count : integer (int32)
+
+LocationListDto
+    locations : array of LocationDto
+
+ActivitiesInfoDto
+    location : LocationDto
+    activities : array of ActivityExclLocationDto
+    activityCount : integer (int32)
+
+ActivityExclLocationDto
+    id : integer (int64)
+    name : string
+    startTime : string (date-time)
+    endTime : string (date-time)
+    frameType : integer (int32)
+    accountId : integer (int64)
+    gaUId : string
+    chipLabel : string
+    chipCode : string
+
+SportListDto
+    sports : array of string - one of: Unknown, Karting, MX, Car, Bike, RC, Cycling, IceSkating, Running, ModelBoatRacing, InlineSkating, StockCar, Swimming, Other, Equine
+
+ActivityStatsDto
+    lapCount : integer (int32)
+    fastestTime : string
+    averageTime : string
+    medianTime : string
+    totalTrainingTime : string
+    activeTrainingTime : string
+    averageSpeed : SpeedDto
+    fastestSpeed : SpeedDto
+    chip : ChipDto
+
+SpeedDto
+    kph : number (double)
+    mps : number (double)
+
+SessionListDto
+    bestLap : OverallBestLapDto
+    stats : ActivityStatsDto
+    sessions : array of SessionDto
+    sections : array of SectionDto
+    onlyNewSince : string
+
+OverallBestLapDto
+    sessionId : integer (int32)
+    lapNr : integer (int64)
+    duration : string
+    speed : SpeedDto
+
+SessionDto
+    id : integer (int32)
+    chipId : integer (int64)
+    dateTimeStart : string (date-time)
+    bestLap : BestLapDto
+    aveLapDuration : string
+    medianLapDuration : string
+    duration : string
+    laps : array of LapDto
+
+BestLapDto
+    nr : integer (int64)
+    duration : string
+    speed : SpeedDto
+
+LapDto
+    nr : integer (int64)
+    dateTimeStart : string (date-time)
+    duration : string
+    speed : SpeedDto
+    diffPrevLap : string
+    sessionDuration : string
+    status : string - one of: NONE, SLOWER, EQUAL, FASTER, SESSIONBEST, REPORTBEST
+    sections : array of LapSectionDto
+    dataAttributes : array of DataAttributeDto
+
+LapSectionDto
+    name : string
+    duration : string
+    diffPrevLap : string
+    speed : SpeedDto
+
+DataAttributeDto
+    type : string - one of: VOLTAGE, TEMPERATURE
+    value : object
+
+====================================================================================================
+2. USERS AND PRODUCTS API  -  https://usersandproducts-api.speedhive.com  -  89 operations
+====================================================================================================
+Accounts, profiles, transponders (chips), products, images, friends and organisations.
+
+Groups: AccountsProductsChipsV2 (6), AccountsV2 (28), Achievements (4), Authentication (2), Health (1), Image (2), ProductsChipsV2 (21), SpeedhiveFriends (2), SpeedhiveNotifications (10), SpeedhiveProfile (7), SpeedhiveTimeline (1), SpeedhiveVideos (5)
+
+----------------------------------------------------------------------------------------------------
+AccountsProductsChipsV2  (6 operations)
+----------------------------------------------------------------------------------------------------
+GET    /api/v2/accounts/{userId}/products
+       [needs a login (access token)]
+       operationId: AccountsProductsChipsV2_GetProductsByUserid
+       Parameters:
+         path   userId : string, required
+         header Authorization : string, required - access token
+       Answers:
+         200 List of owned products -> ProductListDtoWithDiagnostics
+         400 Bad request
+         403 Authenticated user is not authorized
+         404 No such user found
+
+GET    /api/v2/accounts/{userId}/products/chips
+       [needs a login (access token)]
+       operationId: AccountsProductsChipsV2_GetChipsByUserid
+       Parameters:
+         path   userId : string, required
+         header Authorization : string, required - access token
+       Answers:
+         200 List of owned chips -> ChipProductListDto
+         400 Bad request
+         403 Authenticated user is not authorized
+         404 No such user found
+
+POST   /api/v2/accounts/{userId}/products/chips/{chipNumber}
+       [needs a login (access token)]
+       operationId: AccountsProductsChipsV2_PostChipByUseridChipnumber
+       Parameters:
+         path   userId : string, required
+         path   chipNumber : integer (int64), required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+         204 User claimed chip
+         400 Bad request
+         403 Authenticated user is not authorized
+         404 No such chip found
+         409 Chip already registered or credits are not activated
+
+DELETE /api/v2/accounts/{userId}/products/chips/{chipNumber}
+       [needs a login (access token)]
+       operationId: AccountsProductsChipsV2_DisconnectChipByUseridChipnumber
+       Parameters:
+         path   userId : string, required
+         path   chipNumber : integer (int64), required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+         204 Disconnected chip from account
+         400 Bad request
+         403 Authenticated user is not authorized
+         404 No such chip or user found
+         500 Server error
+
+POST   /api/v2/accounts/{userId}/products/chips/code/{chipCode}
+       [needs a login (access token)]
+       operationId: AccountsProductsChipsV2_PostChipByUseridChipcodeWebsiterequest
+       Parameters:
+         path   userId : string, required
+         path   chipCode : string, required
+         query  websiteRequest : boolean, optional
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+         204 User claimed chip
+         400 Bad request
+         403 Authenticated user is not authorized
+         404 No such chip found
+         409 Chip already registered or credits are not activated; The chip is a TR2 timer and cannot be registered
+
+DELETE /api/v2/accounts/{userId}/products/chips/code/{chipCode}
+       [needs a login (access token)]
+       operationId: AccountsProductsChipsV2_DisconnectChipByUseridChipcode
+       Parameters:
+         path   userId : string, required
+         path   chipCode : string, required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+         204 Disconnected chip from account
+         400 Bad request
+         403 Authenticated user is not authorized
+         404 No such chip or user found
+         500 Server error
+
+----------------------------------------------------------------------------------------------------
+AccountsV2  (28 operations)
+----------------------------------------------------------------------------------------------------
+POST   /api/v2/accounts
+       operationId: AccountsV2_CreateByNewuser
+       Parameters:
+         body   newUser : CreateUserBindingModel, required
+       Answers:
+         200 OK -> object
+
+GET    /api/v2/accounts/{userId}
+       operationId: AccountsV2_UserByIdByUserid
+       Parameters:
+         path   userId : string, required
+         header Authorization : string, optional - access token
+       Answers:
+         200 User information -> UserReturnModel
+         400 Bad request
+         401 Unauthorized
+         404 No such user id found
+
+DELETE /api/v2/accounts/{userId}
+       [needs a login (access token)]
+       operationId: AccountsV2_DeleteByUserid
+       Parameters:
+         path   userId : string, required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+         202 The deletion process has been started
+
+POST   /api/v2/accounts/registration/resendMail
+       operationId: AccountsV2_ResendRegistrationConfirmationByUsermodel
+       Parameters:
+         body   userModel : UserBindingModel, required
+       Answers:
+         200 OK -> object
+
+POST   /api/v2/accounts/registration/activate
+       operationId: AccountsV2_ActivateAccountByConfirmation
+       Parameters:
+         body   confirmation : ActivateAccountBindingModel, required
+       Answers:
+         200 OK -> object
+
+PUT    /api/v2/accounts/password/requestReset
+       operationId: AccountsV2_RequestPasswordResetByConfirmation
+       Parameters:
+         body   confirmation : RequestPasswordResetBindingModel, required
+       Answers:
+         200 OK -> object
+
+POST   /api/v2/accounts/password/requestReset/confirm
+       operationId: AccountsV2_ResetPasswordByConfirmation
+       Parameters:
+         body   confirmation : ResetPasswordBindingModel, required
+       Answers:
+         200 OK -> object
+
+PUT    /api/v2/accounts/{userId}/password
+       [needs a login (access token)]
+       operationId: AccountsV2_ChangePasswordByUseridChange
+       Parameters:
+         path   userId : string, required
+         body   change : ChangePasswordBindingModel, required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+
+PUT    /api/v2/accounts/{userId}/requestChange
+       [needs a login (access token)]
+       operationId: AccountsV2_RequestEmailChangeByUseridRequest
+       Parameters:
+         path   userId : string, required
+         body   request : RequestEmailChangeBindingModel, required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+
+POST   /api/v2/accounts/{userId}/requestChange/activate
+       operationId: AccountsV2_ActivateEmailChangeByUseridConfirmation
+       Parameters:
+         path   userId : string, required
+         body   confirmation : ActivateEmailChangeBindingModel, required
+       Answers:
+         200 OK -> object
+
+POST   /api/v2/accounts/{userId}/requestChange/cancel
+       operationId: AccountsV2_CancelEmailChangeByUserid
+       Parameters:
+         path   userId : string, required
+       Answers:
+         200 OK -> object
+
+GET    /api/v2/accounts/email/{email}
+       [needs a login (access token)]
+       operationId: AccountsV2_UserByEmailByEmail
+       Parameters:
+         path   email : string, required
+         header Authorization : string, required - access token
+       Answers:
+         200 User information -> UserReturnModel
+         400 Bad request
+         401 Unauthorized
+         404 No such email found
+
+PUT    /api/v2/accounts/email
+       [needs a login (access token)]
+       operationId: AccountsV2_UserByEmailByUsermodel
+       Parameters:
+         body   userModel : UserBindingModel, required
+         header Authorization : string, required - access token
+       Answers:
+         200 User information -> UserReturnModel
+         400 Bad request
+         401 Unauthorized
+         404 No such email found
+
+GET    /api/v2/accounts/profiles
+       operationId: AccountsV2_GetProfilesListByUserlist
+       Parameters:
+         query  userList.ids : array of string, required
+       Answers:
+         200 A list of user profiles -> ProfileListReturnModel
+         400 Bad request
+
+POST   /api/v2/accounts/profiles
+       operationId: AccountsV2_PostProfilesListByUserlist
+       Parameters:
+         body   userList : UserIdListBindingModel, required
+       Answers:
+         200 A list of user profiles -> ProfileListReturnModel
+         400 Bad request
+
+GET    /api/v2/accounts/{userId}/profiles
+       [USED BY ICESIGHTS: proxy /account/:userId (name and nickname)]
+       operationId: AccountsV2_ProfileByUserid
+       Parameters:
+         path   userId : string, required
+         header Authorization : string, optional - access token
+       Answers:
+         200 User profile -> ProfileReturnModel
+         400 Bad request
+         401 Unauthorized
+         404 No such user id found
+
+PUT    /api/v2/accounts/{userId}/profiles
+       [needs a login (access token)]
+       operationId: AccountsV2_ProfileByUseridProfile
+       Parameters:
+         path   userId : string, required
+         body   profile : ProfileBindingModel, required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+         204 Profile change was succesful
+         400 Bad request
+         401 Unauthorized
+         403 Forbidden
+         404 No such user id found
+         500 Server error
+
+GET    /api/v2/accounts/avatars
+       operationId: AccountsV2_GetAvatarsListByUserlist
+       Parameters:
+         query  userList.ids : array of string, required
+       Answers:
+         200 A list of base64 encoded user avatars -> AvatarListReturnModel
+         400 Bad request
+         401 Unauthorized
+
+POST   /api/v2/accounts/avatars
+       operationId: AccountsV2_PostAvatarsListByUserlist
+       Parameters:
+         body   userList : UserIdListBindingModel, required
+       Answers:
+         200 OK -> object
+
+GET    /api/v2/accounts/{userId}/avatars
+       operationId: AccountsV2_AvatarByUseridMaxwidth
+       Parameters:
+         path   userId : string, required
+         query  maxWidth : integer (int32), optional
+       Answers:
+         200 OK -> object
+
+PUT    /api/v2/accounts/{userId}/avatars
+       [needs a login (access token)]
+       operationId: AccountsV2_AvatarByUseridAvatar
+       Parameters:
+         path   userId : string, required
+         body   avatar : AvatarBindingModel, required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+
+DELETE /api/v2/accounts/{userId}/avatars
+       [needs a login (access token)]
+       operationId: AccountsV2_AvatarByUserid
+       Parameters:
+         path   userId : string, required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+
+GET    /api/v2/accounts/{userId}/privacy/practice
+       [needs a login (access token)]
+       operationId: AccountsV2_PracticePrivacyByUserid
+       Parameters:
+         path   userId : string, required
+         header Authorization : string, required - access token
+       Answers:
+         200 Practice privacy settings -> PracticePrivacyReturnModel
+         400 Bad request
+         401 Unauthorized
+         404 No such user id found
+
+PUT    /api/v2/accounts/{userId}/privacy/practice
+       [needs a login (access token)]
+       operationId: AccountsV2_PracticePrivacyByUseridPrivacy
+       Parameters:
+         path   userId : string, required
+         query  privacy.resultsArePrivate : boolean, required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+
+GET    /api/v2/accounts/properties/titles
+       operationId: AccountsV2_TitlePropertiesBy
+       Parameters: none
+       Answers:
+         200 A list of titles -> PropertyListReturnModel
+
+GET    /api/v2/accounts/properties/timezones
+       operationId: AccountsV2_TimezonePropertiesBy
+       Parameters: none
+       Answers:
+         200 A list of timezones -> PropertyListReturnModel
+
+GET    /api/v2/accounts/properties/countries
+       operationId: AccountsV2_CountryPropertiesBy
+       Parameters: none
+       Answers:
+         200 A list of countries -> PropertyListReturnModel
+
+GET    /api/v2/accounts/properties/languages
+       operationId: AccountsV2_LanguagePropertiesBy
+       Parameters: none
+       Answers:
+         200 A list of languages -> PropertyListReturnModel
+
+----------------------------------------------------------------------------------------------------
+Achievements  (4 operations)
+----------------------------------------------------------------------------------------------------
+GET    /api/v2/achievements/{accountId}/overview
+       operationId: Achievements_GetAchievementsOverviewAsyncByAccountid
+       Parameters:
+         path   accountId : string, required
+       Answers:
+         200 OK -> BadgesDto
+
+GET    /api/v2/achievements/{accountId}/details
+       operationId: Achievements_GetAchievementsAsyncByAccountidAchievementtype
+       Parameters:
+         path   accountId : string, required
+         query  achievementType : integer (int32) - one of: 0, 1, 2, 3, 4, 5, optional
+       Answers:
+         200 OK -> BadgesDto
+
+GET    /api/v2/achievements/{profileId}/statistics
+       operationId: Achievements_GetStatisticsOfUserAsyncByProfileidLookupyear
+       Parameters:
+         path   profileId : string, required
+         query  lookupYear : integer (int32), optional
+       Answers:
+         200 OK -> PersonalStatisticsDto
+
+GET    /api/v2/achievements/{profileId}/statistics-filter
+       operationId: Achievements_GetStatisticsFilterForUserAsyncByProfileid
+       Parameters:
+         path   profileId : string, required
+       Answers:
+         200 OK -> PersonalStatisticsFiltersDto
+
+----------------------------------------------------------------------------------------------------
+Authentication  (2 operations)
+----------------------------------------------------------------------------------------------------
+POST   /auth/validate
+       [needs a login (access token)]
+       operationId: Authentication_ValidateBy
+       Parameters:
+         header Authorization : string, required - access token
+       Answers:
+         200 Access token is valid
+         401 Unauthorized
+
+POST   /auth/claims
+       [needs a login (access token)]
+       operationId: Authentication_ClaimsBy
+       Parameters:
+         header Authorization : string, required - access token
+       Answers:
+         200 Claims of the authenticated user
+         401 Unauthorized
+
+----------------------------------------------------------------------------------------------------
+Health  (1 operation)
+----------------------------------------------------------------------------------------------------
+GET    /api/health
+       operationId: Health_IndexByCancellationtoken
+       Parameters: none
+       Answers:
+         200 OK -> object
+
+----------------------------------------------------------------------------------------------------
+Image  (2 operations)
+----------------------------------------------------------------------------------------------------
+GET    /api/v2/image/id/{userId}
+       [USED BY ICESIGHTS: proxy /avatar/:imageId (profile picture)]
+       operationId: Image_GetAvatarImageByAccountIdByUseridWidth
+       Parameters:
+         path   userId : string, required
+         query  width : integer (int32), optional
+       Answers:
+         200 Returned an image.
+
+GET    /api/v2/image/tx/{transponder}
+       operationId: Image_GetAvatarImageByTransponderByTransponderWidth
+       Parameters:
+         path   transponder : string, required
+         query  width : integer (int32), optional
+       Answers:
+         200 Returned an image.
+
+----------------------------------------------------------------------------------------------------
+ProductsChipsV2  (21 operations)
+----------------------------------------------------------------------------------------------------
+GET    /api/v2/products/chips/types
+       operationId: ProductsChipsV2_ChipTypesBy
+       Parameters: none
+       Answers:
+         200 List of chip types -> ChipTypeListDto
+
+GET    /api/v2/products/chips/{chipNumber}
+       [needs a login (access token)]
+       operationId: ProductsChipsV2_ChipsByNumberByChipnumber
+       Parameters:
+         path   chipNumber : integer (int64), required
+         header Authorization : string, required - access token
+       Answers:
+         200 Chip information -> ChipProductListDto
+         400 Bad request
+         404 No such chip found
+
+GET    /api/v2/products/chips/{chipNumber}/account
+       operationId: ProductsChipsV2_ChipOwnerByNumberByChipnumber
+       Parameters:
+         path   chipNumber : integer (int64), required
+       Answers:
+         200 Account of the chip owner -> ChipOwnerDto
+         400 Bad request
+         404 No such chip or no owner found
+
+PUT    /api/v2/products/chips/chipnumber/name
+       [needs a login (access token)]
+       operationId: ProductsChipsV2_UpdateChipNameByNumberByUpdatechipnamebynumbermodel
+       Parameters:
+         body   updateChipNameByNumberModel : UpdateChipNameByNumberModel, required
+         header Authorization : string, required - access token
+       Answers:
+         200 Chip name updated
+         400 Bad request
+         403 Authenticated user is not authorized
+         404 No such chip found
+
+DELETE /api/v2/products/chips/{chipNumber}/name
+       [needs a login (access token)]
+       operationId: ProductsChipsV2_DeleteChipNameByNumberByChipnumber
+       Parameters:
+         path   chipNumber : integer (int64), required
+         header Authorization : string, required - access token
+       Answers:
+         200 Chip name removed
+         400 Bad request
+         403 Authenticated user is not authorized
+         404 No such chip found
+
+DELETE /api/v2/products/chips/{chipNumber}/carId/{carId}/name
+       [needs a login (access token)]
+       operationId: ProductsChipsV2_DeleteChipNameByNumberByChipnumberCarid
+       Parameters:
+         path   chipNumber : integer (int64), required
+         path   carId : integer (int32), required
+         header Authorization : string, required - access token
+       Answers:
+         200 Chip name removed
+         400 Bad request
+         403 Authenticated user is not authorized
+         404 No such chip found
+
+DELETE /api/v2/products/chips/code/{chipCode}/name
+       [needs a login (access token)]
+       operationId: ProductsChipsV2_DeleteChipNameByNumberByChipcode
+       Parameters:
+         path   chipCode : string, required
+         header Authorization : string, required - access token
+       Answers:
+         200 Chip name removed
+         400 Bad request
+         403 Authenticated user is not authorized
+         404 No such chip found
+
+DELETE /api/v2/products/chips/code/{chipCode}/carId/{carId}/name
+       [needs a login (access token)]
+       operationId: ProductsChipsV2_DeleteChipNameByNumberByChipcodeCarid
+       Parameters:
+         path   chipCode : string, required
+         path   carId : integer (int32), required
+         header Authorization : string, required - access token
+       Answers:
+         200 Chip name removed
+         400 Bad request
+         403 Authenticated user is not authorized
+         404 No such chip found
+
+GET    /api/v2/products/chips/{chipNumber}/subscription
+       [needs a login (access token)]
+       operationId: ProductsChipsV2_ChipSubscriptionByNumberByChipnumber
+       Parameters:
+         path   chipNumber : integer (int64), required
+         header Authorization : string, required - access token
+       Answers:
+         200 Account of the chip owner -> ChipSubscriptionDto
+         400 Bad request
+         403 Authenticated user is not authorized
+         404 No such chip or no subscription found
+
+GET    /api/v2/products/chips/{chipNumber}/carId/{carId}
+       [needs a login (access token)]
+       operationId: ProductsChipsV2_ChipByNumberByChipnumberCarid
+       Parameters:
+         path   chipNumber : integer (int64), required
+         path   carId : integer (int32), required
+         header Authorization : string, required - access token
+       Answers:
+         200 Chip information -> ChipProductDto
+         400 Bad request
+         404 No such chip found
+
+PUT    /api/v2/products/chips/chipnumber/carId/name
+       [needs a login (access token)]
+       operationId: ProductsChipsV2_UpdateChipNameByNumberAndCarIdByUpdatechipnamebynumberandcaridmodel
+       Parameters:
+         body   updateChipNameByNumberAndCarIdModel : UpdateChipNameByNumberAndCarIdModel, required
+         header Authorization : string, required - access token
+       Answers:
+         200 Chip name updated
+         400 Bad request
+         403 Authenticated user is not authorized
+         404 No such chip found
+
+GET    /api/v2/products/chips/code/{chipCode}
+       [needs a login (access token)]
+       operationId: ProductsChipsV2_ChipsByCodeByChipcode
+       Parameters:
+         path   chipCode : string, required
+         header Authorization : string, required - access token
+       Answers:
+         200 Chip information -> ChipProductListDto
+         400 Bad request
+         404 No such chip found
+
+GET    /api/v2/products/chips/code/{chipCode}/account
+       [USED BY ICESIGHTS: proxy /userid/:transponder (which account a transponder belongs to)]
+       operationId: ProductsChipsV2_ChipOwnerByCodeByChipcode
+       Parameters:
+         path   chipCode : string, required
+       Answers:
+         200 Chip owner -> ChipOwnerDto
+         400 Bad request
+         404 No such chip or no owner found
+
+PUT    /api/v2/products/chips/chipcode/name
+       [needs a login (access token)]
+       operationId: ProductsChipsV2_UpdateChipNameByCodeByUpdatechipnamebycodemodel
+       Parameters:
+         body   updateChipNameByCodeModel : UpdateChipNameByCodeModel, required
+         header Authorization : string, required - access token
+       Answers:
+         200 Chip name updated
+         400 Bad request
+         403 Authenticated user is not authorized
+         404 No such chip found
+
+GET    /api/v2/products/chips/code/{chipCode}/subscription
+       [needs a login (access token)]
+       operationId: ProductsChipsV2_ChipSubscriptionByCodeByChipcode
+       Parameters:
+         path   chipCode : string, required
+         header Authorization : string, required - access token
+       Answers:
+         200 Chip subscription -> ChipSubscriptionDto
+         400 Bad request
+         403 Authenticated user is not authorized
+         404 No such chip or no subscription found
+
+GET    /api/v2/products/chips/code/{chipCode}/carId/{carId}
+       [needs a login (access token)]
+       operationId: ProductsChipsV2_ChipByCodeByChipcodeCarid
+       Parameters:
+         path   chipCode : string, required
+         path   carId : integer (int32), required
+         header Authorization : string, required - access token
+       Answers:
+         200 Chip information -> ChipProductDto
+         400 Bad request
+         404 No such chip found
+
+PUT    /api/v2/products/chips/code/chipcode/carId/name
+       [needs a login (access token)]
+       operationId: ProductsChipsV2_UpdateChipNameByCodeAndCarIdByUpdatechipnamebycodeandcaridmodel
+       Parameters:
+         body   updateChipNameByCodeAndCarIdModel : UpdateChipNameByCodeAndCarIdModel, required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+
+GET    /api/v2/products/chips/price-list/{transponderId}
+       [needs a login (access token)]
+       operationId: ProductsChipsV2_GetTranspondersPriceListAsyncByTransponderidCountry
+       Parameters:
+         path   transponderId : integer (int32), required
+         query  country : string, optional
+         header Authorization : string, required - access token
+       Answers:
+         200 Price list is provided -> array of PriceList
+
+GET    /api/v2/products/chips/price-list/{orderId}/status
+       [needs a login (access token)]
+       operationId: ProductsChipsV2_GetOrderStatusAsyncByOrderid
+       Parameters:
+         path   orderId : string, required
+         header Authorization : string, required - access token
+       Answers:
+         200 Price list is provided -> SubscriptionOrderStatus
+
+POST   /api/v2/products/chips/price-list/order-request
+       [needs a login (access token)]
+       operationId: ProductsChipsV2_CreateSubscriptionOrderRequestAsyncByOrderrequest
+       Parameters:
+         body   orderRequest : OrderRequest, required
+         header Authorization : string, required - access token
+       Answers:
+         200 Order placed successfully -> SubscriptionOrderDetails
+
+GET    /api/v2/products/chips/{chipCode}/category
+       operationId: ProductsChipsV2_GetProductCategoryByChipcode
+       Parameters:
+         path   chipCode : string, required
+       Answers:
+         200 OK -> object
+
+----------------------------------------------------------------------------------------------------
+SpeedhiveFriends  (2 operations)
+----------------------------------------------------------------------------------------------------
+POST   /api/v1/speedhiveprofile/friends/follow/{userId}/{friendId}
+       [needs a login (access token)]
+       operationId: SpeedhiveFriends_FollowFriendByUseridFriendidFollow
+       Parameters:
+         path   userId : string, required
+         path   friendId : string, required
+         query  follow : boolean, optional
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+
+GET    /api/v1/speedhiveprofile/friends/{profileId}
+       operationId: SpeedhiveFriends_GetFollowFriendsByProfileidUserid
+       Parameters:
+         path   profileId : string, required
+         query  userId : string, optional
+       Answers:
+         200 Get friends a user is following/followed by -> FollowFriendsDto
+
+----------------------------------------------------------------------------------------------------
+SpeedhiveNotifications  (10 operations)
+----------------------------------------------------------------------------------------------------
+POST   /api/v1/speedhiveprofile/emailnotify/{userId}/{emailnotify}
+       [needs a login (access token)]
+       operationId: SpeedhiveNotifications_SetEmailNotifyByUseridEmailnotify
+       Parameters:
+         path   userId : string, required
+         path   emailnotify : boolean, required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+
+POST   /api/v1/speedhiveprofile/appnotify/{userId}/{appnotify}
+       [needs a login (access token)]
+       operationId: SpeedhiveNotifications_SetAppNotifyByUseridAppnotify
+       Parameters:
+         path   userId : string, required
+         path   appnotify : boolean, required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+
+POST   /api/v1/speedhiveprofile/appnotify/eventspublished/{userId}/{eventspublished}
+       [needs a login (access token)]
+       operationId: SpeedhiveNotifications_SetEventsPublishedNotifyByUseridEventspublished
+       Parameters:
+         path   userId : string, required
+         path   eventspublished : boolean, required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+
+POST   /api/v1/speedhiveprofile/appnotify/friendeventspublished/{userId}/{friendeventspublished}
+       [needs a login (access token)]
+       operationId: SpeedhiveNotifications_SetFriendEventsPublishedNotifyByUseridFriendeventspublished
+       Parameters:
+         path   userId : string, required
+         path   friendeventspublished : boolean, required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+
+POST   /api/v1/speedhiveprofile/appnotify/friendfollowed/{userId}/{friendfollowed}
+       [needs a login (access token)]
+       operationId: SpeedhiveNotifications_SetFriendFollowedNotifyByUseridFriendfollowed
+       Parameters:
+         path   userId : string, required
+         path   friendfollowed : boolean, required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+
+POST   /api/v1/speedhiveprofile/appnotify/sessionstarted/{userId}/{sessionstarted}
+       [needs a login (access token)]
+       operationId: SpeedhiveNotifications_SetLiveTimingSessionStartedNotifyByUseridSessionstarted
+       Parameters:
+         path   userId : string, required
+         path   sessionstarted : boolean, required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+
+POST   /api/v1/speedhiveprofile/appnotify/friendsessionstarted/{userId}/{friendsessionstarted}
+       [needs a login (access token)]
+       operationId: SpeedhiveNotifications_SetFriendsNotifyByUseridFriendsessionstarted
+       Parameters:
+         path   userId : string, required
+         path   friendsessionstarted : boolean, required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+
+POST   /api/v1/speedhiveprofile/appnotify/videouploaded/{userId}/{value}
+       [needs a login (access token)]
+       operationId: SpeedhiveNotifications_SetVideoUploadedNotifyByUseridValue
+       Parameters:
+         path   userId : string, required
+         path   value : boolean, required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+
+POST   /api/v1/speedhiveprofile/appnotify/eventvideouploaded/{userId}/{value}
+       [needs a login (access token)]
+       operationId: SpeedhiveNotifications_SetEventVideoUploadedNotifyByUseridValue
+       Parameters:
+         path   userId : string, required
+         path   value : boolean, required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+
+POST   /api/v1/speedhiveprofile/appnotify/productexpirewarning/{userId}/{productexpirewarning}
+       [needs a login (access token)]
+       operationId: SpeedhiveNotifications_SetProductExpireWarningNotifyByUseridProductexpirewarning
+       Parameters:
+         path   userId : string, required
+         path   productexpirewarning : boolean, required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+
+----------------------------------------------------------------------------------------------------
+SpeedhiveProfile  (7 operations)
+----------------------------------------------------------------------------------------------------
+GET    /api/v1/speedhiveprofile/{userId}
+       [needs a login (access token)]
+       operationId: SpeedhiveProfile_GetProfileByUseridProfileidFriendsVideosTimelineIncludeachievementIncludestatisticsLookupyear
+       Parameters:
+         path   userId : string, required
+         query  profileId : string, optional
+         query  friends : boolean, optional
+         query  videos : boolean, optional
+         query  timeline : boolean, optional
+         query  includeAchievement : boolean, optional
+         query  includeStatistics : boolean, optional
+         query  lookupYear : integer (int32), optional
+         header Authorization : string, required - access token
+       Answers:
+         200 Speedhive Profile -> SpeedhiveProfileDto
+
+GET    /api/v1/speedhiveprofile/public/{profileId}
+       operationId: SpeedhiveProfile_GetPublicProfileByProfileidUseridFriendsVideosTimelineIncludeachievementIncludestatisticsLookupyear
+       Parameters:
+         path   profileId : string, required
+         query  userId : string, optional
+         query  friends : boolean, optional
+         query  videos : boolean, optional
+         query  timeline : boolean, optional
+         query  includeAchievement : boolean, optional
+         query  includeStatistics : boolean, optional
+         query  lookupYear : integer (int32), optional
+       Answers:
+         200 Speedhive Profile -> SpeedhiveProfileDto
+
+GET    /api/v1/speedhiveprofile/public/tx/{transponder}
+       operationId: SpeedhiveProfile_GetPublicProfileByTransponderByTransponderUseridFriendsVideosTimelineIncludeachievementIncludestatisticsLookupyear
+       Parameters:
+         path   transponder : string, required
+         query  userId : string, required
+         query  friends : boolean, optional
+         query  videos : boolean, optional
+         query  timeline : boolean, optional
+         query  includeAchievement : boolean, optional
+         query  includeStatistics : boolean, optional
+         query  lookupYear : integer (int32), optional
+       Answers:
+         200 Public Speedhive Profile By Transponder -> SpeedhiveProfileDto
+
+POST   /api/v1/speedhiveprofile/update/{userId}
+       [needs a login (access token)]
+       operationId: SpeedhiveProfile_UpdateSpeedhiveProfileByUseridSpeedhiveprofile
+       Parameters:
+         path   userId : string, required
+         body   speedhiveProfile : SpeedhiveProfileDto, required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+
+POST   /api/v1/speedhiveprofile/unsubscribe/{userId}
+       operationId: SpeedhiveProfile_UnsubsribeByUserid
+       Parameters:
+         path   userId : string, required
+       Answers:
+         200 OK -> object
+
+POST   /api/v1/speedhiveprofile/privateprofile/{userId}/{privateProfile}
+       [needs a login (access token)]
+       operationId: SpeedhiveProfile_SetPrivateProfileByUseridPrivateprofile
+       Parameters:
+         path   userId : string, required
+         path   privateProfile : boolean, required
+         header Authorization : string, required - access token
+       Answers:
+         200 OK -> object
+
+POST   /api/v1/speedhiveprofile/compare
+       operationId: SpeedhiveProfile_CompareNamesByStringcompare
+       Parameters:
+         body   StringCompare : StringCompare, required
+       Answers:
+         200 Dice Coefficient Distance -> integer (int64)
+
+----------------------------------------------------------------------------------------------------
+SpeedhiveTimeline  (1 operation)
+----------------------------------------------------------------------------------------------------
+GET    /api/v1/speedhiveprofile/timeline/{profileId}
+       operationId: SpeedhiveTimeline_GetTimelineByProfileid
+       Parameters:
+         path   profileId : string, required
+       Answers:
+         200 Speedhive Timeline -> TimelineDto
+
+----------------------------------------------------------------------------------------------------
+SpeedhiveVideos  (5 operations)
+----------------------------------------------------------------------------------------------------
+GET    /api/v1/speedhiveprofile/videos/{profileId}
+       operationId: SpeedhiveVideos_GetVideosByProfileid
+       Parameters:
+         path   profileId : string, required
+       Answers:
+         200 Speedhive Videos -> VideosDto
+
+GET    /api/v1/speedhiveprofile/videos/event/{eventid}
+       operationId: SpeedhiveVideos_GetVideosByEventid
+       Parameters:
+         path   eventid : integer (int32), required
+       Answers:
+         200 Speedhive Videos -> VideosDto
+
+POST   /api/v1/speedhiveprofile/videos/add/{userId}/{videoId}
+       [needs a login (access token)]
+       operationId: SpeedhiveVideos_AddVideoByUseridVideoid
+       Parameters:
+         path   userId : string, required
+         path   videoId : string, required
+         header Authorization : string, required - access token
+       Answers:
+         200 Video Added -> VideosDto
+
+POST   /api/v1/speedhiveprofile/videos/add/{userId}
+       [needs a login (access token)]
+       operationId: SpeedhiveVideos_AddVideoByUseridVideodto
+       Parameters:
+         path   userId : string, required
+         body   videoDto : VideoDto, required
+         header Authorization : string, required - access token
+       Answers:
+         200 Video Added -> VideosDto
+
+POST   /api/v1/speedhiveprofile/videos/delete/{userId}/{videoId}
+       [needs a login (access token)]
+       operationId: SpeedhiveVideos_DeleteVideoAsyncByUseridVideoidEventid
+       Parameters:
+         path   userId : string, required
+         path   videoId : string, required
+         query  eventId : integer (int32), optional
+         header Authorization : string, required - access token
+       Answers:
+         200 Video Deleted -> VideosDto
+
+2b. DATA MODELS OF THE USERS AND PRODUCTS API
+----------------------------------------------------------------------------------------------------
+ProductListDtoWithDiagnostics
+    products : array of ProductDtoWithDiagnostics
+
+ProductDtoWithDiagnostics
+    latestDiagnostics : DiagnosticsModel
+    firmwareUpdateStatus : integer (int32) - one of: 0, 1, 2
+    chip : ChipDto
+    isFlex : boolean
+    isTimeLimited : boolean
+    type : string
+    state : string
+    subscription : ChipSubscriptionDto
+
+DiagnosticsModel
+    entry_id : string
+    uid : string
+    txNumber : string
+    txHw : string
+    txFw : string
+    licensestatus : string
+    log_timestamp : integer (int64)
+    log : string
+
+ChipDto
+    code : string
+    codeNr : integer (int64)
+    carId : integer (int64)
+    id : integer (int64)
+    customName : string
+
+ChipSubscriptionDto
+    expires : string (date-time)
+    transponderEndDate : string (date-time)
+    redeemableCredits : integer (int32)
+    type : integer (int32) - one of: 0, 100, 200, 300, 400, 500, 500, 500, 600
+
+ChipProductListDto
+    chipProducts : array of ChipProductDto
+
+ChipProductDto
+    chip : ChipDto
+    isFlex : boolean
+    isTimeLimited : boolean
+    state : string
+    type : string
+
+CreateUserBindingModel
+    email : string (required)
+    givenName : string (required)
+    surName : string (required)
+    subscribeNewsLetter : boolean
+
+UserReturnModel
+    userId : string
+    givenName : string
+    surName : string
+    nickName : string
+    email : string
+    accountStatus : integer (int32) - one of: 0, 1, 2
+
+UserBindingModel
+    email : string (required)
+
+ActivateAccountBindingModel
+    activationCode : string (required)
+    password : string (required)
+    email : string
+
+RequestPasswordResetBindingModel
+    email : string (required)
+
+ResetPasswordBindingModel
+    passwordResetCode : string (required)
+    newPassword : string (required)
+    email : string
+
+ChangePasswordBindingModel
+    newPassword : string (required)
+
+RequestEmailChangeBindingModel
+    newEmail : string (required)
+
+ActivateEmailChangeBindingModel
+    emailChangeActivationCode : string (required)
+
+UserIdListBindingModel
+    ids : array of string (required)
+
+ProfileListReturnModel
+    profiles : array of ProfileReturnModel
+
+ProfileReturnModel
+    userId : string
+    accountStatus : integer (int32) - one of: 0, 1, 2
+    name : NameReturnModel
+    postalAddress : AddressReturnModel
+    contact : ContactReturnModel
+    personalDetails : PersonalDetailsReturnModel
+    preferences : PersonalPreferencesReturnModel
+
+NameReturnModel
+    givenName : string
+    surName : string
+    title : string
+    nickName : string
+
+AddressReturnModel
+    address : string
+    postalCode : string
+    localityName : string
+    stateOrProvincename : string
+    countryName : string
+
+ContactReturnModel
+    email : string
+    telephoneNumber : string
+    mobileTelephoneNumber : string
+
+PersonalDetailsReturnModel
+    dateOfBirth : string (date-time)
+
+PersonalPreferencesReturnModel
+    language : string
+    locale : string
+    timezone : string
+
+ProfileBindingModel
+    name : NameBindingModel (required)
+    postalAddress : AddressBindingModel (required)
+    contact : ContactBindingModel (required)
+    personalDetails : PersonalDetailsBindingModel (required)
+    preferences : PersonalPreferencesBindingModel (required)
+
+NameBindingModel
+    givenName : string (required)
+    surName : string (required)
+    title : string
+    nickName : string
+
+AddressBindingModel
+    address : string
+    postalCode : string
+    localityName : string
+    stateOrProvincename : string
+    countryName : string
+
+ContactBindingModel
+    telephoneNumber : string
+    mobileTelephoneNumber : string
+
+PersonalDetailsBindingModel
+    dateOfBirth : string (date-time)
+
+PersonalPreferencesBindingModel
+    language : string
+    locale : string
+    timezone : string
+
+AvatarListReturnModel
+    avatars : array of AvatarReturnModel
+
+AvatarReturnModel
+    userId : string
+    image : string (byte)
+
+AvatarBindingModel
+    image : string (byte) (required)
+
+PracticePrivacyReturnModel
+    resultsArePrivate : boolean
+
+PracticePrivacyBindingModel
+    resultsArePrivate : boolean (required)
+
+PropertyListReturnModel
+    properties : map of string
+
+BadgesDto
+    userId : string
+    total : integer (int32)
+    badges : array of BadgeDto
+
+BadgeDto
+    badgeType : integer (int32) - one of: 0, 1, 2, 3, 4, 5
+    racer : RacerDto
+    eventId : integer (int32)
+    eventName : string
+    eventDate : string (date-time)
+    trackname : string
+    sessionId : integer (int32)
+    sessionGroup : string
+    sessionName : string
+    className : string
+    bestLap : integer (int32)
+    bestTime : string
+    bestPosition : integer (int32)
+    nrRacers : integer (int32)
+    bestSpeed : string
+    nrLaps : integer (int32)
+    nrSessions : integer (int32)
+    podium : array of RacerDto
+    total : integer (int32)
+
+RacerDto
+    number : string
+    name : string
+    position : integer (int32)
+    accountId : string
+
+PersonalStatisticsDto
+    accountId : string
+    name : string
+    filter : string
+    events : integer (int32)
+    sessions : integer (int32)
+    races : integer (int32)
+    qualification : integer (int32)
+    practice : integer (int32)
+    laps : integer (int32)
+    wins : integer (int32)
+    podiums : integer (int32)
+    topFives : integer (int32)
+    bestLaps : integer (int32)
+    averagePos : integer (int32)
+    totalPos : integer (int32)
+    timeRaced : string
+
+PersonalStatisticsFiltersDto
+    accountId : string
+    filters : array of string
+
+CancellationToken
+    isCancellationRequested : boolean
+    canBeCanceled : boolean
+    waitHandle : WaitHandle
+
+WaitHandle
+    handle : object
+    safeWaitHandle : SafeWaitHandle
+
+SafeWaitHandle
+    isInvalid : boolean
+    isClosed : boolean
+
+ChipTypeListDto
+    chipTypes : array of string
+
+ChipOwnerDto
+    userId : string
+
+UpdateChipNameByNumberModel
+    chipNumber : integer (int64) (required)
+    name : string (required)
+
+UpdateChipNameByNumberAndCarIdModel
+    chipNumber : integer (int64) (required)
+    name : string (required)
+    carId : integer (int32) (required)
+
+UpdateChipNameByCodeModel
+    chipCode : string (required)
+    name : string (required)
+
+UpdateChipNameByCodeAndCarIdModel
+    chipCode : string (required)
+    name : string (required)
+    carId : integer (int32) (required)
+
+PriceList
+    id : string
+    currency : string
+    vat : number (double)
+    price : number (double)
+    priceWithVat : number (double)
+    productName : string
+
+SubscriptionOrderStatus
+    orderId : string
+    status : string
+
+OrderRequest
+    account_id : string
+    country : string
+    item_id : string
+    product_code : string
+    return_url : string
+
+SubscriptionOrderDetails
+    country : string
+    currency : string
+    description : string
+    paylink : string
+    price : number (double)
+    vat : number (double)
+    product_code : string
+    order_id : string
+
+FollowFriendsDto
+    following : array of FollowFriendDto
+    followedBy : array of FollowFriendDto
+
+FollowFriendDto
+    userId : string
+    firstName : string
+    lastName : string
+    myFriend : boolean
+
+SpeedhiveProfileDto
+    accountId : string
+    firstName : string
+    lastName : string
+    emailAddress : string
+    emailNotify : boolean
+    appNotify : boolean
+    notifySettingsDto : NotifySettingsDto
+    privateProfile : boolean
+    followFriendsDto : FollowFriendsDto
+    videosDto : VideosDto
+    timelineDto : TimelineDto
+    achievement : BadgeDto
+    personalStats : PersonalStatisticsDto
+
+NotifySettingsDto
+    eventPublished : boolean
+    friendsEventPublished : boolean
+    friendFollowed : boolean
+    liveTimingSessionStarted : boolean
+    liveTimingFriendsSessionStarted : boolean
+    videoUploaded : boolean
+    eventVideoUploaded : boolean
+    productExpireWarning : boolean
+
+VideosDto
+    videos : array of VideoDto
+
+TimelineDto
+    userId : string
+    messages : array of TimelineMessageDto
+
+VideoDto
+    id : string
+    eventId : integer (int32)
+    sessionId : integer (int32)
+    racerName : string
+    racerId : string
+    description : string
+
+TimelineMessageDto
+    profileId : string
+    type : integer (int32) - one of: 0, 1, 2, 3, 4
+    message : string
+    utc : string (date-time)
+    timelineName : string
+    racerName : string
+    eventName : string
+    eventId : string
+    userId : string
+    videoId : string
+
+StringCompare
+    name1 : string
+    name2 : string
+
