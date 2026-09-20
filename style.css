@@ -706,6 +706,26 @@ button:disabled {
     max-width: 260px;
 }
 
+.compare-readout {
+    flex-basis: 100%;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.compare-readout:empty { display: none; }
+
+.compare-readout::before {
+    content: "";
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 8px;
+    border-radius: 50%;
+    background: var(--compare, var(--series-2));
+    opacity: 0.55;
+}
+
 .lap-readout {
     margin-left: auto;
     font-variant-numeric: tabular-nums;
@@ -777,6 +797,9 @@ button:disabled {
 
 .rider-row.selected { border-color: var(--axis); }
 
+/* Riders who were not on the ice at the same time as you (0 min together) */
+.rider-row.no-overlap { opacity: 0.55; }
+
 .rider-row input[type="checkbox"] {
     width: 18px;
     height: 18px;
@@ -800,6 +823,10 @@ button:disabled {
 }
 
 .rider-actions button { padding: 6px 12px; font-size: 0.9em; }
+
+.rider-compare { padding: 4px 10px; font-size: 0.85em; flex-shrink: 0; }
+.rider-compare.active { background-color: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.rider-compare.active:hover:not(:disabled) { background-color: var(--accent-hover); }
 
 /* A small dot keeps the full 16px click area; the dot itself is drawn with a gradient. */
 .rider-swatch.small {

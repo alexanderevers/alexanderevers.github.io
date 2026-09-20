@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const lapMaxSlider = $('lapMaxSlider');
     const lapMaxInput = $('lapMaxInput');
     const lapMaxError = $('lapMaxError');
+    const compareReadout = $('compareReadout');
 
     // The replay speed is remembered between visits (only when it is one of the speeds in the list).
     const savedSpeed = String(loadSetting('replaySpeed', ''));
@@ -93,6 +94,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ---------- Selection ----------
     const selectedRiders = () => riders.filter(r => r.selected);
+
+    // The rider whose lap times are drawn next to the followed rider's in the lap graph (one at a time).
+    let compareRider = null;
+    function toggleCompare(rider) {
+        compareRider = compareRider === rider ? null : rider;
+        if (compareRider && !rider.selected) setSelected(rider, true);   // a hidden rider is shown so the laps load
+        else updateRows();
+    }
 
     // The reference rider, then the riders the user gave a colour (by clicking their dot in the list), then the
     // riders that were shown first are labelled (colour + initials); a rider keeps its colour while shown.
@@ -177,6 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (selected && !rider.selected) rider.selectedAt = ++selectionCounter;
         rider.selected = selected;
         if (!selected) { rider.forceLabel = false; rider.forceSmall = false; }
+        if (!selected && compareRider === rider) compareRider = null;
         refreshLabelled();
         if (selected && !rider.laps && !rider.loading) requestLaps(rider);
         updateTimeline();
@@ -221,6 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
         riders.forEach(rider => {
             const row = document.createElement('label');
             row.className = 'rider-row';
+            if (!rider.isReference && rider.togetherMs === 0) row.classList.add('no-overlap');   // 0 min together: greyed out
             const avatar = rider.accountId ? `${PROXY_BASE_URL}/avatar/${encodeURIComponent(rider.accountId)}` : '';
             const session = `${formatTime(rider.startTime).slice(0, 5)}${rider.endTime ? '–' + formatTime(rider.endTime).slice(0, 5) : ''}`;
             const hasTimes = !rider.isReference && rider.togetherMs !== null && rider.togetherMs !== undefined;
@@ -237,9 +248,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span class="rider-name">${escapeHtml(rider.name)}${rider.isReference ? ' <em>(you)</em>' : ''}</span>
                     <small>${escapeHtml(meta)}</small>
                 </span>
+                <button type="button" class="rider-compare secondary-btn" title="Draw this rider's lap times in the graph, to compare lap by lap">Compare</button>
                 <span class="rider-live"></span>`;
             const checkbox = row.querySelector('input');
             checkbox.addEventListener('change', () => setSelected(rider, checkbox.checked));
+            row.querySelector('.rider-compare').addEventListener('click', event => {
+                event.preventDefault();    // the row is a label: do not toggle the checkbox
+                event.stopPropagation();
+                toggleCompare(rider);
+            });
             row.addEventListener('mouseenter', () => { rider.hover = true; });
             row.addEventListener('mouseleave', () => { rider.hover = false; });
             const dot = row.querySelector('.rider-swatch');
@@ -249,7 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 toggleLabel(rider);
             });
             riderList.appendChild(row);
-            rows.set(rider, { row, checkbox, swatch: row.querySelector('.rider-swatch'), live: row.querySelector('.rider-live') });
+            rows.set(rider, { row, checkbox, swatch: row.querySelector('.rider-swatch'), live: row.querySelector('.rider-live'), compare: row.querySelector('.rider-compare') });
         });
     }
 
@@ -273,6 +290,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 : 'Click to show this rider with a colour';
         });
         updateFollowOptions();
+        riders.forEach(rider => {
+            const { compare } = rows.get(rider);
+            const comparing = compareRider === rider;
+            compare.classList.toggle('hidden', rider === followRider);   // comparing a rider with himself says nothing
+            compare.classList.toggle('active', comparing);
+            compare.textContent = comparing ? 'Stop comparing' : 'Compare';
+        });
     }
 
     let lastLiveUpdate = 0;
@@ -425,6 +449,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ---------- Lap time graph of the followed rider ----------
     const LAP_PAD = { l: 50, r: 16, t: 16, b: 28 };
+    const COMPARE_ALPHA = 0.55;        // the compared rider's laps are drawn paler than the followed rider's
     let followRider = null;
     let followPickedByUser = false;   // until the user picks someone, the graph follows the reference rider
     // ... or the rider that was followed last time (remembered by transponder, so it works in other sessions too)
@@ -475,6 +500,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const kept = candidates.find(r => r === previous);
         const remembered = !followPickedByUser && rememberedFollowChip ? candidates.find(r => r.chipCode === rememberedFollowChip) : null;
         followRider = (followPickedByUser && kept) || remembered || reference || kept || candidates[0] || null;
+        if (compareRider === followRider) compareRider = null;
         if (followRider) followSelect.value = String(followRider.id);
         followSelect.disabled = candidates.length < 2;
         // A different rider starts fully in view; the slider then zooms in from there.
@@ -485,6 +511,7 @@ document.addEventListener('DOMContentLoaded', () => {
         followPickedByUser = true;
         saveSetting('followChip', followRider.chipCode);
         setLapMax(showAllLapsMax(followRider));
+        updateRows();   // the compare buttons follow who is followed
     });
     const trimZeros = text => text.replace(/\.?0+$/, '');
     const secondsLabel = seconds => trimZeros(formatSecondsToDuration(seconds));
@@ -507,7 +534,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!extent || !followRider.laps.some(isSkatingLap)) return null;
         // The window runs from the fastest lap in view up to the max lap time.
         const inView = followRider.laps.filter(isFastLap).map(l => l.durMs / 1000);
-        const low = inView.length ? Math.min(...inView) : Math.max(0, lapMaxSeconds - 10);
+        // the compared rider's laps must fit in the window as well
+        const compared = (compareRider?.laps || []).filter(l => isFastLap(l) && l.startMs + l.durMs >= extent.startMs && l.startMs <= extent.endMs).map(l => l.durMs / 1000);
+        const shown = [...inView, ...compared];
+        const low = shown.length ? Math.min(...shown) : Math.max(0, lapMaxSeconds - 10);
         const ticks = niceTicks(low, lapMaxSeconds);
         const yMin = ticks[0];
         const yMax = ticks[ticks.length - 1];
@@ -533,6 +563,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx2.textBaseline = 'middle';
             ctx2.fillText(selectedRiders().some(r => r.loading) ? 'Loading laps…' : 'Show a rider to see the lap times', lapView.w / 2, lapView.h / 2);
             lapReadout.textContent = '';
+            compareReadout.textContent = '';
             return;
         }
         const { extent, ticks, plotW, plotH, x, y } = scale;
@@ -587,32 +618,50 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Lap times in view as a line. A greyed-out lap or a stretch without any recorded laps
         // interrupts the line, so it never draws across time the rider was not skating fast.
-        ctx2.strokeStyle = seriesColor;
-        ctx2.lineWidth = 2;
-        ctx2.lineJoin = 'round';
-        ctx2.lineCap = 'round';
-        ctx2.beginPath();
-        let connected = false;
-        let previousEnd = null;
-        laps.forEach(lap => {
-            const px = x(lap.startMs + lap.durMs);
-            if (previousEnd !== null && lap.startMs - previousEnd > LAP_GAP_TOLERANCE_MS) connected = false;
-            previousEnd = lap.startMs + lap.durMs;
-            if (!isFastLap(lap)) { connected = false; return; }
-            const py = y(lap.durMs / 1000);
-            if (connected) ctx2.lineTo(px, py); else ctx2.moveTo(px, py);
-            connected = true;
-        });
-        ctx2.stroke();
-        if (laps.length <= 120) {
-            ctx2.fillStyle = seriesColor;
-            laps.forEach(lap => {
-                if (!isFastLap(lap)) return;
-                ctx2.beginPath();
-                ctx2.arc(x(lap.startMs + lap.durMs), y(lap.durMs / 1000), 3, 0, Math.PI * 2);
-                ctx2.fill();
+        const drawSeries = (seriesLaps, color, alpha) => {
+            ctx2.globalAlpha = alpha;
+            ctx2.strokeStyle = color;
+            ctx2.lineWidth = 2;
+            ctx2.lineJoin = 'round';
+            ctx2.lineCap = 'round';
+            ctx2.beginPath();
+            let connected = false;
+            let previousEnd = null;
+            seriesLaps.forEach(lap => {
+                const px = x(lap.startMs + lap.durMs);
+                if (previousEnd !== null && lap.startMs - previousEnd > LAP_GAP_TOLERANCE_MS) connected = false;
+                previousEnd = lap.startMs + lap.durMs;
+                if (!isFastLap(lap)) { connected = false; return; }
+                const py = y(lap.durMs / 1000);
+                if (connected) ctx2.lineTo(px, py); else ctx2.moveTo(px, py);
+                connected = true;
             });
+            ctx2.stroke();
+            if (seriesLaps.length <= 120) {
+                ctx2.fillStyle = color;
+                seriesLaps.forEach(lap => {
+                    if (!isFastLap(lap)) return;
+                    ctx2.beginPath();
+                    ctx2.arc(x(lap.startMs + lap.durMs), y(lap.durMs / 1000), 3, 0, Math.PI * 2);
+                    ctx2.fill();
+                });
+            }
+            ctx2.globalAlpha = 1;
+        };
+
+        // The compared rider: paler and in another colour, drawn under the followed rider, at the moments
+        // he really crossed the line, so the laps of riders skating together line up.
+        let compareColor = null;
+        if (compareRider?.laps?.length) {
+            compareColor = [colors.series[1], colors.series[0]].find(color => color !== seriesColor);
+            ctx2.save();
+            ctx2.beginPath();
+            ctx2.rect(LAP_PAD.l, LAP_PAD.t - 2, plotW, plotH + 4);
+            ctx2.clip();
+            drawSeries(compareRider.laps, compareColor, COMPARE_ALPHA);
+            ctx2.restore();
         }
+        drawSeries(laps, seriesColor, 1);
 
         // The current lap's point, ringed (grey when the lap is beyond the max lap time)
         if (state) {
@@ -639,6 +688,20 @@ document.addEventListener('DOMContentLoaded', () => {
             ? `Lap ${state.lap.nr} · ${(state.lap.durMs / 1000).toFixed(1)}s · ${state.speedKph.toFixed(1)} km/h`
             : 'Off the ice';
         if (lapReadout.textContent !== readout) lapReadout.textContent = readout;
+
+        // The compared rider's lap at this moment and how much slower (+) or faster (−) it is than yours
+        let compareText = '';
+        if (compareRider?.laps?.length) {
+            const other = riderStateAt(compareRider.laps, t, trackLengthM);
+            if (!other) compareText = `${compareRider.name}: off the ice`;
+            else {
+                const diff = state ? (other.lap.durMs - state.lap.durMs) / 1000 : null;
+                const diffText = diff === null ? '' : ` (${diff >= 0 ? '+' : '−'}${Math.abs(diff).toFixed(2)}s)`;
+                compareText = `${compareRider.name}: Lap ${other.lap.nr} · ${(other.lap.durMs / 1000).toFixed(2)}s${diffText}`;
+            }
+            compareReadout.style.setProperty('--compare', compareColor);
+        }
+        if (compareReadout.textContent !== compareText) compareReadout.textContent = compareText;
     }
 
     // Click or drag on the graph to jump to that moment.

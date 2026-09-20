@@ -93,6 +93,11 @@ Nothing is sent to a server; a browser that blocks storage just forgets the sett
 - **Deep links:** `index.html?transponder=XX-12345&activity=123` loads the transponder's activities and opens that activity's laps. `script.js` keeps the address bar in step with the chosen activity (`history.replaceState`), so the address can simply be copied; `pendingActivityId` holds the id from the link until the list has loaded. An id that is not in the list gives a message. The replay page's back link (`index.html?transponder=...&activity=...`) returns to the same activity.
 - **Phone layout:** `style.css` has a `max-width: 768px` block (one column, rider details under the name) and a `pointer: coarse` block (larger buttons, checkboxes, dots, theme switch). Wide tables scroll inside their own box. The browser test checks that neither page scrolls sideways at 390 px.
 
+### Comparing lap times and riders who were not on the ice with you
+
+- **Compare (replay):** every rider row has a **Compare** button (not on the rider the graph follows). One rider at a time is drawn in the lap graph in a second colour at 55% opacity, at the moments he really crossed the line, so the laps of riders skating together line up. Next to the graph a line shows his current lap and the difference to your lap (`+0.31s` = he is slower). The graph's time window makes room for his laps. Comparing a hidden rider shows him first; hiding him, or following him instead, ends the comparison.
+- **Greyed out:** riders with 0 min together (they were not on the ice at the same time as you, for example an all-day recording) are dimmed in the rider list, as on the main page. They can still be shown with the checkbox.
+
 ### GPX download for Strava
 
 `gpx-generator.js` turns the laps of a session into a GPX file. It needs a **master track** per ice rink: one lap of the rink as a GPX file in `/tracks`, whose points are spread over every lap of the session. The rinks are listed in `MASTER_TRACKS` at the top of `gpx-generator.js` and matched by MYLAPS location id (or by name):

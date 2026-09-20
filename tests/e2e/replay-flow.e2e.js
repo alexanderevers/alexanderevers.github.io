@@ -215,6 +215,12 @@ function skip(name, reason) {
             assert.equal(allDay.checked, false, 'the all-day rider must not be shown');
             assert.match(await page.evaluate('[...document.querySelectorAll(".rider-row")].find(r => r.textContent.includes("Allday")).querySelector("small").textContent'), /together 0 min/);
         });
+        await step('replay: riders with 0 min together are greyed out in the list, the others are not', async () => {
+            const dimmed = JSON.parse(await page.evaluate('JSON.stringify([...document.querySelectorAll(".rider-row.no-overlap .rider-name")].map(n => n.textContent.trim()))'));
+            assert.deepEqual(dimmed, ['Daan Allday']);
+            assert.ok(Number(await page.evaluate('getComputedStyle(document.querySelector(".rider-row.no-overlap")).opacity')) < 1);
+            assert.equal(await page.evaluate('getComputedStyle(document.querySelector(".rider-row:not(.no-overlap)")).opacity'), '1');
+        });
         await step('replay: the clock starts when you entered the ice, although other riders loaded first', async () => {
             assert.equal((await text('#clockLabel')).trim(), new Date(data.T0).toLocaleTimeString('en-GB'));
         });
@@ -305,6 +311,52 @@ function skip(name, reason) {
             const after = await text('#clockLabel');
             assert.notEqual(after, before);
             assert.match(await text('#lapReadout'), /^Lap \d+ ·/);
+        });
+        await step('replay: Compare draws another rider in the lap graph (paler, other colour, one at a time) and can be turned off', async () => {
+            const graph = () => page.evaluate('document.getElementById("lapCanvas").toDataURL()');
+            const row = name => `[...document.querySelectorAll(".rider-row")].find(r => r.querySelector(".rider-name").textContent.includes(${JSON.stringify(name)}))`;
+            const clickCompare = name => page.evaluate(`${row(name)}.querySelector(".rider-compare").click()`);
+            // orange pixels of the canvas (the other colour): half transparent (pale) or fully opaque
+            const orangePixels = () => page.evaluate(`(() => {
+                const c = document.getElementById("lapCanvas"), d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+                let pale = 0, pure = 0;
+                for (let i = 0; i < d.length; i += 4) {
+                    const [r, g, b, a] = [d[i], d[i + 1], d[i + 2], d[i + 3]];
+                    if (r > 200 && g < 140 && b < 100) { if (a >= 250) pure++; else if (a >= 110 && a <= 170) pale++; }
+                }
+                return { pale, pure };
+            })()`);
+
+            assert.equal(await page.evaluate('document.querySelector(".rider-row .rider-compare").classList.contains("hidden")'), true, 'you can compare with yourself');
+            const before = await graph();
+            assert.deepEqual(await orangePixels(), { pale: 0, pure: 0 });
+
+            await clickCompare('Extra Rider10');
+            await page.sleep(300);
+            assert.notEqual(await graph(), before, 'the graph did not change');
+            assert.match(await text('#compareReadout'), /^Extra Rider10: Lap \d+ · \d+\.\d\ds \([+−]\d+\.\d\ds\)$/);
+            assert.equal(await page.evaluate(`${row('Extra Rider10')}.querySelector(".rider-compare").textContent`), 'Stop comparing');
+            const pixels = await orangePixels();
+            assert.ok(pixels.pale > 50, `no pale compare line found: ${JSON.stringify(pixels)}`);
+            assert.equal(pixels.pure, 0, 'the compare line is not paler than the full colour');
+
+            await clickCompare('Extra Rider4');                                     // another rider replaces the first
+            await page.sleep(200);
+            assert.match(await text('#compareReadout'), /^Extra Rider4:/);
+            assert.equal(await count('.rider-compare.active'), 1);
+
+            await page.evaluate(`${row('Extra Rider4')}.querySelector("input").click()`);   // hiding him stops the comparison
+            await page.sleep(200);
+            assert.equal((await text('#compareReadout')).trim(), '');
+            assert.equal(await count('.rider-compare.active'), 0);
+            await page.evaluate(`${row('Extra Rider4')}.querySelector("input").click()`);   // show him again
+            await page.waitFor(allLapsLoaded, 'the rider to load again');
+
+            await clickCompare('Extra Rider10');
+            await clickCompare('Extra Rider10');                                    // turned off again
+            await page.sleep(300);
+            assert.equal((await text('#compareReadout')).trim(), '');
+            assert.equal(await graph(), before, 'the graph did not return to how it was');
         });
         await step('replay: the play button advances the clock at the chosen speed', async () => {
             const seconds = label => { const [h, m, s] = label.trim().split(':').map(Number); return h * 3600 + m * 60 + s; };

@@ -151,7 +151,7 @@ File: `tests/e2e/replay-flow.e2e.js` (helpers in `tests/e2e/browser.js`). What h
 
 1. A tiny web server serves the repository folder on a random port and injects the **fake API** (`fixtures/fake-api-stub.js`) into every HTML page. The pages therefore never talk to the real proxy.
 2. A headless Chrome/Edge is started in a temporary profile and controlled through the DevTools protocol. Requests to `*.workers.dev` (the avatar images) are blocked, so the test does not depend on the real proxy at all.
-3. The scenario runs as 33 named steps; each prints `PASS` or `FAIL` (with the reason). When Chart.js cannot be downloaded, a `SKIP` line replaces the four chart-dependent steps (3 to 6 below), and another one the three deep link steps.
+3. The scenario runs as 35 named steps; each prints `PASS` or `FAIL` (with the reason). When Chart.js cannot be downloaded, a `SKIP` line replaces the four chart-dependent steps (3 to 6 below), and another one the three deep link steps.
 
 The steps, in order:
 
@@ -165,20 +165,22 @@ The steps, in order:
 | 9 | overlapping riders | "Select all skated together" picks exactly the 16 riders with more than 0 min, not the all-day rider; toggles to "Select none" and back |
 | 10 | open replay | address `replay.html?activity=1`; stored data has 18 riders, 16 selected, 400 m track, `togetherMs`/`groupMs` on every rider |
 | 11 | replay | 17 riders shown: **10 with a colour, 7 small dots**; header "(17 shown, first 10 labelled)"; the all-day rider is listed but not shown ("together 0 min") |
-| 12 | replay | the clock starts at the reference rider's first lap start **even though the other riders' laps arrive first** (the fake API delays the reference rider's laps by 800 ms on purpose) |
-| 13-15 | replay | play/speed sit under the track, the lap graph under them, and there is no time slider; the lap graph follows "you" and the readout shows `Lap 1 · <s>s · <km/h> km/h`; every rider row shows lap, time, speed and the gap in metres to you |
-| 16 | replay | the back link returns to `index.html?transponder=...&activity=...` (the same activity) |
-| 17-19 | replay | clicking a small dot gives that rider a colour (still 10 coloured, checkbox untouched); clicking a coloured dot makes it small (the next rider takes the free colour); clicking your own dot does nothing |
-| 20-21 | replay | Hide all keeps only you, Show all skated together restores the same 17; a rider can be added and removed with the checkbox |
-| 22-23 | lap graph | starts with every lap in view (slider = slowest lap rounded up + 1), the slider and the text box stay in sync, invalid text shows an error without changing the slider, clicking the graph moves the replay clock |
-| 24 | playback | the clock advances by at least 4 s in 1.5 s at 5x, and the button toggles Play/Pause |
-| 25 | remembered settings | after choosing 30x and following another rider, reloading the replay keeps 30x and that rider |
-| 26 | theme | the switch sets `data-theme="dark"`, stores it in `localStorage`, changes the page colour, and switches back |
-| 27 | remembered settings | after moving the "max fast lap time" slider, reloading the main page keeps that value |
-| 28-30 | deep links (needs Chart.js) | `index.html?transponder=...&activity=...` opens that session (laps table filled, address unchanged); choosing another activity, or none, updates the address bar; an unknown activity id shows "Activity ... was not found" and is dropped from the address |
-| 31 | phone layout | at 390 px wide neither the replay page nor the main page scrolls sideways, and a rider's live text sits under the name |
-| 32 | replay | without stored data the page explains how to open a replay |
-| 33 | whole run | **no exception and no `console.error` on any page** |
+| 12 | replay | riders with 0 min together are greyed out in the list (only the all-day rider), the others are not |
+| 13 | replay | the clock starts at the reference rider's first lap start **even though the other riders' laps arrive first** (the fake API delays the reference rider's laps by 800 ms on purpose) |
+| 14-16 | replay | play/speed sit under the track, the lap graph under them, and there is no time slider; the lap graph follows "you" and the readout shows `Lap 1 · <s>s · <km/h> km/h`; every rider row shows lap, time, speed and the gap in metres to you |
+| 17 | replay | the back link returns to `index.html?transponder=...&activity=...` (the same activity) |
+| 18-20 | replay | clicking a small dot gives that rider a colour (still 10 coloured, checkbox untouched); clicking a coloured dot makes it small (the next rider takes the free colour); clicking your own dot does nothing |
+| 21-22 | replay | Hide all keeps only you, Show all skated together restores the same 17; a rider can be added and removed with the checkbox |
+| 23-24 | lap graph | starts with every lap in view (slider = slowest lap rounded up + 1), the slider and the text box stay in sync, invalid text shows an error without changing the slider, clicking the graph moves the replay clock |
+| 25 | replay | **Compare** draws another rider in the lap graph: the graph changes, the line under the header names him with his lap time and the difference to yours, the line is paler (half transparent) and in another colour (checked by counting canvas pixels), only one rider at a time, hiding him ends it, and turning it off restores the graph exactly; you cannot compare with yourself |
+| 26 | playback | the clock advances by at least 4 s in 1.5 s at 5x, and the button toggles Play/Pause |
+| 27 | remembered settings | after choosing 30x and following another rider, reloading the replay keeps 30x and that rider |
+| 28 | theme | the switch sets `data-theme="dark"`, stores it in `localStorage`, changes the page colour, and switches back |
+| 29 | remembered settings | after moving the "max fast lap time" slider, reloading the main page keeps that value |
+| 30-32 | deep links (needs Chart.js) | `index.html?transponder=...&activity=...` opens that session (laps table filled, address unchanged); choosing another activity, or none, updates the address bar; an unknown activity id shows "Activity ... was not found" and is dropped from the address |
+| 33 | phone layout | at 390 px wide neither the replay page nor the main page scrolls sideways, and a rider's live text sits under the name |
+| 34 | replay | without stored data the page explains how to open a replay |
+| 35 | whole run | **no exception and no `console.error` on any page** |
 
 ## 5. How to verify the output
 
