@@ -13,10 +13,10 @@ talks to MYLAPS through a small proxy on Cloudflare Workers.
 
 | Page | Features |
 |---|---|
-| `index.html` (main) | look up a transponder (`XX-12345`); list its activities; lap table and charts; a "max fast lap time" slider that separates speed laps from the rest; speed-lap analysis (average, median, best 5, consistency, fade, speed blocks with distance and totals, distribution); session summary cards; **GPX download for Strava** (for rinks that have a track file); **find overlapping sessions**: every rider who was on the ice during the activity, with *skated together* and *in your group* estimates, sorted by both |
+| `index.html` (main) | look up a transponder (`XX-12345`); list **all** its activities (up to 500, with a year filter); lap table and charts; a "max fast lap time" slider that separates speed laps from the rest; speed-lap analysis (average, median, best 5, consistency, fade, speed blocks with distance and totals, distribution); session summary cards (including how much of the session you were really skating); **GPX download for Strava** (for rinks that have a track file); **find overlapping sessions**: every rider who was on the ice during the activity, with *skated together* and *in your group* estimates, sorted by both |
 | `replay.html` | **race replay**: the chosen riders on an oblong 400 m ice track, driven by their real lap times; play/pause/speed/seek; up to 10 riders with a colour and initials, the rest as small dots (click a rider's dot in the list to give or take a colour); a lap-time graph of one rider with a moving line and a max-lap-time slider; show/hide riders one by one or "all who skated with you" |
 | `search_user.html` | search riders by name and see their last session |
-| all pages | light/dark theme switch (follows the OS until you choose) |
+| all pages | light/dark theme switch (follows the OS until you choose). The theme, the "max fast lap time", the replay speed and the rider you followed last are remembered in your browser |
 
 ## Architecture
 
@@ -84,7 +84,7 @@ node -e "const {buildFakeData}=require('./tests/fixtures/fake-mylaps-data');cons
 Node.js 22 or newer. No `npm install` is needed.
 
 ```bash
-npm test               # 92 unit tests (about 1.5 s)
+npm test               # 109 unit tests (about 1.5 s)
 npm run test:worker    # the proxy's tests against a fake MYLAPS
 npm run test:e2e       # a real headless Chrome/Edge clicking through the whole flow on fake data (about 11 s)
 npm run test:all       # unit + worker

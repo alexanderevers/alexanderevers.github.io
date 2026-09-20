@@ -148,3 +148,45 @@ describe('fetchAllActivitiesFromLocation: paging through a rink like the real AP
             /Failed to fetch activities for location 2040: 500/);
     });
 });
+
+
+describe('fetchActivities: the whole activity list', () => {
+    const asked = [];
+    const answer = routes => async url => {
+        asked.push(url);
+        for (const [part, response] of routes) if (url.includes(part)) return typeof response === 'function' ? response(url) : response;
+        return failure(404, { error: 'not found' });
+    };
+    const list = count => Array.from({ length: count }, (_, i) => ({ id: 1000 - i, startTime: `2026-01-${String(1 + (i % 28)).padStart(2, '0')}T12:00:00Z` }));
+
+    it('asks for up to 500 activities (without a count the proxy returns only the newest 100)', async () => {
+        asked.length = 0;
+        app.sandbox.fetch = answer([
+            ['/userid/', ok({ userId: 'U1' })],
+            ['/activities/', ok({ activities: list(144) })],
+            ['/account/', ok({ name: { givenName: 'A' } })]
+        ]);
+        const result = await app.sandbox.fetchActivities('PZ-28583');
+        assert.equal(app.get('ACTIVITIES_COUNT'), 500);
+        assert.ok(asked.includes(`${PROXY}/activities/U1?count=500`), asked.join('\n'));
+        assert.equal(result.activities.length, 144);
+        assert.equal(result.userId, 'U1');
+        assert.equal(result.account.name.givenName, 'A');
+    });
+    it('still works when the profile cannot be fetched', async () => {
+        app.sandbox.fetch = answer([['/userid/', ok({ userId: 'U1' })], ['/activities/', ok({ activities: list(3) })], ['/account/', failure(500, null, false)]]);
+        const result = await app.sandbox.fetchActivities('PZ-28583');
+        assert.equal(result.account, null);
+        assert.equal(result.activities.length, 3);
+    });
+    it('gives a readable error for an unknown transponder or a missing user id', async () => {
+        app.sandbox.fetch = answer([['/userid/', failure(404, null, false)]]);
+        await assert.rejects(() => app.sandbox.fetchActivities('XX-00000'), /User ID lookup failed: 404/);
+        app.sandbox.fetch = answer([['/userid/', ok({})]]);
+        await assert.rejects(() => app.sandbox.fetchActivities('XX-00000'), /User ID not found/);
+    });
+    it('reports a failing activity list', async () => {
+        app.sandbox.fetch = answer([['/userid/', ok({ userId: 'U1' })], ['/activities/', failure(500, null, false)], ['/account/', ok({})]]);
+        await assert.rejects(() => app.sandbox.fetchActivities('PZ-28583'), /Activities fetch failed: 500/);
+    });
+});

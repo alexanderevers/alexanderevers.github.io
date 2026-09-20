@@ -87,6 +87,17 @@ function analyzeSpeedLaps(laps, thresholdSeconds, trackLengthM) {
     };
 }
 
+/**
+ * How much of the session you were really skating: MYLAPS reports the total training time (first to last
+ * lap) and the active training time (only the laps). Returns null when either is missing.
+ */
+function activeTimeShare(stats) {
+    const active = parseTrainingTimeToSeconds(stats && stats.activeTrainingTime);
+    const total = parseTrainingTimeToSeconds(stats && stats.totalTrainingTime);
+    if (!(active >= 0) || !(total > 0)) return null;
+    return { activeSeconds: active, totalSeconds: total, share: Math.min(active / total, 1) };
+}
+
 function formatSigned(seconds, digits = 2) {
     return `${seconds >= 0 ? '+' : '-'}${Math.abs(seconds).toFixed(digits)}s`;
 }

@@ -37,9 +37,11 @@ function buildStubScript(data, { referenceLapsDelayMs = 800 } = {}) {
         window.__proxyRequests.push(url);
 
         if (endpoint === 'userid') return byChip(id) ? ok({ userId: 'U-' + id }) : missing();
-        if (endpoint === 'activities') {
-            const owner = byChip(id.replace(/^U-/, ''));
-            return ok({ activities: owner ? [owner] : [] });
+        if (endpoint === 'activities') {                    // every activity of this transponder, newest first
+            const chip = id.replace(/^U-/, '');
+            const mine = Object.values(DATA.activities).filter(a => a.chipCode === chip)
+                .sort((a, b) => Date.parse(b.startTime) - Date.parse(a.startTime));
+            return ok({ activities: mine });
         }
         if (endpoint === 'account') {
             const name = DATA.names[id.replace(/^U-/, '')];

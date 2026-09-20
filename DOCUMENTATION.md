@@ -54,7 +54,7 @@ Error answers are never cached. Browsers keep answers for at most one day (`Cach
 The proxy exposes several endpoints that map to the underlying MYLAPS API:
 
 -   `/api/mylaps/userid/:transponder`: Fetches the `userId` for a given transponder number.
--   `/api/mylaps/activities/:userId`: Fetches a list of activities for a user. Supports optional `count` (default 100) and `order` query parameters.
+-   `/api/mylaps/activities/:userId`: Fetches a list of activities for a user. Supports optional `count` (1 to 500, default 100) and `order` query parameters. The website asks for `count=500` so that the whole list comes back; without it only the newest 100 activities are returned.
 -   `/api/mylaps/search?term=...`: Searches active profiles by name. Supports `count` and `offset`.
 -   `/api/mylaps/laps/:activityId`: Fetches lap data for a specific activity. Add `?finished=1` for an activity that ended a while ago so the laps are cached for a long time.
 -   `/api/mylaps/account/:userId`: Fetches a user's profile information (name, etc.).
@@ -72,6 +72,21 @@ The frontend is a single-page application that handles user input, makes request
 -   **`script.js`**: The core JavaScript file that contains the application logic for fetching data, handling user interactions, and updating the UI.
 -   **`api.js`**: This file contains the functions responsible for making `fetch` requests to the proxy server. The `PROXY_BASE_URL` constant in this file must point to your deployed Cloudflare Worker URL (with `/api/mylaps` appended).
 -   **`style.css`**: Contains all the styles for the application.
+
+### Activity list, active time and remembered settings
+
+- **Activity list:** `api.js` requests up to 500 activities (`ACTIVITIES_COUNT`). When they span more than one year a **Year** filter appears above the list ("All years (144)", "2026 (28)", ...). `utils.js` holds the helpers (`activityYearCounts`, `filterActivitiesByYear`).
+- **Active time:** the session summary has an **Active Time** card: MYLAPS's `activeTrainingTime` and its share of `totalTrainingTime` (`activeTimeShare` in `stats.js`).
+- **Remembered settings** (browser `localStorage`, via `loadSetting`/`saveSetting` in `utils.js`, all keys start with `mylaps.`):
+
+| Key | What | Where |
+|---|---|---|
+| `theme` | light or dark, when you switched it by hand | all pages |
+| `mylaps.maxFastLapSeconds` | the "max fast lap time" slider | main page |
+| `mylaps.replaySpeed` | replay speed (1x to 60x) | replay page |
+| `mylaps.followChip` | transponder of the rider whose lap graph you followed last (used again when that rider is in the replay) | replay page |
+
+Nothing is sent to a server; a browser that blocks storage just forgets the settings.
 
 ### GPX download for Strava
 
@@ -111,3 +126,4 @@ Automated tests live in `tests/` (unit tests, a headless-browser end-to-end test
 (proxy tests). Run `npm test`, `npm run test:worker` and `npm run test:e2e` from the repository root; Node.js 22 or newer,
 no install needed. `tests/README.md` explains how to run them, what output to expect and how to tell a real failure
 from an environment problem.
+

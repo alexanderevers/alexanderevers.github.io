@@ -5,6 +5,9 @@
 // Cloudflare Worker (see cloudflare-worker/README.md).
 const PROXY_BASE_URL = 'https://mylaps-proxy.iceskater.workers.dev/api/mylaps';
 
+// The most activities we ask for (the proxy accepts up to 500). Without it only the newest 100 come back.
+const ACTIVITIES_COUNT = 500;
+
 const FETCH_RETRIES = 2;
 const FETCH_RETRY_DELAY_MS = 500;
 
@@ -52,8 +55,8 @@ async function fetchActivities(transponder) {
         throw new Error('User ID not found for the given transponder.');
     }
 
-    // Fetch activities and account profile in parallel
-    const activitiesUrl = `${PROXY_BASE_URL}/activities/${userID}`;
+    // Fetch activities and account profile in parallel. Without a count the proxy returns only the newest 100.
+    const activitiesUrl = `${PROXY_BASE_URL}/activities/${userID}?count=${ACTIVITIES_COUNT}`;
     const accountUrl = `${PROXY_BASE_URL}/account/${userID}`;
 
     const [activitiesResponse, accountResponse] = await Promise.all([

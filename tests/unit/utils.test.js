@@ -1,11 +1,12 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { loadBrowserScripts } = require('../helpers/browser-scripts');
+const { loadBrowserScripts, hostCopy } = require('../helpers/browser-scripts');
 
+const app = loadBrowserScripts(['utils.js']);
 const {
     parseDurationToSeconds, formatSecondsToDuration, formatDurationShort, formatTotalTrainingTime,
     isValidTransponderFormat, escapeHtml
-} = loadBrowserScripts(['utils.js']).sandbox;
+} = app.sandbox;
 
 describe('parseDurationToSeconds', () => {
     it('reads seconds and minutes:seconds', () => {
@@ -78,5 +79,89 @@ describe('escapeHtml', () => {
     it('turns null and undefined into an empty string', () => {
         assert.equal(escapeHtml(null), '');
         assert.equal(escapeHtml(undefined), '');
+    });
+});
+
+
+const { parseTrainingTimeToSeconds, activityYear, activityYearCounts, filterActivitiesByYear, loadSetting, saveSetting } = app.sandbox;
+
+describe('parseTrainingTimeToSeconds', () => {
+    it('reads HH:MM:SS.ms and MM:SS.ms like MYLAPS writes them', () => {
+        assert.ok(Math.abs(parseTrainingTimeToSeconds('1:15:53.827') - 4553.827) < 1e-6);
+        assert.ok(Math.abs(parseTrainingTimeToSeconds('52:10.4') - 3130.4) < 1e-6);
+        assert.equal(parseTrainingTimeToSeconds('00:20:00'), 1200);
+    });
+    it('gives NaN for anything else', () => {
+        assert.ok(Number.isNaN(parseTrainingTimeToSeconds('45')));
+        assert.ok(Number.isNaN(parseTrainingTimeToSeconds(null)));
+        assert.ok(Number.isNaN(parseTrainingTimeToSeconds(undefined)));
+        assert.ok(Number.isNaN(parseTrainingTimeToSeconds('1:2:3:4')));
+    });
+});
+
+describe('activities per year', () => {
+    // Mid-year timestamps: the same year in every time zone.
+    const activities = [
+        { id: 1, startTime: '2026-06-15T12:00:00Z' },
+        { id: 2, startTime: '2025-06-15T12:00:00Z' },
+        { id: 3, startTime: '2026-03-15T12:00:00Z' },
+        { id: 4, startTime: '2024-09-15T12:00:00Z' },
+        { id: 5, startTime: '2025-10-15T12:00:00Z' },
+        { id: 6, startTime: '2026-08-15T12:00:00Z' }
+    ];
+    it('reads the year of an activity', () => {
+        assert.equal(activityYear(activities[0]), 2026);
+    });
+    it('counts the activities per year, newest year first', () => {
+        assert.deepEqual(hostCopy(activityYearCounts(activities)), [{ year: 2026, count: 3 }, { year: 2025, count: 2 }, { year: 2024, count: 1 }]);
+        assert.deepEqual(hostCopy(activityYearCounts([])), []);
+    });
+    it('filters on one year, given as a number or as text, or keeps everything for "all"', () => {
+        assert.deepEqual(hostCopy(filterActivitiesByYear(activities, 2025)).map(a => a.id), [2, 5]);
+        assert.deepEqual(hostCopy(filterActivitiesByYear(activities, '2024')).map(a => a.id), [4]);
+        assert.equal(filterActivitiesByYear(activities, 'all').length, 6);
+        assert.equal(filterActivitiesByYear(activities, 1999).length, 0);
+    });
+});
+
+describe('remembered settings', () => {
+    const memory = () => {
+        const data = new Map();
+        return {
+            data,
+            getItem: key => (data.has(key) ? data.get(key) : null),
+            setItem: (key, value) => { data.set(key, String(value)); }
+        };
+    };
+    const withStorage = storage => { app.sandbox.localStorage = storage; return storage; };
+
+    it('gives the fallback when nothing is stored', () => {
+        withStorage(memory());
+        assert.equal(loadSetting('maxFastLapSeconds', 60), 60);
+        assert.equal(loadSetting('followChip', null), null);
+    });
+    it('stores numbers, text and null and reads them back with their type', () => {
+        const storage = withStorage(memory());
+        saveSetting('speed', 30);
+        saveSetting('chip', 'CD-11111');
+        saveSetting('nothing', null);
+        assert.strictEqual(loadSetting('speed', 0), 30);
+        assert.strictEqual(loadSetting('chip', ''), 'CD-11111');
+        assert.strictEqual(loadSetting('nothing', 'fallback'), null);
+        assert.deepEqual([...storage.data.keys()].sort(), ['mylaps.chip', 'mylaps.nothing', 'mylaps.speed']);   // all under one prefix
+    });
+    it('falls back when the stored text is damaged', () => {
+        const storage = withStorage(memory());
+        storage.data.set('mylaps.speed', '{not json');
+        assert.equal(loadSetting('speed', 5), 5);
+    });
+    it('does not break the page when storage is not available (private window, blocked site data)', () => {
+        const blocked = { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); } };
+        withStorage(blocked);
+        assert.equal(loadSetting('speed', 5), 5);
+        assert.doesNotThrow(() => saveSetting('speed', 30));
+        app.sandbox.localStorage = undefined;                                   // no localStorage at all
+        assert.equal(loadSetting('speed', 7), 7);
+        assert.doesNotThrow(() => saveSetting('speed', 30));
     });
 });

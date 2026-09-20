@@ -25,7 +25,7 @@ needs the real MYLAPS API, a Cloudflare account or a personal transponder.
 Run from the repository root (the folder that contains `package.json` and `index.html`):
 
 ```bash
-npm test               # unit tests            -> expect 92 tests, 27 suites, 0 failures   (~1.5 s)
+npm test               # unit tests            -> expect 109 tests, 32 suites, 0 failures  (~1.5 s)
 npm run test:worker    # Cloudflare Worker     -> expect the last line "ALL PASS"           (~2 s)
 npm run test:e2e       # real browser          -> expect the last line "ALL PASSED"         (~11 s)
 npm run test:all       # unit + worker (does not start a browser)
@@ -40,9 +40,9 @@ to *deploy* or run the Worker locally, never for the tests.)
 ```
 npm test
   ...
-  # tests 92
-  # suites 27
-  # pass 92
+  # tests 109
+  # suites 32
+  # pass 109
   # fail 0
 
 npm run test:worker
@@ -125,11 +125,11 @@ node --test --test-name-pattern="break lap" "tests/unit/*.test.js"  # tests whos
 
 | File | Tests | What it proves |
 |---|---|---|
-| `utils.test.js` | time parsing round-trips, `formatDurationShort` ("<1 min", "12 min", "1 h 05 min", "N/A"), transponder format, HTML escaping | display and input handling are consistent |
-| `stats.test.js` | 8 tests on a fixed set of 10 laps | counts, average 41.129, median 41.0, best-5 average 40.88, consistency 0.459, fade 0.433, blocks laps 2-4 and 6-9, `null` when no lap is fast enough |
+| `utils.test.js` | time parsing round-trips, `formatDurationShort` ("<1 min", "12 min", "1 h 05 min", "N/A"), `parseTrainingTimeToSeconds`, transponder format, HTML escaping, **activities per year** (counts, filter), **remembered settings** (load/save with fallback, damaged text, storage that is blocked or missing) | display, input handling and the year filter and settings helpers are consistent |
+| `stats.test.js` | 8 tests on a fixed set of 10 laps, plus `activeTimeShare` | counts, average 41.129, median 41.0, best-5 average 40.88, consistency 0.459, fade 0.433, blocks laps 2-4 and 6-9, `null` when no lap is fast enough; **active time as a share of the total time** (82% for a real session, capped at 100%, `null` when a time is missing) |
 | `replay-track.test.js` | geometry | the lap has length 1 and no jumps; the finish line is at the end of the bottom straight, before the right-hand corner; 100/200/300 m land on the corner/straight joins; heading matches the direction of travel; `trackDelta` is the signed shortest distance |
 | `replay-model.test.js` | positions and the two ranking numbers | interpolation inside a lap, lap boundaries, small gaps, long pauses, **break laps** (< 8 km/h) are off the ice, overlap time is symmetric and ignores breaks, group time is ~all for a rider 20 m behind, 0 for 100 m/200 m, ~0 at chance level |
-| `api.test.js` | retries and paging | retries only on 5xx/network errors (max 3 tries), readable error messages for non-JSON error bodies, `?finished=1` only for activities that ended > 15 min ago, **paging through a rink advances by what was received (page cap 200) and stops based on END time** |
+| `api.test.js` | retries, paging and the activity list | retries only on 5xx/network errors (max 3 tries), readable error messages for non-JSON error bodies, `?finished=1` only for activities that ended > 15 min ago, **paging through a rink advances by what was received (page cap 200) and stops based on END time** | **`fetchActivities` asks for `count=500`** (the whole list, not only the newest 100), still works without a profile, readable errors for an unknown transponder |
 | `gpx-generator.test.js` | rinks and files | id and name matching to a track file, unknown rinks get none, **every `.gpx` in `/tracks` is registered and is a closed ~400 m lap with increasing timestamps**, GPX output has strictly increasing times and no duplicate finish-line point |
 
 ### 4.2 Worker tests: `npm run test:worker`
@@ -149,28 +149,31 @@ File: `tests/e2e/replay-flow.e2e.js` (helpers in `tests/e2e/browser.js`). What h
 
 1. A tiny web server serves the repository folder on a random port and injects the **fake API** (`fixtures/fake-api-stub.js`) into every HTML page. The pages therefore never talk to the real proxy.
 2. A headless Chrome/Edge is started in a temporary profile and controlled through the DevTools protocol. Requests to `*.workers.dev` (the avatar images) are blocked, so the test does not depend on the real proxy at all.
-3. The scenario runs as 24 named steps; each prints `PASS` or `FAIL` (with the reason). When Chart.js cannot be downloaded, a single `SKIP` line replaces the four chart-dependent steps (2 to 5 below).
+3. The scenario runs as 27 named steps; each prints `PASS` or `FAIL` (with the reason). When Chart.js cannot be downloaded, a single `SKIP` line replaces the four chart-dependent steps (3 to 6 below).
 
 The steps, in order:
 
 | # | Area | Asserted |
 |---|---|---|
-| 1 | main page | profile name/nickname and activity list come from the fake API |
-| 2-5 | main page (needs Chart.js) | 8 summary cards, lap table without voltage/temperature columns, 7 speed-lap cards, blocks table with a total row, the max-fast-lap slider changes the analysis, **GPX download appears** and contains a valid GPX starting at the Amsterdam master track's first point |
-| 6 | overlapping riders | exactly 17 cards; the rider from 5 hours later and the old session are not listed; you are not listed |
-| 7 | overlapping riders | sorted by whole minutes "Skated together" (most first); every card also shows an "In your group" estimate (`~`); the all-day rider shows `0 min`, is dimmed and is last |
-| 8 | overlapping riders | "Select all skated together" picks exactly the 16 riders with more than 0 min, not the all-day rider; toggles to "Select none" and back |
-| 9 | open replay | address `replay.html?activity=1`; stored data has 18 riders, 16 selected, 400 m track, `togetherMs`/`groupMs` on every rider |
-| 10 | replay | 17 riders shown: **10 with a colour, 7 small dots**; header "(17 shown, first 10 labelled)"; the all-day rider is listed but not shown ("together 0 min") |
-| 11 | replay | the clock starts at the reference rider's first lap start **even though the other riders' laps arrive first** (the fake API delays the reference rider's laps by 800 ms on purpose) |
-| 12-13 | replay | the lap graph follows "you" and the readout shows `Lap 1 · <s>s · <km/h> km/h`; every rider row shows lap, time, speed and the gap in metres to you |
-| 14-16 | replay | clicking a small dot gives that rider a colour (still 10 coloured, checkbox untouched); clicking a coloured dot makes it small (the next rider takes the free colour); clicking your own dot does nothing |
-| 17-18 | replay | Hide all keeps only you, Show all skated together restores the same 17; a rider can be added and removed with the checkbox |
-| 19-20 | lap graph | starts with every lap in view (slider = slowest lap rounded up + 1), the slider and the text box stay in sync, invalid text shows an error without changing the slider, clicking the graph moves the replay clock |
-| 21 | playback | the clock advances by at least 4 s in 1.5 s at 5x, and the button toggles Play/Pause |
-| 22 | theme | the switch sets `data-theme="dark"`, stores it in `localStorage`, changes the page colour, and switches back |
-| 23 | replay | without stored data the page explains how to open a replay |
-| 24 | whole run | **no exception and no `console.error` on any page** |
+| 1 | main page | profile name/nickname and the activity list come from the fake API (all 25 of your activities are listed) |
+| 2 | activity list | the list is requested with `count=500`; the **year filter** shows "All years (25)" and the years with their counts; choosing a year narrows the list; a selected activity stays selected when it is in the chosen year and is cleared (laps hidden, button disabled) when it is not |
+| 3-6 | main page (needs Chart.js) | 9 summary cards including **Active Time** with "% of total time", lap table without voltage/temperature columns, 7 speed-lap cards, blocks table with a total row, the max-fast-lap slider changes the analysis, **GPX download appears** and contains a valid GPX starting at the Amsterdam master track's first point |
+| 7 | overlapping riders | exactly 17 cards; the rider from 5 hours later and the old session are not listed; you are not listed |
+| 8 | overlapping riders | sorted by whole minutes "Skated together" (most first); every card also shows an "In your group" estimate (`~`); the all-day rider shows `0 min`, is dimmed and is last |
+| 9 | overlapping riders | "Select all skated together" picks exactly the 16 riders with more than 0 min, not the all-day rider; toggles to "Select none" and back |
+| 10 | open replay | address `replay.html?activity=1`; stored data has 18 riders, 16 selected, 400 m track, `togetherMs`/`groupMs` on every rider |
+| 11 | replay | 17 riders shown: **10 with a colour, 7 small dots**; header "(17 shown, first 10 labelled)"; the all-day rider is listed but not shown ("together 0 min") |
+| 12 | replay | the clock starts at the reference rider's first lap start **even though the other riders' laps arrive first** (the fake API delays the reference rider's laps by 800 ms on purpose) |
+| 13-14 | replay | the lap graph follows "you" and the readout shows `Lap 1 · <s>s · <km/h> km/h`; every rider row shows lap, time, speed and the gap in metres to you |
+| 15-17 | replay | clicking a small dot gives that rider a colour (still 10 coloured, checkbox untouched); clicking a coloured dot makes it small (the next rider takes the free colour); clicking your own dot does nothing |
+| 18-19 | replay | Hide all keeps only you, Show all skated together restores the same 17; a rider can be added and removed with the checkbox |
+| 20-21 | lap graph | starts with every lap in view (slider = slowest lap rounded up + 1), the slider and the text box stay in sync, invalid text shows an error without changing the slider, clicking the graph moves the replay clock |
+| 22 | playback | the clock advances by at least 4 s in 1.5 s at 5x, and the button toggles Play/Pause |
+| 23 | remembered settings | after choosing 30x and following another rider, reloading the replay keeps 30x and that rider |
+| 24 | theme | the switch sets `data-theme="dark"`, stores it in `localStorage`, changes the page colour, and switches back |
+| 25 | remembered settings | after moving the "max fast lap time" slider, reloading the main page keeps that value |
+| 26 | replay | without stored data the page explains how to open a replay |
+| 27 | whole run | **no exception and no `console.error` on any page** |
 
 ## 5. How to verify the output
 
@@ -186,17 +189,17 @@ The steps, in order:
 
 | Suite | Expected |
 |---|---|
-| unit | `# tests 92`, `# suites 27`, `# pass 92`, `# fail 0`, `# cancelled 0`, `# skipped 0` |
-| Worker | 47 `PASS` lines, no `FAIL`, last line `ALL PASS` |
-| browser | 24 `PASS` lines, no `FAIL`, no `SKIP`, last line `ALL PASSED`. Without access to the Chart.js CDN, the four chart steps are replaced by one `SKIP` line (20 `PASS` lines) and the last line reads `ALL PASSED (1 skipped)` |
+| unit | `# tests 109`, `# suites 32`, `# pass 109`, `# fail 0`, `# cancelled 0`, `# skipped 0` |
+| Worker | 49 `PASS` lines, no `FAIL`, last line `ALL PASS` |
+| browser | 27 `PASS` lines, no `FAIL`, no `SKIP`, last line `ALL PASSED`. Without access to the Chart.js CDN, the four chart steps are replaced by one `SKIP` line (23 `PASS` lines) and the last line reads `ALL PASSED (1 skipped)` |
 
 Quick machine check:
 
 ```bash
-npm test 2>&1 | grep -E "^# (tests|pass|fail)"                          # tests 92 / pass 92 / fail 0 (piped output is TAP;
+npm test 2>&1 | grep -E "^# (tests|pass|fail)"                          # tests 109 / pass 109 / fail 0 (piped output is TAP;
                                                                         # in a terminal the same lines start with "ℹ" instead of "#")
-npm run test:worker 2>&1 | grep -c "^PASS"                              # 47
-npm run test:e2e 2>&1 | grep -cE "^PASS"                                # 24
+npm run test:worker 2>&1 | grep -c "^PASS"                              # 49
+npm run test:e2e 2>&1 | grep -cE "^PASS"                                # 27
 npm run test:e2e 2>&1 | grep -E "^(FAIL|SKIP)"                          # nothing when everything ran
 ```
 
@@ -237,11 +240,13 @@ sport "Speed Skating", track length 400 m, location id 5) in exactly the shape t
 | 40 | Daan "Allday" | **-30 - 90** | only between **40 and 55** | activity window covers yours, but he skated long after you: must show **0 min together** |
 | 5 | Ilse | 300 - 330 | | skates 5 hours later: must **not** be listed as overlapping |
 | 9 | Old Session | 2026-08-01 | | another month: must **not** be listed |
+| 101 - 124 | your older sessions (same chip as you) | 2024 - 2026, one hour each | none (they are only listed) | fills your activity list with 25 activities: 13 in 2026 (12 older + today's), 9 in 2025, 3 in 2024, to exercise the year filter. Dates are mid-month, so the year is the same in every time zone |
 
 Numbers derived from it (used by the browser test):
 
 - overlapping activities = ids 2, 3, 4, 7, 20-31, 40 = **17** (5, 9 and yourself excluded)
 - riders who really skated with you (together > 0) = 17 - the all-day rider = **16**
+- your activity list = **25** activities (13 in 2026, 9 in 2025, 3 in 2024); the fake API returns them all for your chip, newest first
 - replay shows you + those 16 = **17** riders: 10 coloured, 7 small; the all-day rider is listed but hidden
 - payload stored for the replay: 18 riders (you + 17), `selected` = 16
 
@@ -297,12 +302,14 @@ npm test; git checkout -- replay-model.js
 sed -i 's|f = ((((f % 1) + 1) % 1) + 1 / 8) % 1;|f = (((f % 1) + 1) % 1);|' replay-track.js
 npm test; git checkout -- replay-track.js
 
-npm test                                                         # green again: 92 passed
+npm test                                                         # green again: 109 passed
 ```
 
 (`sed -i` is GNU sed, as in Git Bash or Linux. On macOS use `sed -i ''`. On plain PowerShell, edit the line by hand.)
 
-The results seen when this was written: 89 pass / 3 fail, 90 pass / 2 fail, 89 pass / 3 fail, then 92 pass / 0 fail.
+The results seen when this was written: 106 pass / 3 fail, 107 pass / 2 fail, 106 pass / 3 fail, then 109 pass / 0 fail.
+
+The same idea works for the newer features (make a change, expect the named test to fail, restore the file): setting `ACTIVITIES_COUNT` in `api.js` to 100 fails the `fetchActivities` test; making `saveSetting` do nothing fails the two "remembers ..." browser steps; removing the `yearFilter` change handler in `script.js` fails the year filter step.
 
 ## 9. Optional: checks against the live proxy
 
@@ -339,6 +346,9 @@ Understanding these makes the tests (and the code) easy to read.
 - **Colours.** The reference rider and the first riders that were shown (10 in total) get a coloured dot with initials; every other rider is a small blue dot. Clicking the dot in the rider list gives or takes away a colour; when all 10 colours are taken, the rider picked longest ago gives one up. Ten colours are validated for both themes.
 - **The rink activity list** (`/locations/:id`): a page holds **at most 200** activities even if 250 are requested, so the next offset must advance by the number received; the list is sorted by **end time**, newest first, so paging stops when the last activity of a page ended before the session started (comparing start times stops too early).
 - **Caching.** Laps of an activity that ended more than 15 minutes ago are requested with `?finished=1`, which lets the proxy cache them for 30 days.
+- **The whole activity list.** Without a count the proxy returns only the newest 100 activities; the website asks for `count=500` (the proxy's maximum), so older sessions (back to 2011 for the developer's account) appear. A year filter narrows the list; a selected activity stays selected only when it is in the chosen year.
+- **Active time.** MYLAPS reports the total training time (first to last lap) and the active training time (the laps). The session summary shows the active time and its share of the total; the card says "N/A" when either time is missing.
+- **Remembered settings.** `localStorage` keys `mylaps.maxFastLapSeconds` (main page slider), `mylaps.replaySpeed` and `mylaps.followChip` (the transponder of the rider whose lap graph was followed last), plus `theme`. Values that no longer fit (for example a slider value outside its range) are ignored, and a browser that blocks storage simply forgets the settings.
 - **Master tracks.** One GPX lap per rink in `/tracks`, registered in `MASTER_TRACKS` (`gpx-generator.js`) by MYLAPS location id (with a name fallback). A rink without a file gets no download button.
 
 ## 11. Changing things

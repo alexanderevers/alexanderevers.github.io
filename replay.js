@@ -31,6 +31,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const lapMaxInput = $('lapMaxInput');
     const lapMaxError = $('lapMaxError');
 
+    // The replay speed is remembered between visits (only when it is one of the speeds in the list).
+    const savedSpeed = String(loadSetting('replaySpeed', ''));
+    if ([...speedSelect.options].some(option => option.value === savedSpeed)) speedSelect.value = savedSpeed;
+    speedSelect.addEventListener('change', () => saveSetting('replaySpeed', speedSelect.value));
+
     // ---------- Data ----------
     function loadPayload() {
         try {
@@ -426,6 +431,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const LAP_PAD = { l: 50, r: 16, t: 16, b: 28 };
     let followRider = null;
     let followPickedByUser = false;   // until the user picks someone, the graph follows the reference rider
+    // ... or the rider that was followed last time (remembered by transponder, so it works in other sessions too)
+    const rememberedFollowChip = loadSetting('followChip', null);
 
     const isSkatingLap = lap => (trackLengthM / (lap.durMs / 1000)) * 3.6 >= MIN_SKATING_KPH;
 
@@ -470,7 +477,8 @@ document.addEventListener('DOMContentLoaded', () => {
         followSelect.innerHTML = candidates.map(r => `<option value="${r.id}">${escapeHtml(r.name)}${r.isReference ? ' (you)' : ''}</option>`).join('');
         const reference = candidates.find(r => r.isReference);
         const kept = candidates.find(r => r === previous);
-        followRider = (followPickedByUser && kept) || reference || kept || candidates[0] || null;
+        const remembered = !followPickedByUser && rememberedFollowChip ? candidates.find(r => r.chipCode === rememberedFollowChip) : null;
+        followRider = (followPickedByUser && kept) || remembered || reference || kept || candidates[0] || null;
         if (followRider) followSelect.value = String(followRider.id);
         followSelect.disabled = candidates.length < 2;
         // A different rider starts fully in view; the slider then zooms in from there.
@@ -479,6 +487,7 @@ document.addEventListener('DOMContentLoaded', () => {
     followSelect.addEventListener('change', () => {
         followRider = riders.find(r => String(r.id) === followSelect.value) || followRider;
         followPickedByUser = true;
+        saveSetting('followChip', followRider.chipCode);
         setLapMax(showAllLapsMax(followRider));
     });
     const trimZeros = text => text.replace(/\.?0+$/, '');

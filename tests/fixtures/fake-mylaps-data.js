@@ -35,6 +35,33 @@ const OLD_SESSION = { id: 9, chip: 'ZZ-99999', name: ['Old', 'Session', null], s
 
 const iso = ms => new Date(ms).toISOString();
 
+/** Seconds as MYLAPS writes long times: "1:15:53.827". */
+function clock(seconds) {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const rest = (seconds % 60).toFixed(3).padStart(6, '0');
+    return `${hours}:${String(minutes).padStart(2, '0')}:${rest}`;
+}
+
+// Older sessions of the reference rider at the same rink (mid-month dates, so the year is the same in every
+// time zone), so the activity list spans several years: 12 in 2026, 9 in 2025 and 3 in 2024.
+const HISTORY_DATES = [
+    '2026-03-02', '2026-03-16', '2026-04-06', '2026-04-20', '2026-05-04', '2026-05-18',
+    '2026-06-01', '2026-06-15', '2026-07-06', '2026-07-20', '2026-08-03', '2026-08-17',
+    '2025-01-13', '2025-02-10', '2025-03-10', '2025-10-06', '2025-10-20', '2025-11-03', '2025-11-17', '2025-12-01', '2025-12-15',
+    '2024-01-15', '2024-02-19', '2024-11-11'
+];
+
+function historyActivities() {
+    return HISTORY_DATES.map((date, i) => ({
+        id: 101 + i,
+        chipCode: REFERENCE_CHIP,
+        startTime: `${date}T18:00:00.000Z`,
+        endTime: `${date}T19:00:00.000Z`,
+        location: { ...LOCATION }
+    }));
+}
+
 function activityOf(rider) {
     return {
         id: rider.id,
@@ -77,7 +104,8 @@ function lapsResponseOf(rider) {
             lapCount: laps.length,
             fastestTime: (rider.pace - 1.5).toFixed(3),
             averageTime: `${rider.pace}.000`,
-            totalTrainingTime: '00:20:00',
+            totalTrainingTime: clock((rider.endMin - rider.startMin) * 60),                        // first to last minute of the activity
+            activeTrainingTime: clock(laps.reduce((sum, lap) => sum + Number(lap.duration), 0)),  // only the laps
             averageSpeed: { kph: 30 },
             fastestSpeed: { kph: 40 }
         },
@@ -93,6 +121,7 @@ function buildFakeData() {
         activities[rider.id] = activityOf(rider);
         lapsById[rider.id] = lapsResponseOf(rider);
     });
+    historyActivities().forEach(activity => { activities[activity.id] = activity; });   // no laps needed: they are only listed
     activities[OLD_SESSION.id] = {
         id: OLD_SESSION.id, chipCode: OLD_SESSION.chip, startTime: OLD_SESSION.startTime, endTime: OLD_SESSION.endTime, location: { ...LOCATION }
     };
@@ -101,4 +130,4 @@ function buildFakeData() {
     return { T0, referenceId: 1, referenceChip: REFERENCE_CHIP, location: LOCATION, activities, lapsById, names };
 }
 
-module.exports = { T0, MINUTE, LOCATION, CAST, buildFakeData, lapsOf, lapsResponseOf, activityOf };
+module.exports = { T0, MINUTE, LOCATION, CAST, buildFakeData, lapsOf, lapsResponseOf, activityOf, historyActivities, clock };

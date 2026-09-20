@@ -20,6 +20,10 @@ const ALL_DAY_ID = 40;                         // window covers yours, laps far 
 const OVERLAPPING = CAST.filter(r => r.id !== REFERENCE.id && r.id !== 5);   // everyone whose activity window overlaps yours
 const SKATED_WITH_YOU = OVERLAPPING.filter(r => r.id !== ALL_DAY_ID);
 const referenceLaps = data.lapsById[REFERENCE.id].sessions[0].laps;
+// Your own activities: today's session and the older ones, and how many of them there are per year.
+const MY_ACTIVITIES = Object.values(data.activities).filter(a => a.chipCode === REFERENCE.chip);
+const PER_YEAR = {};
+MY_ACTIVITIES.forEach(a => { const year = new Date(a.startTime).getFullYear(); PER_YEAR[year] = (PER_YEAR[year] || 0) + 1; });
 
 let failures = 0;
 let skipped = 0;
@@ -62,7 +66,33 @@ function skip(name, reason) {
         await step('main page: profile and activity list from the fake API', async () => {
             assert.equal((await text('#profile-name')).trim(), 'Alex Evers');
             assert.equal((await text('#profile-nickname')).trim(), 'Zoom');
-            assert.equal(await count('#activitySelect option'), 2);   // placeholder + the reference activity
+            assert.equal(await count('#activitySelect option'), MY_ACTIVITIES.length + 1);   // placeholder + all your activities
+        });
+
+        await step('activity list: all your activities are requested and can be filtered by year', async () => {
+            assert.ok(await page.evaluate('window.__proxyRequests.some(url => /\\/activities\\/[^?]+\\?count=500$/.test(url))'), 'the list was not requested with count=500');
+            assert.equal(await visible('#yearFilterWrap'), true);
+            const labels = JSON.parse(await page.evaluate('JSON.stringify([...document.querySelectorAll("#yearFilter option")].map(o => o.textContent))'));
+            const years = Object.keys(PER_YEAR).map(Number).sort((a, b) => b - a);
+            assert.deepEqual(labels, [`All years (${MY_ACTIVITIES.length})`, ...years.map(year => `${year} (${PER_YEAR[year]})`)]);
+
+            const chooseYear = year => page.evaluate(`(() => { const f = document.getElementById("yearFilter"); f.value = "${year}"; f.dispatchEvent(new Event("change")); })()`);
+            const options = () => count('#activitySelect option');
+            await chooseYear('2025');
+            assert.equal(await options(), PER_YEAR[2025] + 1);
+            await chooseYear('2024');
+            assert.equal(await options(), PER_YEAR[2024] + 1);
+            await chooseYear('all');
+            assert.equal(await options(), MY_ACTIVITIES.length + 1);
+
+            // a selected activity stays selected when it is in the chosen year, and is cleared when it is not
+            await page.evaluate(`(() => { const s = document.getElementById("activitySelect"); s.value = "${REFERENCE.id}"; s.dispatchEvent(new Event("change")); })()`);
+            await chooseYear('2026');
+            assert.equal(await page.evaluate('document.getElementById("activitySelect").value'), String(REFERENCE.id));
+            await chooseYear('2025');
+            assert.equal(await page.evaluate('document.getElementById("activitySelect").value'), '');
+            assert.equal(await page.evaluate('document.getElementById("fetchLapsBtn").disabled'), true);
+            await chooseYear('all');
         });
 
         await page.evaluate(`(() => { const s = document.getElementById("activitySelect"); s.value = "${REFERENCE.id}"; s.dispatchEvent(new Event("change")); })()`);
@@ -74,10 +104,13 @@ function skip(name, reason) {
             await page.waitFor('!document.getElementById("lapsData").classList.contains("hidden")', 'the laps section');
 
             await step('main page: session summary cards and the laps table', async () => {
-                assert.equal(await count('#sessionSummary .stat-card'), 8);
+                assert.equal(await count('#sessionSummary .stat-card'), 9);
                 assert.equal(await count('#lapsTableContainer tbody tr'), referenceLaps.length);
                 assert.equal(await count('#lapsTableContainer thead th'), 5);           // no voltage / temperature columns
                 assert.match(await text('#sessionSummary'), /Avg Transponder/);
+                const summary = await text('#sessionSummary');
+                assert.match(summary, /Active Time/);
+                assert.match(summary, /\d+% of total time/);
             });
             await step('main page: speed lap analysis (cards, blocks table with a total row, charts)', async () => {
                 assert.equal(await count('#speedStats .stat-card'), 7);
@@ -267,6 +300,19 @@ function skip(name, reason) {
             assert.equal((await text('#playBtn')).trim(), 'Play');
         });
 
+        await step('replay: remembers the speed and the rider you followed last time', async () => {
+            await page.evaluate(`(() => {
+                const speed = document.getElementById("speedSelect"); speed.value = "30"; speed.dispatchEvent(new Event("change"));
+                const follow = document.getElementById("followSelect");
+                const bram = [...follow.options].find(o => o.textContent.includes("Bram"));
+                follow.value = bram.value; follow.dispatchEvent(new Event("change"));
+            })()`);
+            await page.navigate(`${base}/replay.html?activity=${REFERENCE.id}`);
+            await page.waitFor(allLapsLoaded, 'all laps to load after the reload');
+            assert.equal(await page.evaluate('document.getElementById("speedSelect").value'), '30');
+            assert.match(await page.evaluate('document.getElementById("followSelect").selectedOptions[0].textContent'), /Bram/);
+        });
+
         await step('theme switch: dark mode is applied, remembered and can be switched back', async () => {
             await click('#themeToggle');
             assert.equal(await page.evaluate('document.documentElement.dataset.theme'), 'dark');
@@ -275,6 +321,17 @@ function skip(name, reason) {
             await click('#themeToggle');
             assert.equal(await page.evaluate('document.documentElement.dataset.theme'), 'light');
         });
+        await step('main page: remembers the max fast lap time', async () => {
+            const mainPage = `${base}/index.html?transponder=${data.referenceChip}`;
+            await page.navigate(mainPage);
+            await page.waitFor('document.getElementById("activitySelect").options.length > 1', 'the activity list to load');
+            await setRange('#maxFastLapSlider', 45);
+            await page.navigate(mainPage);
+            await page.waitFor('document.getElementById("activitySelect").options.length > 1', 'the activity list to load again');
+            assert.equal(Number(await page.evaluate('document.getElementById("maxFastLapSlider").value')), 45);
+            assert.equal(await page.evaluate('document.getElementById("maxFastLapInput").value'), '45.000');
+        });
+
         await step('replay without stored data explains how to open a replay', async () => {
             await page.evaluate('localStorage.removeItem("replayData")');
             await page.navigate(`${base}/replay.html?activity=${REFERENCE.id}`);

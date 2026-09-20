@@ -76,6 +76,9 @@ check('search without a term -> 400', await status('/api/mylaps/search') === 400
 check('invalid count -> 400', await status('/api/mylaps/activities/X?count=abc') === 400);
 check('count too large -> 400', await status('/api/mylaps/activities/X?count=99999') === 400);
 check('invalid order -> 400', await status('/api/mylaps/activities/X?order=sideways') === 400);
+calls = [];
+check('the whole activity list can be requested (count=500)', await status('/api/mylaps/activities/X?count=500') === 200 && lastCall().url.endsWith('/activities?count=500'), lastCall()?.url);
+check('one more than the maximum is refused (count=501)', await status('/api/mylaps/activities/X?count=501') === 400);
 check('invalid sport -> 400', await status('/api/mylaps/locations/2040?sport=../x') === 400);
 calls = [];
 await get('/api/mylaps/locations/2040?year=2026&sport=IceSkating&evil=1&count=5');

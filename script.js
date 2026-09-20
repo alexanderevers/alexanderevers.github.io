@@ -32,6 +32,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const speedBlocksContainer = document.getElementById('speedBlocks');
     const distributionSection = document.getElementById('distributionSection');
     const distributionChartCanvas = document.getElementById('distributionChart');
+    const yearFilter = document.getElementById('yearFilter');
+    const yearFilterWrap = document.getElementById('yearFilterWrap');
 
     const TRANSPONDER_COOKIE_KEY = 'savedTransponders';
 
@@ -44,6 +46,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentTrackLength = 400; // Standaardwaarde, wordt bijgewerkt bij activiteitselectie
     let estimatedRowHeight = 28;
     let hoveredRowIndex = null;
+    // The "max fast lap time" is remembered between visits (when it is a value the slider can show).
+    const savedMaxFastLap = Number(loadSetting('maxFastLapSeconds', NaN));
+    if (Number.isFinite(savedMaxFastLap) && savedMaxFastLap >= parseFloat(maxFastLapSlider.min) && savedMaxFastLap <= parseFloat(maxFastLapSlider.max)) {
+        maxFastLapSlider.value = savedMaxFastLap;
+    }
     let MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
     let generatedGpxFilename = 'training_session.gpx'; // Variabele voor de bestandsnaam
     let showOnlySpeedLaps = false;
@@ -67,6 +74,8 @@ document.addEventListener('DOMContentLoaded', () => {
         hide(activityInfoPanel); resetGpxState(downloadGpxBtn); hide(overlappingSessions); hide(fetchOverlappingBtn);
         profileInfoDiv.style.display = 'none'; // Force hide with inline style
         errorDiv.textContent = '';
+        hide(yearFilterWrap);
+        yearFilter.innerHTML = '';
         activitySelect.innerHTML = '<option value="">Select an activity</option>';
         fetchLapsBtn.disabled = true;
         fetchOverlappingBtn.disabled = true;
@@ -197,6 +206,33 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // The activity list can hold hundreds of sessions, so it can be narrowed down to one year.
+    function fillYearFilter() {
+        const years = activityYearCounts(userActivities);
+        yearFilter.innerHTML = `<option value="all">All years (${userActivities.length})</option>`
+            + years.map(({ year, count }) => `<option value="${year}">${year} (${count})</option>`).join('');
+        yearFilter.value = 'all';
+        yearFilterWrap.classList.toggle('hidden', years.length < 2);   // one year needs no filter
+    }
+
+    function fillActivitySelect() {
+        const previous = activitySelect.value;
+        activitySelect.innerHTML = '<option value="">Select an activity</option>';
+        filterActivitiesByYear(userActivities, yearFilter.value || 'all').forEach(activity => {
+            const option = document.createElement('option');
+            option.value = activity.id;
+            option.textContent = `${formatDateTime(activity.startTime)} - ${activity.location.sport} - ${activity.location.name}`;
+            activitySelect.appendChild(option);
+        });
+        if (previous && [...activitySelect.options].some(option => option.value === previous)) {
+            activitySelect.value = previous;                                // the selected activity is in this year: keep it
+        } else if (previous) {
+            activitySelect.dispatchEvent(new Event('change'));              // it is not: clear laps, charts and buttons
+        }
+        fetchLapsBtn.disabled = !activitySelect.value;
+    }
+    yearFilter.addEventListener('change', fillActivitySelect);
+
     fetchActivitiesBtn.addEventListener('click', async () => {
         resetUI();
         const transponder = transponderInput.value.trim().toUpperCase();
@@ -218,13 +254,8 @@ document.addEventListener('DOMContentLoaded', () => {
             loadSavedTransponders(TRANSPONDER_COOKIE_KEY, transponderDatalist);
             hide(loadingDiv);
             if (userActivities.length > 0) {
-                activitySelect.innerHTML = '<option value="">Select an activity</option>';
-                userActivities.forEach(activity => {
-                    const option = document.createElement('option');
-                    option.value = activity.id;
-                    option.textContent = `${formatDateTime(activity.startTime)} - ${activity.location.sport} - ${activity.location.name}`;
-                    activitySelect.appendChild(option);
-                });
+                fillYearFilter();
+                fillActivitySelect();
                 show(activitiesListDiv);
                 fetchLapsBtn.disabled = !activitySelect.value;
             } else {
@@ -298,6 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const totalDistanceInKm = (totalDistanceInMeters / 1000).toFixed(2);
                 const speedLapsDistanceInKm = (speedLapsDistanceInMeters / 1000).toFixed(2);
 
+                const activeTime = activeTimeShare(stats);
                 sessionSummaryContainer.innerHTML = `
                     <div class="stat-card"><span class="label">Total Laps</span><span class="value">${stats.lapCount || 'N/A'}</span></div>
                     <div class="stat-card">
@@ -309,6 +341,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div class="stat-card"><span class="label">Average Lap</span><span class="value">${stats.averageTime || 'N/A'}</span></div>
                     <div class="stat-card"><span class="label">Total Time</span><span class="value">${formatTotalTrainingTime(stats.totalTrainingTime) || 'N/A'}</span></div>
+                    <div class="stat-card" title="Time spent skating (the laps). The rest of the session you were standing still or resting.">
+                        <span class="label">Active Time</span>
+                        <span class="value">
+                            ${activeTime ? formatTotalTrainingTime(stats.activeTrainingTime) : 'N/A'}
+                            ${activeTime ? `<br><span class="speed-laps-distance-value">${Math.round(activeTime.share * 100)}% of total time</span>` : ''}
+                        </span>
+                    </div>
                     <div class="stat-card">
                         <span class="label">Total Distance</span>
                         <span class="value">
@@ -438,6 +477,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     maxFastLapSlider.addEventListener('input', () => {
         MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
+        saveSetting('maxFastLapSeconds', MAX_FAST_LAP_TIME_SECONDS);
         maxFastLapInput.value = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
         hide(maxFastLapValueError);
         if (currentLapData.length > 0) {
@@ -457,6 +497,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             hide(maxFastLapValueError);
             MAX_FAST_LAP_TIME_SECONDS = parsedSeconds;
+            saveSetting('maxFastLapSeconds', MAX_FAST_LAP_TIME_SECONDS);
             maxFastLapSlider.value = parsedSeconds;
             if (currentLapData.length > 0) {
                 updateCharts(currentLapData, contextLapChart?.startIndex || 0);

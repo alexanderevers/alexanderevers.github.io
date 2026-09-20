@@ -65,6 +65,51 @@ function escapeHtml(value) {
 }
 
 
+// --- Settings that are remembered between visits ---
+
+const SETTINGS_PREFIX = 'mylaps.';
+
+/** A remembered setting, or `fallback` when there is none (or the browser does not allow storage). */
+function loadSetting(name, fallback) {
+    try {
+        const raw = localStorage.getItem(SETTINGS_PREFIX + name);
+        return raw === null ? fallback : JSON.parse(raw);
+    } catch {
+        return fallback;
+    }
+}
+
+function saveSetting(name, value) {
+    try {
+        localStorage.setItem(SETTINGS_PREFIX + name, JSON.stringify(value));
+    } catch {
+        // storage is not available (private window, blocked site data): the setting is just not remembered
+    }
+}
+
+
+// --- Activities per year ---
+
+function activityYear(activity) {
+    return new Date(activity.startTime).getFullYear();
+}
+
+/** [{ year, count }] for the years that have activities, newest year first. */
+function activityYearCounts(activities) {
+    const counts = new Map();
+    activities.forEach(activity => {
+        const year = activityYear(activity);
+        counts.set(year, (counts.get(year) || 0) + 1);
+    });
+    return [...counts].map(([year, count]) => ({ year, count })).sort((a, b) => b.year - a.year);
+}
+
+/** The activities of one year, or all of them for year === 'all'. */
+function filterActivitiesByYear(activities, year) {
+    return year === 'all' ? activities : activities.filter(activity => activityYear(activity) === Number(year));
+}
+
+
 // --- Formatting Functies ---
 
 function formatDateTime(isoString) {
@@ -130,22 +175,20 @@ function formatDurationShort(ms) {
     return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} min`;
 }
 
+/** "HH:MM:SS.ms" or "MM:SS.ms" as seconds; NaN for any other shape. */
+function parseTrainingTimeToSeconds(text) {
+    if (typeof text !== 'string') return NaN;
+    const parts = text.split(':');
+    if (parts.length === 3) return (+parts[0]) * 3600 + (+parts[1]) * 60 + parseFloat(parts[2]);
+    if (parts.length === 2) return (+parts[0]) * 60 + parseFloat(parts[1]);
+    return NaN;
+}
+
 function formatTotalTrainingTime(durationString) {
     if (!durationString || typeof durationString !== 'string') return 'N/A';
 
-    // The format can be HH:MM:SS.ms or MM:SS.ms
-    const parts = durationString.split(':');
-    let totalSeconds = 0;
-
-    if (parts.length === 3) { // HH:MM:SS.ms
-        totalSeconds = (+parts[0]) * 3600 + (+parts[1]) * 60 + parseFloat(parts[2]);
-    } else if (parts.length === 2) { // MM:SS.ms
-        totalSeconds = (+parts[0]) * 60 + parseFloat(parts[1]);
-    } else {
-        // If format is unexpected, return as is.
-        return durationString;
-    }
-
+    // The format can be HH:MM:SS.ms or MM:SS.ms; anything else is returned as is.
+    const totalSeconds = parseTrainingTimeToSeconds(durationString);
     if (isNaN(totalSeconds)) return durationString;
 
     const hours = Math.floor(totalSeconds / 3600);

@@ -55,3 +55,30 @@ describe('analyzeSpeedLaps', () => {
         assert.equal(single.blocks.length, 0);
     });
 });
+
+
+const { activeTimeShare } = loadBrowserScripts(['utils.js', 'stats.js']).sandbox;
+
+describe('activeTimeShare: how much of the session you were skating', () => {
+    it('is the active time as a share of the total time (a real MYLAPS session)', () => {
+        const result = activeTimeShare({ totalTrainingTime: '1:32:58.193', activeTrainingTime: '1:15:53.827' });
+        assert.ok(Math.abs(result.activeSeconds - 4553.827) < 1e-6);
+        assert.ok(Math.abs(result.totalSeconds - 5578.193) < 1e-6);
+        assert.ok(Math.abs(result.share - 0.8164) < 0.001, `share ${result.share}`);
+    });
+    it('is 100% when you never stopped, and never above 100% (rounding)', () => {
+        assert.equal(activeTimeShare({ totalTrainingTime: '20:00.000', activeTrainingTime: '20:00.000' }).share, 1);
+        assert.equal(activeTimeShare({ totalTrainingTime: '20:00.000', activeTrainingTime: '20:00.400' }).share, 1);
+    });
+    it('is 0% when there was no active time', () => {
+        assert.equal(activeTimeShare({ totalTrainingTime: '20:00.000', activeTrainingTime: '0:00.000' }).share, 0);
+    });
+    it('is null when a time is missing, unreadable or the total is 0', () => {
+        assert.equal(activeTimeShare({ totalTrainingTime: '20:00.000' }), null);
+        assert.equal(activeTimeShare({ activeTrainingTime: '20:00.000' }), null);
+        assert.equal(activeTimeShare({ totalTrainingTime: 'oops', activeTrainingTime: '1:00.000' }), null);
+        assert.equal(activeTimeShare({ totalTrainingTime: '0:00.000', activeTrainingTime: '0:00.000' }), null);
+        assert.equal(activeTimeShare(null), null);
+        assert.equal(activeTimeShare(undefined), null);
+    });
+});

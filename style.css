@@ -278,6 +278,11 @@ button:disabled {
     gap: 10px;
 }
 
+/* Year filter above the activity list: label and select on one row */
+.activity-controls-group .year-filter { align-items: center; }
+.activity-controls-group .year-filter label { width: auto; margin: 0; }
+.activity-controls-group .year-filter select { width: auto; min-width: 180px; }
+
 .activities-split-view {
     display: flex;
     gap: 20px;
