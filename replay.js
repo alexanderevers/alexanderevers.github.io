@@ -98,7 +98,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     show($('shareBtn'));
 
     const trackLengthM = payload.trackLengthM || 400;
-    $('replaySubtitle').textContent = `${payload.location.sport} · ${payload.location.name} · ${formatDateTime(payload.riders[0].startTime)}`;
+    $('replaySubtitle').textContent = `${payload.location.sport} · ${payload.location.name} · ${formatDateTimeWithDay(payload.riders[0].startTime)}`;
     $('backLink').href = `index.html?transponder=${encodeURIComponent(payload.reference.chipCode || '')}&activity=${encodeURIComponent(payload.reference.id)}`;
 
     // Riders who were not on the ice at the same time as you (0 min together) are left out of the replay.

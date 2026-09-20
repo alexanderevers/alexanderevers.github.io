@@ -126,6 +126,12 @@ function formatDateTime(isoString) {
     return `${parts[0]} - ${parts[1]}`;
 }
 
+/** Like formatDateTime, with the day of the week in front: "Tue 01/09/2026 - 20:00". */
+function formatDateTimeWithDay(isoString) {
+    const weekday = new Date(isoString).toLocaleDateString('en-GB', { weekday: 'short' });
+    return `${weekday} ${formatDateTime(isoString)}`;
+}
+
 function formatTime(isoString) {
     if (!isoString) return 'N/A';
     const date = new Date(isoString);

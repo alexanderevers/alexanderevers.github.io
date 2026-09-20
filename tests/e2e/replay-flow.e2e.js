@@ -103,6 +103,17 @@ function skip(name, reason) {
             assert.equal(await page.evaluate('getComputedStyle(document.documentElement).scrollSnapType'), 'y mandatory');
         });
 
+        await step('activities: the day of the week is in the name of the activity and in the Start Time box', async () => {
+            const start = data.activities[REFERENCE.id].startTime;
+            const day = await page.evaluate(`new Date(${JSON.stringify(start)}).toLocaleDateString("en-GB", { weekday: "short" })`);
+            assert.match(day, /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)$/);
+            const option = await page.evaluate(`document.querySelector('#activitySelect option[value="${REFERENCE.id}"]').textContent`);
+            assert.match(option, new RegExp(`^${day} \\d\\d/\\d\\d/\\d{4} - \\d\\d:\\d\\d - `), option);
+            const startBox = (await text('#activityInfoTable tr:nth-child(3) td:nth-child(2)')).trim();
+            assert.match(startBox, new RegExp(`^${day} \\d\\d/\\d\\d/\\d{4} - \\d\\d:\\d\\d$`), startBox);
+            assert.equal(option.startsWith(startBox), true, 'the name and the Start Time box should show the same date');
+        });
+
         await step('transponder field: capitals and the dash are filled in while typing, a typed dash is not doubled, pasted text is cleaned up', async () => {
             const field = 'document.getElementById("transponderInput")';
             const value = () => page.evaluate(`${field}.value`);
@@ -582,6 +593,8 @@ function skip(name, reason) {
             await page.waitFor('!document.getElementById("replayApp").classList.contains("hidden")', 'the replay to be rebuilt from the link');
             await page.waitFor(allLapsLoaded, 'all laps to load');
             assert.match(await text('#replaySubtitle'), /Jaap Eden/);
+            const day = await page.evaluate(`new Date(${JSON.stringify(data.activities[REFERENCE.id].startTime)}).toLocaleDateString('en-GB', { weekday: 'short' })`);
+            assert.match(await text('#replaySubtitle'), new RegExp(`· ${day} \\d\\d/\\d\\d/\\d{4} - \\d\\d:\\d\\d$`), 'the replay subtitle should start the date with the day of the week');
             const states = await rowStates();
             assert.equal(states.length, SKATED_WITH_YOU.length + 1);
             assert.equal(states.filter(s => s.checked).length, SKATED_WITH_YOU.length + 1);

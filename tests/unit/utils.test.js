@@ -5,7 +5,7 @@ const { loadBrowserScripts, hostCopy } = require('../helpers/browser-scripts');
 const app = loadBrowserScripts(['utils.js']);
 const {
     parseDurationToSeconds, formatSecondsToDuration, formatDurationShort, formatTotalTrainingTime,
-    isValidTransponderFormat, escapeHtml
+    isValidTransponderFormat, escapeHtml, formatDateTimeWithDay
 } = app.sandbox;
 
 describe('parseDurationToSeconds', () => {
@@ -208,5 +208,22 @@ describe('formatTransponderInput: the number is written as XX-12345 while typing
         assert.equal(findTransponderInText('AB-12'), null);            // not complete: it is pasted as usual
         assert.equal(findTransponderInText('nothing here'), null);
         assert.equal(findTransponderInText(undefined), null);
+    });
+});
+
+describe('formatDateTimeWithDay: the day of the week in front of the date', () => {
+    const at = (year, month, day, hour, minute) => new Date(year, month - 1, day, hour, minute).toISOString();   // local time, so it holds in every time zone
+    it('writes Tue 01/09/2026 - 20:00', () => {
+        assert.equal(formatDateTimeWithDay(at(2026, 9, 1, 20, 0)), 'Tue 01/09/2026 - 20:00');
+    });
+    it('gives every day of the week its three letters', () => {
+        const days = [];
+        for (let day = 7; day <= 13; day++) days.push(formatDateTimeWithDay(at(2026, 9, day, 12, 30)).slice(0, 3));   // 7 Sep 2026 is a Monday
+        assert.deepEqual(days, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
+    });
+    it('keeps the date and time as they were', () => {
+        const iso = at(2025, 12, 31, 7, 5);
+        assert.equal(formatDateTimeWithDay(iso), `Wed ${app.sandbox.formatDateTime(iso)}`);
+        assert.equal(formatDateTimeWithDay(iso).slice(4), '31/12/2025 - 07:05');
     });
 });

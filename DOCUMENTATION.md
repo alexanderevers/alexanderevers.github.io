@@ -75,7 +75,7 @@ The frontend is a single-page application that handles user input, makes request
 
 ### Activity list, active time and remembered settings
 
-- **Activity list:** `api.js` requests up to 500 activities (`ACTIVITIES_COUNT`). When they span more than one year a **Year** filter appears above the list ("All years (144)", "2026 (28)", ...). `utils.js` holds the helpers (`activityYearCounts`, `filterActivitiesByYear`).
+- **Activity list:** `api.js` requests up to 500 activities (`ACTIVITIES_COUNT`). Each activity is listed with the day of the week ("Tue 01/09/2026 - 20:00 - Speed Skating - Jaap Eden", `formatDateTimeWithDay` in `utils.js`), and the same goes for the Start Time box next to the list. When they span more than one year a **Year** filter appears above the list ("All years (144)", "2026 (28)", ...). `utils.js` holds the helpers (`activityYearCounts`, `filterActivitiesByYear`).
 - **Active time:** the session summary has an **Active Time** card: MYLAPS's `activeTrainingTime` and its share of `totalTrainingTime` (`activeTimeShare` in `stats.js`).
 - **Remembered settings** (browser `localStorage`, via `loadSetting`/`saveSetting` in `utils.js`, all keys start with `mylaps.`):
 

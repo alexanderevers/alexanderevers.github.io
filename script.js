@@ -214,7 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
         filterActivitiesByYear(userActivities, yearFilter.value || 'all').forEach(activity => {
             const option = document.createElement('option');
             option.value = activity.id;
-            option.textContent = `${formatDateTime(activity.startTime)} - ${activity.location.sport} - ${activity.location.name}`;
+            option.textContent = `${formatDateTimeWithDay(activity.startTime)} - ${activity.location.sport} - ${activity.location.name}`;
             activitySelect.appendChild(option);
         });
         if (previous && [...activitySelect.options].some(option => option.value === previous)) {
@@ -411,7 +411,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <tbody>
                             <tr><td>Sport:</td><td>${escapeHtml(activity.location.sport)}</td></tr>
                             <tr><td>Location:</td><td>${escapeHtml(activity.location.name)}</td></tr>
-                            <tr><td>Start Time:</td><td>${formatDateTime(activity.startTime)}</td></tr>
+                            <tr><td>Start Time:</td><td>${formatDateTimeWithDay(activity.startTime)}</td></tr>
                         </tbody>
                     </table>`;
                 show(activityInfoPanel);
