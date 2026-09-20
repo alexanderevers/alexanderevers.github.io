@@ -54,6 +54,25 @@ document.addEventListener('DOMContentLoaded', () => {
     let MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
     let generatedGpxFilename = 'training_session.gpx'; // Variabele voor de bestandsnaam
     let showOnlySpeedLaps = false;
+    // A shared link (?transponder=XX-12345&activity=123) opens straight on that session.
+    let pendingActivityId = null;
+
+    /** The address of the page for this transponder (and activity), so the address bar can be shared. */
+    function addressFor(transponder, activityId) {
+        const params = new URLSearchParams({ transponder });
+        if (activityId) params.set('activity', activityId);
+        return `${window.location.pathname}?${params}`;
+    }
+
+    function updateAddressBar() {
+        const transponder = transponderInput.value.trim().toUpperCase();
+        if (!currentUserId || !isValidTransponderFormat(transponder)) return;
+        try {
+            window.history.replaceState({}, '', addressFor(transponder, activitySelect.value));
+        } catch {
+            // some browsers refuse this (for example on a file:// page): the link is just not updated
+        }
+    }
 
     function destroyCharts() {
         if (mainLapChart) { mainLapChart.destroy(); mainLapChart = null; }
@@ -241,7 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
             show(errorDiv);
             return;
         }
-        const newUrl = `${window.location.pathname}?transponder=${transponder}`;
+        const newUrl = addressFor(transponder, pendingActivityId);
         window.history.pushState({ path: newUrl }, '', newUrl);
         show(loadingDiv);
         try {
@@ -258,6 +277,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 fillActivitySelect();
                 show(activitiesListDiv);
                 fetchLapsBtn.disabled = !activitySelect.value;
+                if (pendingActivityId) {
+                    const wanted = [...activitySelect.options].find(option => option.value === pendingActivityId);
+                    if (wanted) {
+                        activitySelect.value = pendingActivityId;
+                        activitySelect.dispatchEvent(new Event('change'));
+                        fetchLapsBtn.click();
+                    } else {
+                        errorDiv.textContent = `Activity ${pendingActivityId} was not found for this transponder.`;
+                        show(errorDiv);
+                        updateAddressBar();
+                    }
+                    pendingActivityId = null;
+                }
             } else {
                 errorDiv.textContent = "No activities found for this transponder.";
                 show(errorDiv);
@@ -265,6 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error("Error fetching activities:", error);
             hide(loadingDiv);
+            pendingActivityId = null;
             errorDiv.textContent = `Error: ${error.message}. Please check the transponder number.`;
             show(errorDiv);
         }
@@ -473,6 +506,7 @@ document.addEventListener('DOMContentLoaded', () => {
             hide(activityInfoPanel);
             activityInfoTable.innerHTML = '';
         }
+        updateAddressBar();
     });
 
     maxFastLapSlider.addEventListener('input', () => {
@@ -525,6 +559,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleUrlParameter() {
         const urlParams = new URLSearchParams(window.location.search);
         const transponderFromUrl = urlParams.get('transponder');
+        const activityFromUrl = urlParams.get('activity');
+        pendingActivityId = activityFromUrl && /^\d{1,15}$/.test(activityFromUrl) ? activityFromUrl : null;
         if (transponderFromUrl) {
             transponderInput.value = transponderFromUrl.toUpperCase();
             fetchActivitiesBtn.click();

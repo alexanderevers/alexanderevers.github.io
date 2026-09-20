@@ -88,6 +88,11 @@ The frontend is a single-page application that handles user input, makes request
 
 Nothing is sent to a server; a browser that blocks storage just forgets the settings.
 
+### Deep links and phone layout
+
+- **Deep links:** `index.html?transponder=XX-12345&activity=123` loads the transponder's activities and opens that activity's laps. `script.js` keeps the address bar in step with the chosen activity (`history.replaceState`), so the address can simply be copied; `pendingActivityId` holds the id from the link until the list has loaded. An id that is not in the list gives a message. The replay page's back link (`index.html?transponder=...&activity=...`) returns to the same activity.
+- **Phone layout:** `style.css` has a `max-width: 768px` block (one column, rider details under the name) and a `pointer: coarse` block (larger buttons, checkboxes, dots, theme switch). Wide tables scroll inside their own box. The browser test checks that neither page scrolls sideways at 390 px.
+
 ### GPX download for Strava
 
 `gpx-generator.js` turns the laps of a session into a GPX file. It needs a **master track** per ice rink: one lap of the rink as a GPX file in `/tracks`, whose points are spread over every lap of the session. The rinks are listed in `MASTER_TRACKS` at the top of `gpx-generator.js` and matched by MYLAPS location id (or by name):

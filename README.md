@@ -14,9 +14,9 @@ talks to MYLAPS through a small proxy on Cloudflare Workers.
 | Page | Features |
 |---|---|
 | `index.html` (main) | look up a transponder (`XX-12345`); list **all** its activities (up to 500, with a year filter); lap table and charts; a "max fast lap time" slider that separates speed laps from the rest; speed-lap analysis (average, median, best 5, consistency, fade, speed blocks with distance and totals, distribution); session summary cards (including how much of the session you were really skating); **GPX download for Strava** (for rinks that have a track file); **find overlapping sessions**: every rider who was on the ice during the activity, with *skated together* and *in your group* estimates, sorted by both |
-| `replay.html` | **race replay**: the chosen riders on an oblong 400 m ice track, driven by their real lap times; play/pause/speed/seek; up to 10 riders with a colour and initials, the rest as small dots (click a rider's dot in the list to give or take a colour); a lap-time graph of one rider with a moving line and a max-lap-time slider; show/hide riders one by one or "all who skated with you" |
+| `replay.html` | **race replay**: the chosen riders on an oblong 400 m ice track, driven by their real lap times; play/pause/speed, and click or drag the lap graph (under the play controls) to jump to a moment; up to 10 riders with a colour and initials, the rest as small dots (click a rider's dot in the list to give or take a colour); a lap-time graph of one rider with a moving line and a max-lap-time slider; show/hide riders one by one or "all who skated with you" |
 | `search_user.html` | search riders by name and see their last session |
-| all pages | light/dark theme switch (follows the OS until you choose). The theme, the "max fast lap time", the replay speed and the rider you followed last are remembered in your browser |
+| all pages | works on a phone (one column, big touch targets); the main page address can be shared as a **deep link**: `index.html?transponder=XX-12345&activity=123` opens straight on that session. Light/dark theme switch (follows the OS until you choose). The theme, the "max fast lap time", the replay speed and the rider you followed last are remembered in your browser |
 
 ## Architecture
 

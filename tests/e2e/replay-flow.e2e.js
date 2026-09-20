@@ -212,6 +212,14 @@ function skip(name, reason) {
         await step('replay: the clock starts when you entered the ice, although other riders loaded first', async () => {
             assert.equal((await text('#clockLabel')).trim(), new Date(data.T0).toLocaleTimeString('en-GB'));
         });
+        await step('replay: play and speed sit under the ice track, the lap graph under them, and there is no separate time slider', async () => {
+            assert.equal(await count('#timeSlider'), 0);
+            const order = JSON.parse(await page.evaluate('JSON.stringify([...document.querySelectorAll("#replayApp > *")].map(e => e.id || e.className))'));
+            const track = order.indexOf('trackWrap');
+            assert.equal(order[track + 1], 'replay-controls');
+            assert.equal(order[track + 2], 'lap-chart-head');
+            assert.equal(order[track + 4], 'lapCanvas');
+        });
         await step('replay: the lap graph follows you and the readout shows your current lap', async () => {
             assert.match(await page.evaluate('document.getElementById("followSelect").selectedOptions[0].textContent'), /\(you\)/);
             assert.match(await text('#lapReadout'), /^Lap 1 · \d+\.\ds · \d+\.\d km\/h$/);
@@ -222,6 +230,10 @@ function skip(name, reason) {
             assert.ok(lives.some(l => /[+−]\d+ m$/.test(l)), 'no rider shows a gap to you');
         });
 
+        await step('replay: the back link returns to the same activity', async () => {
+            const href = await page.evaluate('document.getElementById("backLink").getAttribute("href")');
+            assert.equal(href, `index.html?transponder=${data.referenceChip}&activity=${REFERENCE.id}`);
+        });
         await step('replay: clicking a small dot gives that rider a colour; you and the checkbox are untouched', async () => {
             const before = await rowStates();
             const lastSmall = before.filter(s => s.kind === 'small').pop();
@@ -330,6 +342,49 @@ function skip(name, reason) {
             await page.waitFor('document.getElementById("activitySelect").options.length > 1', 'the activity list to load again');
             assert.equal(Number(await page.evaluate('document.getElementById("maxFastLapSlider").value')), 45);
             assert.equal(await page.evaluate('document.getElementById("maxFastLapInput").value'), '45.000');
+        });
+
+        if (!chartAvailable) {
+            skip('deep links: a shared address opens the session', 'Chart.js could not be loaded from the CDN (offline?)');
+        } else {
+            await step('deep link: an address with transponder and activity opens that session', async () => {
+                await page.navigate(`${base}/index.html?transponder=${data.referenceChip}&activity=${REFERENCE.id}`);
+                await page.waitFor('!document.getElementById("lapsData").classList.contains("hidden")', 'the laps of the linked activity');
+                assert.equal(await page.evaluate('document.getElementById("activitySelect").value'), String(REFERENCE.id));
+                assert.equal(await count('#lapsTableContainer tbody tr'), referenceLaps.length);
+                assert.equal(await page.evaluate('location.search'), `?transponder=${data.referenceChip}&activity=${REFERENCE.id}`);
+            });
+            await step('deep link: the address bar follows the chosen activity, so it can be shared', async () => {
+                const other = MY_ACTIVITIES.find(a => a.id !== REFERENCE.id);
+                await page.evaluate(`(() => { const s = document.getElementById("activitySelect"); s.value = "${other.id}"; s.dispatchEvent(new Event("change")); })()`);
+                assert.equal(await page.evaluate('location.search'), `?transponder=${data.referenceChip}&activity=${other.id}`);
+                await page.evaluate('(() => { const s = document.getElementById("activitySelect"); s.value = ""; s.dispatchEvent(new Event("change")); })()');
+                assert.equal(await page.evaluate('location.search'), `?transponder=${data.referenceChip}`);
+            });
+            await step('deep link: an activity that is not in the list gives a clear message and is dropped from the address', async () => {
+                await page.navigate(`${base}/index.html?transponder=${data.referenceChip}&activity=999999`);
+                await page.waitFor('!document.getElementById("error").classList.contains("hidden")', 'the message');
+                assert.match(await text('#error'), /Activity 999999 was not found/);
+                assert.equal(await page.evaluate('location.search'), `?transponder=${data.referenceChip}`);
+                assert.equal(await visible('#lapsData'), false);
+            });
+        }
+
+        await step('phone layout: nothing makes the page scroll sideways on a 390 px wide screen, and rider details sit under the name', async () => {
+            await page.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+            try {
+                const sideways = () => page.evaluate('document.documentElement.scrollWidth > document.documentElement.clientWidth');
+                await page.navigate(`${base}/replay.html?activity=${REFERENCE.id}`);
+                await page.waitFor(allLapsLoaded, 'all laps to load on the phone');
+                assert.equal(await sideways(), false, 'replay page scrolls sideways');
+                const layout = JSON.parse(await page.evaluate('JSON.stringify((() => { const row = document.querySelector(".rider-row.selected"); const name = row.querySelector(".rider-name").getBoundingClientRect(); const live = row.querySelector(".rider-live").getBoundingClientRect(); return { nameBottom: name.bottom, liveTop: live.top }; })())'));
+                assert.ok(layout.liveTop >= layout.nameBottom, 'the live text is squeezed next to the name');
+                await page.navigate(`${base}/index.html?transponder=${data.referenceChip}`);
+                await page.waitFor('document.getElementById("activitySelect").options.length > 1', 'the activity list on the phone');
+                assert.equal(await sideways(), false, 'main page scrolls sideways');
+            } finally {
+                await page.send('Emulation.setDeviceMetricsOverride', { width: 1100, height: 900, deviceScaleFactor: 1, mobile: false });
+            }
         });
 
         await step('replay without stored data explains how to open a replay', async () => {

@@ -37,7 +37,6 @@
                         <option value="60">60×</option>
                     </select>
                 </label>
-                <input type="range" id="timeSlider" min="0" max="0" value="0" step="1" disabled aria-label="Replay position">
                 <span id="clockLabel" class="clock-label">--:--:--</span>
             </div>
 
@@ -54,7 +53,7 @@
                 <input type="text" id="lapMaxInput" value="1:00.000" aria-label="Max lap time, M:SS.mmm">
                 <span id="lapMaxError" class="error-message hidden">Invalid time</span>
             </div>
-            <canvas id="lapCanvas" aria-label="Lap times of the followed rider; a vertical line moves with the replay time"></canvas>
+            <canvas id="lapCanvas" aria-label="Lap times of the followed rider; click or drag to move the replay to that moment"></canvas>
 
             <div class="rider-head">
                 <h2>Riders <small id="riderCount"></small></h2>

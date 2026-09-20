@@ -18,7 +18,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const tooltip = $('trackTooltip');
     const playBtn = $('playBtn');
     const speedSelect = $('speedSelect');
-    const timeSlider = $('timeSlider');
     const clockLabel = $('clockLabel');
     const riderList = $('riderList');
     const riderCount = $('riderCount');
@@ -58,7 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const trackLengthM = payload.trackLengthM || 400;
     $('replaySubtitle').textContent = `${payload.location.sport} · ${payload.location.name} · ${formatDateTime(payload.riders[0].startTime)}`;
-    $('backLink').href = `index.html?transponder=${encodeURIComponent(payload.reference.chipCode || '')}`;
+    $('backLink').href = `index.html?transponder=${encodeURIComponent(payload.reference.chipCode || '')}&activity=${encodeURIComponent(payload.reference.id)}`;
 
     const riders = payload.riders.map((r, index) => ({
         ...r, index, laps: null, loading: false, error: null, selected: false, selectedAt: 0, slot: null, hover: false, forceLabel: false, forceSmall: false, labelledAt: 0
@@ -197,7 +196,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (extents.length === 0) {
             timelineReady = false;
             playBtn.disabled = true;
-            timeSlider.disabled = true;
             setPlaying(false);
             statusEl.textContent = selectedRiders().some(r => r.loading) ? 'Loading laps…' : 'Select at least one rider below.';
             return;
@@ -213,8 +211,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         t = Math.min(Math.max(t, tMin), tMax);
         timelineReady = true;
-        timeSlider.max = Math.ceil((tMax - tMin) / 1000);
-        timeSlider.disabled = false;
         playBtn.disabled = false;
         statusEl.textContent = selectedRiders().some(r => r.loading) ? 'Loading laps…' : '';
     }
@@ -677,7 +673,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!playing && t >= tMax) t = Math.min(Math.max(startMs ?? tMin, tMin), tMax);
         setPlaying(!playing);
     });
-    timeSlider.addEventListener('input', () => { t = tMin + Number(timeSlider.value) * 1000; });
     document.addEventListener('keydown', event => {
         if (event.code === 'Space' && !['INPUT', 'SELECT', 'BUTTON'].includes(document.activeElement?.tagName)) {
             event.preventDefault();
@@ -693,7 +688,6 @@ document.addEventListener('DOMContentLoaded', () => {
         lastFrame = now;
         if (timelineReady) {
             clockLabel.textContent = new Date(t).toLocaleTimeString('en-GB');
-            timeSlider.value = Math.round((t - tMin) / 1000);
         }
         draw();
         drawLapChart();

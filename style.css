@@ -679,15 +679,11 @@ button:disabled {
     color: var(--text-secondary);
 }
 
-.replay-controls input[type="range"] {
-    flex: 1 1 220px;
-    accent-color: var(--accent);
-}
-
 .clock-label {
     font-variant-numeric: tabular-nums;
     font-weight: 600;
     min-width: 72px;
+    margin-left: auto;
     text-align: right;
 }
 
@@ -935,4 +931,30 @@ button:disabled {
     .split-view { flex-direction: column; height: auto; }
     #contextChartContainer { height: 250px; }
     #lapsTableContainer { height: 300px; }
+
+    h1 { font-size: 1.5rem; }
+    .stat-card .value { font-size: 1.2em; }
+    .session-card { padding: 12px; gap: 10px; }
+    .session-card-avatar { width: 40px; height: 40px; }
+    .session-card-stats { grid-template-columns: repeat(2, 1fr); }
+
+    /* Replay: the live text of a rider goes under the name instead of squeezing next to it */
+    .rider-row { flex-wrap: wrap; row-gap: 4px; padding: 10px; }
+    .rider-live { flex-basis: 100%; text-align: left; padding-left: 30px; }
+    .rider-actions { margin-left: 0; }
+    .lap-readout { margin-left: 0; flex-basis: 100%; }
+    .clock-label { margin-left: auto; }
+    .lap-max-controls input[type="text"] { width: 100%; text-align: left; }
+}
+
+/* Touch screens: bigger targets for buttons, checkboxes and the rider dots */
+@media (pointer: coarse) {
+    button { min-height: 44px; }
+    .replay-select,
+    .rider-row input[type="checkbox"] { width: 24px; height: 24px; }
+    .rider-swatch { width: 24px; height: 24px; }
+    .switch { width: 54px; height: 30px; }
+    .switch-track { border-radius: 15px; }
+    .switch-track::after { width: 24px; height: 24px; }
+    .switch input:checked + .switch-track::after { transform: translateX(24px); }
 }
