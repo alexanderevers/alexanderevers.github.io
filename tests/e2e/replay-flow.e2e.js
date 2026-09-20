@@ -658,6 +658,9 @@ function skip(name, reason) {
             }
             await page.navigate(`${base}/index.html`);
             assert.match(await text('.topbar .brand'), /^\s*Icesights/);
+            // the rider search is not in the menu; the page itself is still there for anybody who has its address
+            assert.equal(await count('a[href="search_user.html"]'), 0, 'the main page still links to the rider search');
+            assert.equal(await page.evaluate('fetch("search_user.html").then(r => r.status)'), 200);
         });
 
         await step('app: the service worker takes over, keeps the app shell, and the app opens without a connection', async () => {

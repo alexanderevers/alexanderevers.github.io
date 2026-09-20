@@ -112,17 +112,6 @@ body.dashboards-page {
     gap: 16px;
 }
 
-.topbar-link {
-    color: var(--text-secondary);
-    text-decoration: none;
-    font-size: 0.78rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
-.topbar-link:hover { color: var(--text); }
-
 /* Phones with a notch or rounded corners (and the installed app): keep the bar and the navigation inside them */
 .topbar {
     padding-left: max(20px, env(safe-area-inset-left));
@@ -550,7 +539,6 @@ body.dashboards-page {
     .dash-inner { padding: 18px 34px 22px 16px; gap: 14px; }
     .topbar { padding: 0 12px; }
     .brand em,
-    .topbar-link,
     .back-long { display: none; }
     .dash-nav { right: 6px; }
     .dash-dot-label { display: none; }
