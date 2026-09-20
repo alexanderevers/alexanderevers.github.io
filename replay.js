@@ -2,7 +2,7 @@
  * Race replay page: draws the selected riders on an oblong track, driven by their real lap times.
  * Depends on utils.js, api.js, replay-track.js and replay-model.js.
  */
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const MAX_RIDERS = 200;             // safety limit on how many riders are shown at once
     const LABELLED_RIDERS = 10;         // the first riders get a coloured dot with initials, the rest are small blue dots
     const REPLAY_STORAGE_KEY = 'replayData';
@@ -43,17 +43,56 @@ document.addEventListener('DOMContentLoaded', () => {
             const wanted = new URLSearchParams(window.location.search).get('activity');
             if (!payload || !payload.reference || !Array.isArray(payload.riders)) return null;
             if (wanted && String(payload.reference.id) !== wanted) return null;
+            const chip = (new URLSearchParams(window.location.search).get('transponder') || '').toUpperCase();
+            if (chip && payload.reference.chipCode && payload.reference.chipCode.toUpperCase() !== chip) return null;
             return payload;
         } catch {
             return null;
         }
     }
 
-    const payload = loadPayload();
+    /**
+     * The replay of somebody else's link, or in a browser that never opened it from the main page: everything
+     * is rebuilt from the address (transponder and activity) with the same search as the main page.
+     */
+    async function rebuildPayload() {
+        const params = new URLSearchParams(window.location.search);
+        const transponder = (params.get('transponder') || '').trim().toUpperCase();
+        const activityId = params.get('activity');
+        if (!isValidTransponderFormat(transponder) || !/^\d{1,15}$/.test(activityId || '')) return null;
+
+        const loading = $('replayLoading');
+        show(loading);
+        loading.textContent = 'Loading the replay…';
+        const { activities, account, userId } = await fetchActivities(transponder);
+        const reference = activities.find(activity => String(activity.id) === activityId);
+        if (!reference) throw new Error(`Activity ${activityId} was not found for transponder ${transponder}.`);
+        const sessions = await loadOverlappingRiders(reference, text => { loading.textContent = text; });
+        const referenceRider = { name: riderDisplayName({ chipLabel: transponder, account }), chipCode: transponder, accountId: userId };
+        const wanted = parseReplayRiders(params.get('riders'));
+        const known = new Set(sessions.map(session => session.id));
+        const selected = wanted ? wanted.filter(id => known.has(id)) : sessions.filter(session => session.togetherMs > 0).map(session => session.id);
+        return buildReplayPayload(reference, referenceRider, sessions, selected);
+    }
+
+    let payload;
+    try {
+        payload = loadPayload() || await rebuildPayload();
+    } catch (error) {
+        console.warn('Could not load the replay', error);
+        hide($('replayLoading'));
+        $('replayError').textContent = `Could not load the replay: ${error.message}`;
+        show($('replayError'));
+        return;
+    }
+    hide($('replayLoading'));
     if (!payload) {
         show($('replayEmpty'));
         return;
     }
+    // The riders in the address (when there are any) decide who is shown first.
+    const wantedRiders = parseReplayRiders(new URLSearchParams(window.location.search).get('riders'));
+    if (wantedRiders) payload.selected = wantedRiders;
     show($('replayApp'));
 
     const trackLengthM = payload.trackLengthM || 400;
@@ -225,6 +264,47 @@ document.addEventListener('DOMContentLoaded', () => {
         statusEl.textContent = selectedRiders().some(r => r.loading) ? 'Loading laps…' : '';
     }
 
+    // ---------- Link to this replay ----------
+    // The address always holds what is needed to open the same replay anywhere: transponder, activity, riders shown.
+    let lastAddress = null;
+    function updateAddress() {
+        const chip = payload.reference.chipCode;
+        if (!chip) return;
+        const address = replayAddress(chip, payload.reference.id, riders.filter(r => r.selected && !r.isReference).map(r => r.id));
+        if (address === lastAddress) return;
+        lastAddress = address;
+        try {
+            window.history.replaceState({}, '', address);
+        } catch {
+            // some browsers refuse this (for example on a file:// page): the address is then just not updated
+        }
+    }
+
+    // The share button (top right) copies the address of this replay: transponder, activity and the riders shown.
+    let shareNoteTimer = null;
+    $('shareBtn').addEventListener('click', async () => {
+        const link = lastAddress ? new URL(lastAddress, window.location.href).href : window.location.href;
+        let copied = false;
+        try {
+            await navigator.clipboard.writeText(link);
+            copied = true;
+        } catch {
+            const box = document.createElement('textarea');   // older browsers and pages without clipboard access
+            box.value = link;
+            box.style.position = 'fixed';
+            box.style.opacity = '0';
+            document.body.appendChild(box);
+            box.select();
+            try { copied = document.execCommand('copy'); } catch { copied = false; }
+            box.remove();
+        }
+        const note = $('shareNote');
+        note.textContent = copied ? 'Link copied' : 'Copy the link from the address bar';
+        note.classList.add('show');
+        clearTimeout(shareNoteTimer);
+        shareNoteTimer = setTimeout(() => { note.classList.remove('show'); note.textContent = ''; }, 2500);
+    });
+
     // ---------- Rider list ----------
     const rows = new Map();
     function buildRows() {
@@ -290,6 +370,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 : 'Click to show this rider with a colour';
         });
         updateFollowOptions();
+        updateAddress();
         riders.forEach(rider => {
             const { compare } = rows.get(rider);
             const comparing = compareRider === rider;

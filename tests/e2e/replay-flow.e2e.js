@@ -178,9 +178,15 @@ function skip(name, reason) {
             await click('#replaySelectAllBtn');                                             // leave them selected for the replay
             assert.equal(await count('.replay-select:checked'), SKATED_WITH_YOU.length);
         });
-        await step('open replay: address and stored data', async () => {
+        let replayLink = null;
+        await step('open replay: the address holds the transponder, the activity and the riders; the data is stored too', async () => {
             await click('#openReplayBtn');
-            assert.equal(await page.evaluate('window.__opened'), `replay.html?activity=${REFERENCE.id}`);
+            replayLink = await page.evaluate('window.__opened');
+            const link = new URL(replayLink, 'http://x/');
+            assert.equal(link.searchParams.get('transponder'), data.referenceChip);
+            assert.equal(link.searchParams.get('activity'), String(REFERENCE.id));
+            const linkRiders = link.searchParams.get('riders').split(',').map(Number).sort((a, b) => a - b);
+            assert.deepEqual(linkRiders, SKATED_WITH_YOU.map(r => r.id).sort((a, b) => a - b));
             const payload = JSON.parse(await page.evaluate('localStorage.getItem("replayData")'));
             assert.equal(payload.reference.id, REFERENCE.id);
             assert.equal(payload.trackLengthM, 400);
@@ -443,6 +449,56 @@ function skip(name, reason) {
             } finally {
                 await page.send('Emulation.setDeviceMetricsOverride', { width: 1100, height: 900, deviceScaleFactor: 1, mobile: false });
             }
+        });
+
+        // A link sent to someone else, or opened in a private window, has no stored replay data: it is rebuilt from the address.
+        const shownRiders = () => page.evaluate('JSON.stringify([...document.querySelectorAll(".rider-row.selected .rider-name")].map(n => n.textContent.trim()))').then(JSON.parse);
+        const addressRiders = () => page.evaluate('new URLSearchParams(location.search).get("riders")').then(value => value.split(',').map(Number).sort((x, y) => x - y));
+        await step('replay link: opens the same replay without any stored data (other computer, private window)', async () => {
+            await page.evaluate('localStorage.removeItem("replayData")');
+            await page.navigate(`${base}/${replayLink}`);
+            await page.waitFor('!document.getElementById("replayApp").classList.contains("hidden")', 'the replay to be rebuilt from the link');
+            await page.waitFor(allLapsLoaded, 'all laps to load');
+            assert.match(await text('#replaySubtitle'), /Jaap Eden/);
+            const states = await rowStates();
+            assert.equal(states.length, OVERLAPPING.length + 1);
+            assert.equal(states.filter(s => s.checked).length, SKATED_WITH_YOU.length + 1);
+            assert.equal(states.find(s => s.name.includes('Allday')).checked, false);
+            assert.match(await text('#riderList .rider-row small'), /AB-12345/);
+            assert.equal(await page.evaluate('localStorage.getItem("replayData")'), null, 'the rebuilt replay should not depend on stored data');
+            assert.equal((await text('#clockLabel')).trim(), new Date(data.T0).toLocaleTimeString('en-GB'));
+        });
+        await step('replay link: the riders in the link decide who is shown; the address follows the list', async () => {
+            await page.navigate(`${base}/replay.html?transponder=${data.referenceChip}&activity=${REFERENCE.id}&riders=2,3`);
+            await page.waitFor(allLapsLoaded, 'the laps of the linked riders');
+            assert.deepEqual((await shownRiders()).sort(), ['Alex Evers - Zoom (you)', 'Bram Bakker - Bolt', 'Eva Visser']);
+            assert.equal(await page.evaluate('new URLSearchParams(location.search).get("transponder")'), data.referenceChip);
+            assert.deepEqual(await addressRiders(), [2, 3]);
+            assert.equal(await page.evaluate('new URLSearchParams(location.search).get("activity")'), String(REFERENCE.id));
+            // showing another rider changes the address
+            await page.evaluate('[...document.querySelectorAll(".rider-row")].find(r => r.textContent.includes("Gijs")).querySelector("input").click()');
+            await page.waitFor(allLapsLoaded, 'the added rider to load');
+            assert.deepEqual(await addressRiders(), [2, 3, 4]);
+        });
+        await step('replay: the share button in the top right corner copies the link to this replay', async () => {
+            await page.send('Browser.grantPermissions', { permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'], origin: base });
+            const corner = JSON.parse(await page.evaluate('JSON.stringify((() => { const b = document.getElementById("shareBtn").getBoundingClientRect(); const c = document.querySelector(".container").getBoundingClientRect(); return { fromRight: c.right - b.right, fromTop: b.top - c.top, width: b.width }; })())'));
+            assert.ok(corner.fromRight < 40 && corner.fromTop < 40 && corner.width < 50, `the button is not a small button in the top right corner: ${JSON.stringify(corner)}`);
+            assert.equal(await count('#shareBtn svg'), 1, 'the share icon is missing');
+            await click('#shareBtn');
+            await page.waitFor('document.getElementById("shareNote").textContent === "Link copied"', 'the confirmation');
+            const copied = await page.evaluate('navigator.clipboard.readText()');
+            assert.equal(copied, await page.evaluate('location.href'));
+            assert.match(copied, /replay\.html\?transponder=AB-12345&activity=1&riders=/);
+        });
+        await step('replay link: riders=none shows only you; a link to an unknown activity gives a clear message', async () => {
+            await page.navigate(`${base}/replay.html?transponder=${data.referenceChip}&activity=${REFERENCE.id}&riders=none`);
+            await page.waitFor(allLapsLoaded, 'your laps');
+            assert.equal((await shownRiders()).length, 1);
+            await page.navigate(`${base}/replay.html?transponder=${data.referenceChip}&activity=999999&riders=2`);
+            await page.waitFor('!document.getElementById("replayError").classList.contains("hidden")', 'the message');
+            assert.match(await text('#replayError'), /Activity 999999 was not found/);
+            assert.equal(await visible('#replayApp'), false);
         });
 
         await step('replay without stored data explains how to open a replay', async () => {

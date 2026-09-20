@@ -151,7 +151,7 @@ File: `tests/e2e/replay-flow.e2e.js` (helpers in `tests/e2e/browser.js`). What h
 
 1. A tiny web server serves the repository folder on a random port and injects the **fake API** (`fixtures/fake-api-stub.js`) into every HTML page. The pages therefore never talk to the real proxy.
 2. A headless Chrome/Edge is started in a temporary profile and controlled through the DevTools protocol. Requests to `*.workers.dev` (the avatar images) are blocked, so the test does not depend on the real proxy at all.
-3. The scenario runs as 35 named steps; each prints `PASS` or `FAIL` (with the reason). When Chart.js cannot be downloaded, a `SKIP` line replaces the four chart-dependent steps (3 to 6 below), and another one the three deep link steps.
+3. The scenario runs as 39 named steps; each prints `PASS` or `FAIL` (with the reason). When Chart.js cannot be downloaded, a `SKIP` line replaces the four chart-dependent steps (3 to 6 below), and another one the three deep link steps.
 
 The steps, in order:
 
@@ -163,7 +163,7 @@ The steps, in order:
 | 7 | overlapping riders | exactly 17 cards; the rider from 5 hours later and the old session are not listed; you are not listed |
 | 8 | overlapping riders | sorted by "In your group" (longest first) and, at equal group minutes, by "Skated together"; several riders share the same group minutes but not the same time together, so the tie-break is really tested; every card also shows an "In your group" estimate (`~`); the all-day rider shows `0 min`, is dimmed and is last |
 | 9 | overlapping riders | "Select all skated together" picks exactly the 16 riders with more than 0 min, not the all-day rider; toggles to "Select none" and back |
-| 10 | open replay | address `replay.html?activity=1`; stored data has 18 riders, 16 selected, 400 m track, `togetherMs`/`groupMs` on every rider |
+| 10 | open replay | address `replay.html?transponder=AB-12345&activity=1&riders=<the 16 riders>`; stored data has 18 riders, 16 selected, 400 m track, `togetherMs`/`groupMs` on every rider |
 | 11 | replay | 17 riders shown: **10 with a colour, 7 small dots**; header "(17 shown, first 10 labelled)"; the all-day rider is listed but not shown ("together 0 min") |
 | 12 | replay | riders with 0 min together are greyed out in the list (only the all-day rider), the others are not |
 | 13 | replay | the clock starts at the reference rider's first lap start **even though the other riders' laps arrive first** (the fake API delays the reference rider's laps by 800 ms on purpose) |
@@ -179,8 +179,12 @@ The steps, in order:
 | 29 | remembered settings | after moving the "max fast lap time" slider, reloading the main page keeps that value |
 | 30-32 | deep links (needs Chart.js) | `index.html?transponder=...&activity=...` opens that session (laps table filled, address unchanged); choosing another activity, or none, updates the address bar; an unknown activity id shows "Activity ... was not found" and is dropped from the address |
 | 33 | phone layout | at 390 px wide neither the replay page nor the main page scrolls sideways, and a rider's live text sits under the name |
-| 34 | replay | without stored data the page explains how to open a replay |
-| 35 | whole run | **no exception and no `console.error` on any page** |
+| 34 | replay link | a replay link opens the same replay **without any stored data** (as on another computer or in a private window): the whole replay is rebuilt from the address, 17 riders shown, the all-day rider not, the clock starts when you entered the ice, nothing is written to storage |
+| 35 | replay link | `riders=2,3` shows only you and those two; the address bar follows the list when a rider is added |
+| 36 | replay | the **share button** is a small icon button in the top right corner and copies the link (the clipboard holds the address of the replay) |
+| 37 | replay link | `riders=none` shows only you; a link to an unknown activity gives the message "Activity ... was not found" |
+| 38 | replay | without stored data the page explains how to open a replay |
+| 39 | whole run | **no exception and no `console.error` on any page** |
 
 ## 5. How to verify the output
 
@@ -357,6 +361,7 @@ Understanding these makes the tests (and the code) easy to read.
 - **Active time.** MYLAPS reports the total training time (first to last lap) and the active training time (the laps). The session summary shows the active time and its share of the total; the card says "N/A" when either time is missing.
 - **Remembered settings.** `localStorage` keys `mylaps.maxFastLapSeconds` (main page slider), `mylaps.replaySpeed` and `mylaps.followChip` (the transponder of the rider whose lap graph was followed last), plus `theme`. Values that no longer fit (for example a slider value outside its range) are ignored, and a browser that blocks storage simply forgets the settings.
 - **Deep links.** `index.html?transponder=XX-12345&activity=123` opens straight on that session; the address bar follows the chosen activity (`history.replaceState`), so it can be copied and shared. An unknown activity id shows a message. The replay's back link carries the activity id.
+- **Replay links.** `replay.html?transponder=...&activity=...&riders=...` works without stored data: the replay is rebuilt from the address with the same search as the main page (`loadOverlappingRiders`). `riders=none` means nobody but you; without `riders`, everyone who skated with you. The address bar follows the shown riders and the share button copies it.
 - **Phone layout.** Under 768 px the page uses one column and the rider details sit under the name; on touch screens (`pointer: coarse`) buttons, checkboxes, rider dots and the theme switch are larger. Tables that are wider than a phone scroll inside their own box, never the page.
 - **Master tracks.** One GPX lap per rink in `/tracks`, registered in `MASTER_TRACKS` (`gpx-generator.js`) by MYLAPS location id (with a name fallback). A rink without a file gets no download button.
 

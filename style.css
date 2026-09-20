@@ -593,7 +593,43 @@ button:disabled {
 #pageInfo { font-weight: 600; }
 
 /* ---------- Replay ---------- */
-.container.wide { max-width: 1100px; }
+.container.wide { max-width: 1100px; position: relative; }
+
+/* Share button: a small round icon button in the top right corner of the page */
+.share-btn {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background-color: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+
+.share-btn:hover:not(:disabled) { background-color: var(--grid); }
+
+.share-note {
+    position: absolute;
+    top: 50%;
+    right: 44px;
+    transform: translateY(-50%);
+    display: none;
+    padding: 4px 10px;
+    border-radius: 8px;
+    background: var(--text);
+    color: var(--page);
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.share-note.show { display: block; }
 
 .back-link {
     align-self: flex-start;

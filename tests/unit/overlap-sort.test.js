@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { loadBrowserScripts } = require('../helpers/browser-scripts');
+const { loadBrowserScripts, hostCopy } = require('../helpers/browser-scripts');
 
 const { compareOverlappingRiders } = loadBrowserScripts(['utils.js', 'fetch_overlapping_sessions.js']).sandbox;
 const MIN = 60000;
@@ -31,5 +31,27 @@ describe('compareOverlappingRiders: the order of the overlapping riders', () => 
     it('gives 0 for identical riders and works on an empty list', () => {
         assert.equal(compareOverlappingRiders(rider('a', 4, 4), rider('b', 4, 4)), 0);
         assert.deepEqual(order([]), []);
+    });
+});
+
+const { replayAddress, parseReplayRiders } = loadBrowserScripts(['utils.js', 'fetch_overlapping_sessions.js']).sandbox;
+
+describe('replay links: everything needed to open the same replay on another computer', () => {
+    it('holds the transponder, the activity and the riders that are shown', () => {
+        assert.equal(replayAddress('AB-12345', 7561524117, [11, 12, 13]), 'replay.html?transponder=AB-12345&activity=7561524117&riders=11,12,13');
+    });
+    it('says "none" when nobody but you is shown, so it is not confused with a link without riders', () => {
+        assert.equal(replayAddress('AB-12345', 5, []), 'replay.html?transponder=AB-12345&activity=5&riders=none');
+        assert.deepEqual(hostCopy(parseReplayRiders('none')), []);
+    });
+    it('reads the riders back, ignores anything that is not an activity id, and returns null without the parameter', () => {
+        assert.deepEqual(hostCopy(parseReplayRiders('11,12,13')), [11, 12, 13]);
+        assert.deepEqual(hostCopy(parseReplayRiders('11,abc,-4,0,12.5,13')), [11, 13]);
+        assert.deepEqual(hostCopy(parseReplayRiders('')), []);
+        assert.equal(parseReplayRiders(null), null);
+    });
+    it('a written address can be read back', () => {
+        const address = replayAddress('AB-12345', 5, [21, 22]);
+        assert.deepEqual(hostCopy(parseReplayRiders(new URLSearchParams(address.split('?')[1]).get('riders'))), [21, 22]);
     });
 });

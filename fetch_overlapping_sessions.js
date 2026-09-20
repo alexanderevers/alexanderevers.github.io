@@ -34,6 +34,91 @@ function compareOverlappingRiders(a, b) {
         || (exact(b.togetherMs) - exact(a.togetherMs));
 }
 
+/** Runs fn over the items a few at a time, to avoid flooding the proxy (2 calls per rider). */
+async function mapInBatches(items, batchSize, fn, onProgress) {
+    const results = [];
+    for (let i = 0; i < items.length; i += batchSize) {
+        results.push(...await Promise.all(items.slice(i, i + batchSize).map(fn)));
+        if (onProgress) onProgress(results.length, items.length);
+    }
+    return results;
+}
+
+/**
+ * Everyone who was on the ice during an activity, with the time skated together and the time in your group,
+ * in the order shown on the main page. Used by the main page and by the replay page (which rebuilds its riders
+ * from a shared link).
+ * @param {object} selectedActivity  an activity of the reference rider (location, startTime, endTime, id)
+ * @param {function} [onStatus]      called with a progress text
+ */
+async function loadOverlappingRiders(selectedActivity, onStatus = () => {}) {
+    const { location, startTime } = selectedActivity;
+    const year = new Date(startTime).getFullYear();
+
+    const allActivities = await fetchAllActivitiesFromLocation(location.id, year, location.sport, startTime);
+
+    const overlapping = allActivities.filter(activity =>
+        activity.id !== selectedActivity.id && sessions_overlap(selectedActivity, activity)
+    );
+
+    // The selected rider's own laps, to work out how long each rider actually skated at the same time.
+    const trackLengthM = location.trackLength || 400;
+    let referenceLaps = null;
+    try {
+        referenceLaps = normalizeLaps(await fetchLaps(selectedActivity.id, selectedActivity.endTime));
+    } catch (e) {
+        console.error('Could not fetch the selected activity laps; skipping the "skated together" times', e);
+    }
+
+    onStatus(`Loading ${overlapping.length} overlapping riders…`);
+    const overlappingWithDetails = await mapInBatches(overlapping, 5, async (activity) => {
+        try {
+            const [sessionDetails, accountDetails] = await Promise.all([
+                fetchLaps(activity.id, activity.endTime),
+                fetchAccountDetails(activity.chipCode)
+            ]);
+            const riderLaps = normalizeLaps(sessionDetails);
+            const togetherMs = referenceLaps ? onIceOverlapMs(referenceLaps, riderLaps, trackLengthM) : null;
+            // riderLaps is only kept until the group times are worked out below
+            return { ...activity, stats: sessionDetails.stats, account: accountDetails, togetherMs, groupMs: null, riderLaps };
+        } catch (e) {
+            console.error(`Could not fetch details for activity ${activity.id}`, e);
+            return { ...activity, stats: null, account: null, togetherMs: null, groupMs: null, riderLaps: null };
+        }
+    }, (done, total) => {
+        onStatus(`Loading overlapping riders… ${done} of ${total}`);
+    });
+
+    // Who skated in your group is decided from everyone's finish crossings together.
+    if (referenceLaps) {
+        const groupById = groupMembership(referenceLaps,
+            overlappingWithDetails.filter(session => session.riderLaps).map(session => ({ id: session.id, laps: session.riderLaps })),
+            trackLengthM);
+        overlappingWithDetails.forEach(session => {
+            session.groupMs = session.riderLaps ? (groupById.get(session.id) ?? 0) : null;
+        });
+    }
+    overlappingWithDetails.forEach(session => { delete session.riderLaps; });
+
+    overlappingWithDetails.sort(compareOverlappingRiders);
+    return overlappingWithDetails;
+}
+
+/**
+ * Address of the replay page for an activity and the riders that are shown. It holds everything the page needs
+ * (transponder, activity, riders), so it works on any computer, not only where the replay was opened from.
+ */
+function replayAddress(transponder, activityId, riderIds) {
+    const riders = riderIds && riderIds.length ? riderIds.join(',') : 'none';
+    return `replay.html?transponder=${encodeURIComponent(transponder)}&activity=${activityId}&riders=${riders}`;
+}
+
+/** The rider activity ids of a "riders" address parameter: null when it is absent, [] for "none". */
+function parseReplayRiders(param) {
+    if (param === null || param === undefined) return null;
+    return param.split(',').map(Number).filter(id => Number.isInteger(id) && id > 0);
+}
+
 /** Estimated durations get a "~" in front; N/A stays N/A. */
 function formatEstimate(ms) {
     const text = formatDurationShort(ms);
@@ -194,18 +279,8 @@ function setupOverlappingSessionsEventListeners(getActivities, getReferenceRider
             show(errorDiv);
             return;
         }
-        window.open(`replay.html?activity=${payload.reference.id}`, '_blank');
+        window.open(replayAddress(payload.reference.chipCode, payload.reference.id, payload.selected), '_blank');
     });
-
-    // Fetch details in small batches to avoid flooding the proxy (2 calls per rider).
-    async function mapInBatches(items, batchSize, fn, onProgress) {
-        const results = [];
-        for (let i = 0; i < items.length; i += batchSize) {
-            results.push(...await Promise.all(items.slice(i, i + batchSize).map(fn)));
-            if (onProgress) onProgress(results.length, items.length);
-        }
-        return results;
-    }
 
     fetchOverlappingBtn.addEventListener('click', async () => {
         const userActivities = getActivities();
@@ -226,55 +301,7 @@ function setupOverlappingSessionsEventListeners(getActivities, getReferenceRider
                 throw new Error("Could not find the selected activity details.");
             }
 
-            const { location, startTime } = selectedActivity;
-            const year = new Date(startTime).getFullYear();
-
-            const allActivities = await fetchAllActivitiesFromLocation(location.id, year, location.sport, startTime);
-
-            const overlapping = allActivities.filter(activity =>
-                activity.id !== selectedActivity.id && sessions_overlap(selectedActivity, activity)
-            );
-
-            // The selected rider's own laps, to work out how long each rider actually skated at the same time.
-            const trackLengthM = location.trackLength || 400;
-            let referenceLaps = null;
-            try {
-                referenceLaps = normalizeLaps(await fetchLaps(selectedActivity.id, selectedActivity.endTime));
-            } catch (e) {
-                console.error('Could not fetch the selected activity laps; skipping the "skated together" times', e);
-            }
-
-            loadingDiv.textContent = `Loading ${overlapping.length} overlapping riders…`;
-            const overlappingWithDetails = await mapInBatches(overlapping, 5, async (activity) => {
-                try {
-                    const [sessionDetails, accountDetails] = await Promise.all([
-                        fetchLaps(activity.id, activity.endTime),
-                        fetchAccountDetails(activity.chipCode)
-                    ]);
-                    const riderLaps = normalizeLaps(sessionDetails);
-                    const togetherMs = referenceLaps ? onIceOverlapMs(referenceLaps, riderLaps, trackLengthM) : null;
-                    // riderLaps is only kept until the group times are worked out below
-                    return { ...activity, stats: sessionDetails.stats, account: accountDetails, togetherMs, groupMs: null, riderLaps };
-                } catch (e) {
-                    console.error(`Could not fetch details for activity ${activity.id}`, e);
-                    return { ...activity, stats: null, account: null, togetherMs: null, groupMs: null, riderLaps: null };
-                }
-            }, (done, total) => {
-                loadingDiv.textContent = `Loading overlapping riders… ${done} of ${total}`;
-            });
-
-            // Who skated in your group is decided from everyone's finish crossings together.
-            if (referenceLaps) {
-                const groupById = groupMembership(referenceLaps,
-                    overlappingWithDetails.filter(session => session.riderLaps).map(session => ({ id: session.id, laps: session.riderLaps })),
-                    trackLengthM);
-                overlappingWithDetails.forEach(session => {
-                    session.groupMs = session.riderLaps ? (groupById.get(session.id) ?? 0) : null;
-                });
-            }
-            overlappingWithDetails.forEach(session => { delete session.riderLaps; });
-
-            overlappingWithDetails.sort(compareOverlappingRiders);
+            const overlappingWithDetails = await loadOverlappingRiders(selectedActivity, text => { loadingDiv.textContent = text; });
 
             lastOverlap = { reference: selectedActivity, sessions: overlappingWithDetails };
             displayOverlappingSessions(overlappingWithDetails);
