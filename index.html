@@ -1,77 +1,111 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dashboards">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MYLAPS Activity Viewer</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="dashboards.css">
     <script src="theme.js"></script>
     <!-- Include Chart.js library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body>
-    <div class="container">
-        <h1>MYLAPS Activity Viewer</h1>
-        <div class="input-group">
-            <label for="transponderInput">Transponder Number:</label>
-            <input type="text" id="transponderInput" placeholder="Enter transponder number" list="transponder-list">
-            <button id="fetchActivitiesBtn">Fetch Activities</button>
-            <datalist id="transponder-list"></datalist>
-        </div>
-
-        <div id="profile-info" style="display: none;">
-            <img id="profile-avatar" src="" alt="User Avatar">
-            <div class="profile-details">
-                <span id="profile-name"></span>
-                <span id="profile-nickname"></span>
+<body class="dashboards-page">
+    <header class="topbar">
+        <a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true"></span>MYLAPS <em>Activity Viewer</em></a>
+        <div class="topbar-actions">
+            <a class="topbar-link" href="search_user.html">Search riders</a>
+            <div class="theme-switch">
+                <span>Light</span>
+                <label class="switch">
+                    <input type="checkbox" id="themeToggle" aria-label="Dark mode">
+                    <span class="switch-track"></span>
+                </label>
+                <span>Dark</span>
             </div>
         </div>
+    </header>
 
-        <div id="loading" class="hidden">Loading...</div>
-        <div id="error" class="hidden error-message"></div>
+    <nav id="dashNav" class="dash-nav hidden" aria-label="Dashboards"></nav>
 
-        <div id="activitiesList" class="hidden">
-            <h2>Recent Activities</h2>
-            <div class="activities-split-view">
-                <div class="activities-left-panel">
-                    <div class="activity-controls-group input-group"> 
-                        <div id="yearFilterWrap" class="year-filter hidden">
-                            <label for="yearFilter">Year</label>
-                            <select id="yearFilter"></select>
-                        </div>
-                        <select id="activitySelect">
-                            <option value="">Select an activity</option>
-                        </select>
-                        <div> <!-- Wrapper voor de knoppen -->
-                            <button id="fetchLapsBtn" disabled>Fetch Laps</button>
-                            <button id="fetchOverlappingBtn" class="hidden">Find Overlapping Sessions</button>
-                            <button id="downloadGpxBtn" class="hidden">Download GPX for Strava</button>
+    <div id="loading" class="hidden status-banner">Loading...</div>
+    <div id="error" class="hidden error-message status-banner"></div>
+
+    <!-- 01 Start: choose a transponder and a session -->
+    <section class="dash" id="dashStart" data-title="Start">
+        <div class="dash-inner start-inner">
+            <div class="hero-title">
+                <h1>Your laps, your <span class="hot">race</span></h1>
+                <p class="lede">Get insights in your ice-skating activities.</p>
+            </div>
+
+            <div class="input-group start-input">
+                <label for="transponderInput">Transponder number</label>
+                <div class="input-row">
+                    <input type="text" id="transponderInput" placeholder="XX-12345" list="transponder-list" autocapitalize="characters" spellcheck="false">
+                    <button id="fetchActivitiesBtn">Fetch Activities</button>
+                </div>
+                <datalist id="transponder-list"></datalist>
+            </div>
+
+            <div id="profile-info" style="display: none;">
+                <img id="profile-avatar" src="" alt="User Avatar">
+                <div class="profile-details">
+                    <span id="profile-name"></span>
+                    <span id="profile-nickname"></span>
+                </div>
+            </div>
+
+            <div id="activitiesList" class="hidden">
+                <div class="activities-split-view">
+                    <div class="activities-left-panel">
+                        <div class="activity-controls-group input-group">
+                            <div id="yearFilterWrap" class="year-filter hidden">
+                                <label for="yearFilter">Year</label>
+                                <select id="yearFilter"></select>
+                            </div>
+                            <select id="activitySelect">
+                                <option value="">Select an activity</option>
+                            </select>
+                            <div> <!-- Wrapper voor de knoppen -->
+                                <button id="fetchLapsBtn" disabled>Fetch Laps</button>
+                                <button id="fetchOverlappingBtn" class="hidden">Find Overlapping Sessions</button>
+                                <button id="downloadGpxBtn" class="hidden">Download GPX for Strava</button>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div class="activities-right-panel hidden" id="activityInfoPanel">
-                    <div id="activityInfoTable"></div>
+                    <div class="activities-right-panel hidden" id="activityInfoPanel">
+                        <div id="activityInfoTable"></div>
+                    </div>
                 </div>
             </div>
         </div>
+    </section>
 
-        <div id="sessionSummary" class="hidden"></div>
-
-        <div id="lapsData" class="hidden">
-            <div id="maxFastLapControls" class="input-group slider-group">
-                <label for="maxFastLapInput">Max Fast Lap Time:</label>
-                <input type="range" id="maxFastLapSlider" min="10" max="180" value="60" step="0.1">
-                <input type="text" id="maxFastLapInput" value="1:00.000" placeholder="MM:SS.ms or SS.ms">
-                <span id="maxFastLapValueError" class="error-message hidden">Invalid time format</span>
-                <button id="toggleLapsBtn">Show Speed Laps</button>
+    <!-- The dashboards of one session; they appear after "Fetch Laps" -->
+    <div id="lapsData" class="dash-group hidden">
+        <!-- 02 Session: the numbers, and the lap times over the session -->
+        <section class="dash" id="dashSession" data-title="Session">
+            <div class="dash-inner">
+                <header class="dash-head"><h2>Session</h2><p class="dash-sub">The whole session at a glance</p></header>
+                <div id="sessionSummary" class="hidden"></div>
+                <div id="maxFastLapControls" class="input-group slider-group">
+                    <label for="maxFastLapInput">Lap time threshold</label>
+                    <input type="range" id="maxFastLapSlider" min="10" max="180" value="60" step="0.1">
+                    <input type="text" id="maxFastLapInput" value="1:00.000" placeholder="MM:SS.ms or SS.ms">
+                    <span id="maxFastLapValueError" class="error-message hidden">Invalid time format</span>
+                    <button id="toggleLapsBtn">Show Speed Laps</button>
+                </div>
+                <div class="chart-container grow" id="mainChartContainer">
+                    <canvas id="mainLapChart"></canvas>
+                </div>
             </div>
-            <h2>Lap times</h2>
-            <div class="chart-container" id="mainChartContainer">
-                <canvas id="mainLapChart"></canvas>
-            </div>
+        </section>
 
-            <div id="speedAnalysis">
-                <h2>Speed lap analysis</h2>
+        <!-- 03 Speed laps: how fast, how steady -->
+        <section class="dash" id="speedAnalysis" data-title="Speed laps">
+            <div class="dash-inner">
+                <header class="dash-head"><h2>Speed laps</h2><p class="dash-sub">Laps faster than your lap time threshold</p></header>
                 <div id="speedStats" class="stat-grid"></div>
                 <div class="analysis-grid">
                     <div id="distributionSection">
@@ -86,19 +120,14 @@
                     </div>
                 </div>
             </div>
-            <div class="table-and-context-section hidden" id="tableAndContextSection">
-                <h2>Laps Data Analysis</h2>
-                <div class="split-view">
-                    <div class="chart-container" id="contextChartContainer">
-                        <canvas id="contextLapChart"></canvas>
-                    </div>
-                    <div id="lapsTableContainer"></div>
-                </div>
-            </div>
-        </div>
+        </section>
 
-        <div id="overlappingSessions" class="hidden">
-            <h2>Overlapping Sessions</h2>
+    </div>
+
+    <!-- 04 Together: who was on the ice with you -->
+    <section class="dash hidden" id="overlappingSessions" data-title="Together">
+        <div class="dash-inner">
+            <header class="dash-head"><h2>Together</h2><p class="dash-sub">Everyone who was on the ice during this session</p></header>
             <div id="replayToolbar" class="replay-toolbar hidden">
                 <button id="openReplayBtn">Open replay</button>
                 <button id="replaySelectAllBtn" class="secondary-btn" title="Selects only the riders who skated with you (more than 0 min together), not the ones who were not on the ice at the same time">Select all</button>
@@ -106,18 +135,10 @@
             </div>
             <div id="overlappingSessionsTable"></div>
         </div>
-    </div>
-
-    <footer class="theme-switch">
-        <span>Light</span>
-        <label class="switch">
-            <input type="checkbox" id="themeToggle" aria-label="Dark mode">
-            <span class="switch-track"></span>
-        </label>
-        <span>Dark</span>
-    </footer>
+    </section>
 
     <!-- Laad alle scripts in de juiste volgorde -->
+    <script src="dashboards.js"></script>
     <script src="utils.js"></script>
     <script src="gpx-generator.js"></script>
     <script src="api.js"></script>

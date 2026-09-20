@@ -165,3 +165,48 @@ describe('remembered settings', () => {
         assert.doesNotThrow(() => saveSetting('speed', 30));
     });
 });
+
+describe('formatTransponderInput: the number is written as XX-12345 while typing', () => {
+    const { formatTransponderInput, findTransponderInText } = app.sandbox;
+    it('makes capitals and adds the dash by itself after the two letters', () => {
+        assert.equal(formatTransponderInput('p'), 'P');
+        assert.equal(formatTransponderInput('pz'), 'PZ-');
+        assert.equal(formatTransponderInput('pz2'), 'PZ-2');
+        assert.equal(formatTransponderInput('pz28583'), 'PZ-28583');
+    });
+    it('does not type the dash twice when somebody types it', () => {
+        assert.equal(formatTransponderInput('PZ--'), 'PZ-');
+        assert.equal(formatTransponderInput('PZ-'), 'PZ-');
+        assert.equal(formatTransponderInput('PZ-28583'), 'PZ-28583');
+        assert.equal(formatTransponderInput('pz - 28583'), 'PZ-28583');
+        assert.equal(formatTransponderInput('-'), '');
+    });
+    it('keeps exactly two letters and five digits', () => {
+        assert.equal(formatTransponderInput('PZ-285839'), 'PZ-28583');
+        assert.equal(formatTransponderInput('PZC-28583'), 'PZ-28583');
+        assert.equal(formatTransponderInput('12PZ-28583'), 'PZ-28583');
+        assert.equal(formatTransponderInput('P1Z-28583'), 'PZ-28583');
+        assert.equal(formatTransponderInput('PZ-2a8b5c83'), 'PZ-28583');
+    });
+    it('lets the dash be deleted: without trailingDash the dash is not added back', () => {
+        assert.equal(formatTransponderInput('PZ', { trailingDash: false }), 'PZ');
+        assert.equal(formatTransponderInput('PZ-', { trailingDash: false }), 'PZ');
+        assert.equal(formatTransponderInput('PZ-2', { trailingDash: false }), 'PZ-2');   // a digit always brings the dash
+    });
+    it('handles empty and missing input', () => {
+        assert.equal(formatTransponderInput(''), '');
+        assert.equal(formatTransponderInput(null), '');
+        assert.equal(formatTransponderInput(undefined), '');
+    });
+    it('everything it makes from a complete number is a valid transponder number', () => {
+        for (const text of ['pz28583', 'PZ-28583', 'pz - 28583', ' Pz-28583 ']) assert.equal(isValidTransponderFormat(formatTransponderInput(text)), true, text);
+    });
+    it('finds a whole number in pasted text and writes it as XX-12345', () => {
+        assert.equal(findTransponderInText('pz-28583'), 'PZ-28583');
+        assert.equal(findTransponderInText('Transponder: pz - 28583, thanks'), 'PZ-28583');
+        assert.equal(findTransponderInText('PZ28583'), 'PZ-28583');
+        assert.equal(findTransponderInText('AB-12'), null);            // not complete: it is pasted as usual
+        assert.equal(findTransponderInText('nothing here'), null);
+        assert.equal(findTransponderInText(undefined), null);
+    });
+});

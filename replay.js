@@ -93,7 +93,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // The riders in the address (when there are any) decide who is shown first.
     const wantedRiders = parseReplayRiders(new URLSearchParams(window.location.search).get('riders'));
     if (wantedRiders) payload.selected = wantedRiders;
+    hide($('replayMessage'));
     show($('replayApp'));
+    show($('shareBtn'));
 
     const trackLengthM = payload.trackLengthM || 400;
     $('replaySubtitle').textContent = `${payload.location.sport} · ${payload.location.name} · ${formatDateTime(payload.riders[0].startTime)}`;
@@ -410,8 +412,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         const unitsW = b.maxX - b.minX + 2 * MARGIN;
         const unitsH = b.maxY - b.minY + 2 * MARGIN;
         const dpr = window.devicePixelRatio || 1;
-        const w = trackWrap.clientWidth;
-        const h = Math.round(w * unitsH / unitsW);
+        // The track is drawn as large as fits in the space the dashboard gives it, in its own proportions.
+        const aspect = unitsW / unitsH;
+        const availableW = trackWrap.clientWidth;
+        const availableH = trackWrap.clientHeight;
+        const w = Math.max(1, Math.round(availableH > 0 ? Math.min(availableW, availableH * aspect) : availableW));
+        const h = Math.round(w / aspect);
+        canvas.style.width = `${w}px`;
         canvas.style.height = `${h}px`;
         canvas.width = Math.round(w * dpr);
         canvas.height = Math.round(h * dpr);
@@ -422,6 +429,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         lapCanvas.height = Math.round(lapView.h * dpr);
     }
     window.addEventListener('resize', resize);
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(resize).observe(trackWrap);   // the dashboard can change size
     resize();
 
     const toPx = p => ({ x: view.w / 2 + p.x * view.scale, y: view.h / 2 + p.y * view.scale });

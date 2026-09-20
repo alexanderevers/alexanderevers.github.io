@@ -1,28 +1,18 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dashboards">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Race Replay</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="dashboards.css">
     <script src="theme.js"></script>
 </head>
-<body>
-    <div class="container wide">
-        <a id="backLink" href="index.html" class="back-link">&larr; Back to activity viewer</a>
-        <h1>Race Replay</h1>
-        <p id="replaySubtitle" class="muted-note subtitle"></p>
-
-        <p id="replayLoading" class="muted-note hidden"></p>
-        <p id="replayError" class="error-message hidden"></p>
-
-        <div id="replayEmpty" class="hidden">
-            <p>No replay data found. Open a replay from the main page: fetch an activity, choose
-                <strong>Find Overlapping Sessions</strong>, tick the riders you want and press <strong>Open replay</strong>.</p>
-        </div>
-
-        <div id="replayApp" class="hidden">
-            <button id="shareBtn" class="share-btn" type="button" title="Copy the link to this replay" aria-label="Copy the link to this replay">
+<body class="dashboards-page">
+    <header class="topbar">
+        <a id="backLink" href="index.html" class="back-link">&larr; Back<span class="back-long"> to activity viewer</span></a>
+        <div class="topbar-actions">
+            <button id="shareBtn" class="share-btn hidden" type="button" title="Copy the link to this replay" aria-label="Copy the link to this replay">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <circle cx="18" cy="5" r="3"></circle>
                     <circle cx="6" cy="12" r="3"></circle>
@@ -32,63 +22,99 @@
                 </svg>
                 <span id="shareNote" class="share-note" role="status"></span>
             </button>
-            <div id="replayStatus" class="muted-note"></div>
-            <div class="track-wrap" id="trackWrap">
-                <canvas id="trackCanvas" aria-label="Oblong ice track with the selected riders"></canvas>
-                <div id="trackTooltip" class="track-tooltip hidden"></div>
-            </div>
-
-            <div class="replay-controls">
-                <button id="playBtn" disabled>Play</button>
-                <label class="speed-label">Speed
-                    <select id="speedSelect">
-                        <option value="1">1×</option>
-                        <option value="2">2×</option>
-                        <option value="5" selected>5×</option>
-                        <option value="10">10×</option>
-                        <option value="30">30×</option>
-                        <option value="60">60×</option>
-                    </select>
+            <div class="theme-switch">
+                <span>Light</span>
+                <label class="switch">
+                    <input type="checkbox" id="themeToggle" aria-label="Dark mode">
+                    <span class="switch-track"></span>
                 </label>
-                <span id="clockLabel" class="clock-label">--:--:--</span>
+                <span>Dark</span>
             </div>
-
-            <div class="lap-chart-head">
-                <h2>Lap times</h2>
-                <label class="speed-label">Rider
-                    <select id="followSelect" aria-label="Rider to follow in the lap time graph"></select>
-                </label>
-                <span id="lapReadout" class="lap-readout"></span>
-                <span id="compareReadout" class="compare-readout"></span>
-            </div>
-            <div class="lap-max-controls">
-                <label for="lapMaxSlider">Max lap time</label>
-                <input type="range" id="lapMaxSlider" min="10" max="180" step="0.1" value="60">
-                <input type="text" id="lapMaxInput" value="1:00.000" aria-label="Max lap time, M:SS.mmm">
-                <span id="lapMaxError" class="error-message hidden">Invalid time</span>
-            </div>
-            <canvas id="lapCanvas" aria-label="Lap times of the followed rider; click or drag to move the replay to that moment"></canvas>
-
-            <div class="rider-head">
-                <h2>Riders <small id="riderCount"></small></h2>
-                <span class="rider-actions">
-                    <button id="showAllBtn" class="secondary-btn" title="Shows the riders who skated with you (more than 0 min together), not the ones who were not on the ice at the same time">Show all skated together</button>
-                    <button id="hideAllBtn" class="secondary-btn">Hide all</button>
-                </span>
-            </div>
-            <div id="riderList" class="rider-list"></div>
         </div>
+    </header>
+
+    <nav id="dashNav" class="dash-nav hidden" aria-label="Dashboards"></nav>
+
+    <!-- Shown while the replay loads, and when it cannot be opened -->
+    <section class="dash" id="replayMessage" data-title="Replay">
+        <div class="dash-inner start-inner">
+            <div class="hero-title">
+                <p class="eyebrow">Race replay</p>
+                <h1>Race <span class="hot">replay</span></h1>
+            </div>
+            <p id="replayLoading" class="muted-note hidden"></p>
+            <p id="replayError" class="error-message hidden"></p>
+            <div id="replayEmpty" class="hidden">
+                <p>No replay data found. Open a replay from the main page: fetch an activity, choose
+                    <strong>Find Overlapping Sessions</strong>, tick the riders you want and press <strong>Open replay</strong>.</p>
+            </div>
+        </div>
+    </section>
+
+    <div id="replayApp" class="dash-group hidden">
+        <!-- 01 Replay: the track, the controls and the lap graph on one screen -->
+        <section class="dash" id="dashReplay" data-title="Replay">
+            <div class="dash-inner fill">
+                <div class="replay-title">
+                    <h1>Race Replay</h1>
+                    <p id="replaySubtitle" class="muted-note subtitle"></p>
+                    <span id="replayStatus" class="muted-note"></span>
+                </div>
+
+                <div class="track-wrap" id="trackWrap">
+                    <canvas id="trackCanvas" aria-label="Oblong ice track with the selected riders"></canvas>
+                    <div id="trackTooltip" class="track-tooltip hidden"></div>
+                </div>
+
+                <div class="replay-controls">
+                    <button id="playBtn" disabled>Play</button>
+                    <label class="speed-label">Speed
+                        <select id="speedSelect">
+                            <option value="1">1×</option>
+                            <option value="2">2×</option>
+                            <option value="5" selected>5×</option>
+                            <option value="10">10×</option>
+                            <option value="30">30×</option>
+                            <option value="60">60×</option>
+                        </select>
+                    </label>
+                    <span id="clockLabel" class="clock-label">--:--:--</span>
+                </div>
+
+                <div class="lap-chart-head">
+                    <h2>Lap times</h2>
+                    <label class="speed-label">Rider
+                        <select id="followSelect" aria-label="Rider to follow in the lap time graph"></select>
+                    </label>
+                    <span id="lapReadout" class="lap-readout"></span>
+                    <span id="compareReadout" class="compare-readout"></span>
+                </div>
+                <div class="lap-max-controls">
+                    <label for="lapMaxSlider">Max lap time</label>
+                    <input type="range" id="lapMaxSlider" min="10" max="180" step="0.1" value="60">
+                    <input type="text" id="lapMaxInput" value="1:00.000" aria-label="Max lap time, M:SS.mmm">
+                    <span id="lapMaxError" class="error-message hidden">Invalid time</span>
+                </div>
+                <canvas id="lapCanvas" aria-label="Lap times of the followed rider; click or drag to move the replay to that moment"></canvas>
+            </div>
+        </section>
+
+        <!-- 02 Riders: who is shown -->
+        <section class="dash" id="dashRiders" data-title="Riders">
+            <div class="dash-inner fill">
+                <header class="dash-head rider-head">
+                    <h2>Riders <small id="riderCount"></small></h2>
+                    <span class="rider-actions">
+                        <button id="showAllBtn" class="secondary-btn" title="Shows the riders who skated with you (more than 0 min together), not the ones who were not on the ice at the same time">Show all skated together</button>
+                        <button id="hideAllBtn" class="secondary-btn">Hide all</button>
+                    </span>
+                </header>
+                <div id="riderList" class="rider-list"></div>
+            </div>
+        </section>
     </div>
 
-    <footer class="theme-switch">
-        <span>Light</span>
-        <label class="switch">
-            <input type="checkbox" id="themeToggle" aria-label="Dark mode">
-            <span class="switch-track"></span>
-        </label>
-        <span>Dark</span>
-    </footer>
-
+    <script src="dashboards.js"></script>
     <script src="utils.js"></script>
     <script src="api.js"></script>
     <script src="replay-track.js"></script>

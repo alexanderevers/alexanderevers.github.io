@@ -1,10 +1,10 @@
 /* ---------- Theme tokens (light default, dark via OS setting) ---------- */
 :root {
     color-scheme: light;
-    --page: #f9f9f7;
-    --surface: #fcfcfb;
-    --surface-2: #f2f1ed;
-    --text: #0b0b0b;
+    --page: #ececef;
+    --surface: #ffffff;
+    --surface-2: #f2f2f4;
+    --text: #15151e;
     --text-secondary: #52514e;
     --text-muted: #898781;
     --grid: #e1e0d9;
@@ -16,8 +16,9 @@
     --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a; --cat-4: #eda100;
     --cat-5: #e87ba4; --cat-6: #008300; --cat-7: #4a3aa7; --cat-8: #e34948;
     --cat-9: #00a3c4; --cat-10: #a8663a;
-    --accent: #2a78d6;
-    --accent-hover: #256abf;
+    --accent: #e10600;
+    --accent-hover: #b80500;
+    --accent-text: #c40500;
     --accent-ink: #ffffff;
     --good: #28a745;
     --good-hover: #218838;
@@ -31,14 +32,14 @@
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
         color-scheme: dark;
-        --page: #0d0d0d;
-        --surface: #1a1a19;
-        --surface-2: #232321;
+        --page: #12121a;
+        --surface: #1c1c27;
+        --surface-2: #262634;
         --text: #ffffff;
         --text-secondary: #c3c2b7;
         --text-muted: #898781;
-        --grid: #2c2c2a;
-        --axis: #383835;
+        --grid: #30303f;
+        --axis: #45455a;
         --border: rgba(255, 255, 255, 0.10);
         --series-1: #3987e5;
         --series-2: #d95926;
@@ -46,9 +47,10 @@
     --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500;
     --cat-5: #d55181; --cat-6: #008300; --cat-7: #9085e9; --cat-8: #e66767;
     --cat-9: #0e97b3; --cat-10: #b5652f;
-        --accent: #3987e5;
-        --accent-hover: #5598e7;
-        --accent-ink: #0b0b0b;
+        --accent: #e8281f;
+        --accent-hover: #ff4a3f;
+        --accent-text: #ff5a4f;
+        --accent-ink: #ffffff;
         --danger: #e66767;
         --shadow: none;
     }
@@ -56,14 +58,14 @@
 
 :root[data-theme="dark"] {
     color-scheme: dark;
-    --page: #0d0d0d;
-    --surface: #1a1a19;
-    --surface-2: #232321;
+    --page: #12121a;
+    --surface: #1c1c27;
+    --surface-2: #262634;
     --text: #ffffff;
     --text-secondary: #c3c2b7;
     --text-muted: #898781;
-    --grid: #2c2c2a;
-    --axis: #383835;
+    --grid: #30303f;
+    --axis: #45455a;
     --border: rgba(255, 255, 255, 0.10);
     --series-1: #3987e5;
     --series-2: #d95926;
@@ -71,9 +73,10 @@
     --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500;
     --cat-5: #d55181; --cat-6: #008300; --cat-7: #9085e9; --cat-8: #e66767;
     --cat-9: #0e97b3; --cat-10: #b5652f;
-    --accent: #3987e5;
-    --accent-hover: #5598e7;
-    --accent-ink: #0b0b0b;
+    --accent: #e8281f;
+    --accent-hover: #ff4a3f;
+        --accent-text: #ff5a4f;
+    --accent-ink: #ffffff;
     --danger: #e66767;
     --shadow: none;
 }
@@ -136,7 +139,7 @@ h3 small {
 }
 
 a {
-    color: var(--accent);
+    color: var(--accent-text, var(--accent));
 }
 
 .hidden {
@@ -517,7 +520,7 @@ button:disabled {
 
 .session-card.no-overlap { opacity: 0.6; }
 
-.session-stat.together .value { color: var(--accent); }
+.session-stat.together .value { color: var(--accent-text, var(--accent)); }
 
 .session-card-avatar {
     width: 52px;

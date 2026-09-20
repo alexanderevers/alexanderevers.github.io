@@ -52,6 +52,15 @@ function lapTooltipLines(lap) {
 }
 
 /**
+ * The tooltip items to show: one per lap. The bar and the line of a speed lap are drawn at the same place and
+ * would both list the same lap; the average line is explained by the legend, not by a tooltip.
+ */
+function overviewTooltipFilter(item, index, items) {
+    if (item.dataset && item.dataset.isAverage) return false;
+    return items.findIndex(other => !(other.dataset && other.dataset.isAverage) && other.dataIndex === item.dataIndex) === index;
+}
+
+/**
  * Lap times over the session: speed laps as a line, slower laps as muted dots,
  * plus a reference line at the average speed-lap time.
  */
@@ -127,12 +136,10 @@ function buildOverviewChartConfig(lapData, maxFastTime, avgFastTime) {
                     }
                 },
                 tooltip: {
+                    filter: overviewTooltipFilter,
                     callbacks: {
                         title: () => '',
-                        label: context => {
-                            if (context.dataset.isAverage) return context.dataset.label;
-                            return lapTooltipLines(lapData[context.dataIndex]);
-                        }
+                        label: context => lapTooltipLines(lapData[context.dataIndex])
                     }
                 }
             }
@@ -191,47 +198,6 @@ function buildDistributionChartConfig(times) {
                         title: items => `${items[0].label} – ${formatSecondsToDuration(start + (items[0].dataIndex + 1) * width)}`,
                         label: context => `${context.parsed.y} lap${context.parsed.y === 1 ? '' : 's'}`
                     }
-                }
-            }
-        }
-    };
-}
-
-function prepareChartData(data, maxFastTime) {
-    const t = chartTheme();
-    const lapTimesInSeconds = data.map(lap => parseDurationToSeconds(lap.duration));
-    const backgroundColors = lapTimesInSeconds.map(x => (x < maxFastTime ? t.fast : t.slow));
-    const minLapTime = Math.min(...lapTimesInSeconds.filter(x => !isNaN(x)));
-    return { lapTimesInSeconds, backgroundColors, yAxisMin: Math.max(0, minLapTime - 5) };
-}
-
-/** Options for the horizontal 10-lap context chart next to the laps table. */
-function getContextChartOptions(yAxisMin, hoveredRowIndex, maxFastTime, currentFullLapData, startIndex = 0) {
-    const t = applyChartDefaults();
-    return {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: false,
-        scales: {
-            x: timeAxis(t, 'bottom', { min: yAxisMin, max: maxFastTime }),
-            y: {
-                grid: { display: false },
-                border: { color: t.axis },
-                ticks: {
-                    color: t.text,
-                    font: context => (context.index === hoveredRowIndex - startIndex
-                        ? { weight: 'bold', size: 14 }
-                        : { weight: 'normal', size: 12 })
-                }
-            }
-        },
-        plugins: {
-            legend: { display: false },
-            tooltip: {
-                callbacks: {
-                    title: () => '',
-                    label: context => lapTooltipLines(currentFullLapData[startIndex + context.dataIndex])
                 }
             }
         }

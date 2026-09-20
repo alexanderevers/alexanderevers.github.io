@@ -202,6 +202,34 @@ function formatTotalTrainingTime(durationString) {
     return `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
 }
 
+/**
+ * A transponder number while it is typed: always XX-12345 (two capital letters, a dash, five digits).
+ * Anything else is left out: typed dashes and spaces (the dash is added by itself), digits before the two
+ * letters are complete, letters after them, and more than five digits.
+ * @param {string} raw
+ * @param {{trailingDash?: boolean}} [options] trailingDash: add the dash as soon as the two letters are there
+ *        (turned off while deleting, otherwise the dash could never be removed)
+ */
+function formatTransponderInput(raw, { trailingDash = true } = {}) {
+    let letters = '';
+    let digits = '';
+    for (const character of String(raw ?? '').toUpperCase()) {
+        if (letters.length < 2) {
+            if (/[A-Z]/.test(character)) letters += character;
+        } else if (/[0-9]/.test(character) && digits.length < 5) {
+            digits += character;
+        }
+    }
+    const dash = letters.length === 2 && (digits.length > 0 || trailingDash) ? '-' : '';
+    return letters + dash + digits;
+}
+
+/** A complete transponder number inside pasted text ("Transponder: pz - 28583"), as XX-12345, or null. */
+function findTransponderInText(text) {
+    const match = /([A-Za-z]{2})[\s-]*(\d{5})/.exec(String(text ?? ''));
+    return match ? `${match[1].toUpperCase()}-${match[2]}` : null;
+}
+
 function isValidTransponderFormat(transponder) {
     return /^[A-Z]{2}-\d{5}$/.test(transponder);
 }

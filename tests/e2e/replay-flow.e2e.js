@@ -97,16 +97,85 @@ function skip(name, reason) {
 
         await page.evaluate(`(() => { const s = document.getElementById("activitySelect"); s.value = "${REFERENCE.id}"; s.dispatchEvent(new Event("change")); })()`);
 
+        await step('dashboards: before any results only the Start dashboard is there and there is no navigation', async () => {
+            assert.deepEqual(await page.evaluate('Dashboards.available()'), ['dashStart']);
+            assert.equal(await visible('#dashNav'), false);
+            assert.equal(await page.evaluate('getComputedStyle(document.documentElement).scrollSnapType'), 'y mandatory');
+        });
+
+        await step('transponder field: capitals and the dash are filled in while typing, a typed dash is not doubled, pasted text is cleaned up', async () => {
+            const field = 'document.getElementById("transponderInput")';
+            const value = () => page.evaluate(`${field}.value`);
+            const clear = () => page.evaluate(`(() => { const f = ${field}; f.focus(); f.value = ""; })()`);
+            const type = async text => { for (const character of text) await page.send('Input.insertText', { text: character }); };
+            // an input event like the browser sends it after a paste or a delete
+            const edit = (text, inputType) => page.evaluate(`(() => { const f = ${field}; f.value = ${JSON.stringify(text)}; f.dispatchEvent(new InputEvent("input", { inputType: ${JSON.stringify(inputType)}, bubbles: true })); })()`);
+            const paste = text => page.evaluate(`(() => { const f = ${field}; f.focus(); const data = new DataTransfer(); data.setData("text", ${JSON.stringify(text)}); const event = new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }); f.dispatchEvent(event); return event.defaultPrevented; })()`);
+            try {
+                await clear();
+                await type('p');
+                assert.equal(await value(), 'P');
+                await type('z');
+                assert.equal(await value(), 'PZ-', 'the dash is not added after the second letter');
+                await type('-');
+                assert.equal(await value(), 'PZ-', 'a typed dash was added twice');
+                await type('28583');
+                assert.equal(await value(), 'PZ-28583');
+                await type('9');
+                assert.equal(await value(), 'PZ-28583', 'a sixth digit was accepted');
+
+                await clear();
+                await type('ab-12345');                                   // somebody who types the dash themselves
+                assert.equal(await value(), 'AB-12345');
+                await clear();
+                await type('12ab3x4');                                   // digits before the letters and letters after them are left out
+                assert.equal(await value(), 'AB-34');
+
+                await clear();
+                assert.equal(await paste('transponder: pz - 28583'), true);
+                assert.equal(await value(), 'PZ-28583');
+                assert.equal(await paste('ab12345'), true);
+                assert.equal(await value(), 'AB-12345');
+                await edit('ab-12', 'insertFromPaste');                   // a partial number is cleaned up as it is pasted
+                assert.equal(await value(), 'AB-12');
+
+                await edit('AB-', 'deleteContentBackward');                // deleting: the dash and then the letters can be removed
+                assert.equal(await value(), 'AB');
+                await edit('A', 'deleteContentBackward');
+                assert.equal(await value(), 'A');
+
+                await clear();
+                await type('QW12345');
+                assert.match(await value(), /^[A-Z]{2}-\d{5}$/);
+            } finally {
+                await page.evaluate(`${field}.value = "${data.referenceChip}"`);   // the next steps use this number
+            }
+        });
+
+        await step('dashboards: the Start dashboard fits a 1280 x 720 screen without its own vertical scrollbar', async () => {
+            await page.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
+            try {
+                await page.sleep(300);
+                await page.evaluate('document.getElementById("downloadGpxBtn").classList.remove("hidden")');   // the widest row of buttons
+                const fit = JSON.parse(await page.evaluate('JSON.stringify((() => { const i = document.querySelector("#dashStart .dash-inner"); return { scroll: i.scrollHeight, client: i.clientHeight }; })())'));
+                assert.ok(fit.scroll <= fit.client + 1, `the Start dashboard is taller than the screen: ${fit.scroll} > ${fit.client}`);
+                assert.match(await text('#dashStart .lede'), /^Get insights in your ice-skating activities.$/);
+                assert.match(await text('label[for="maxFastLapInput"]'), /^Lap time threshold$/);
+            } finally {
+                await page.evaluate('document.getElementById("downloadGpxBtn").classList.add("hidden")');
+                await page.send('Emulation.setDeviceMetricsOverride', { width: 1100, height: 900, deviceScaleFactor: 1, mobile: false });
+            }
+        });
+
         if (!chartAvailable) {
             skip('main page: lap table, statistics and GPX download', 'Chart.js could not be loaded from the CDN (offline?)');
         } else {
             await click('#fetchLapsBtn');
             await page.waitFor('!document.getElementById("lapsData").classList.contains("hidden")', 'the laps section');
 
-            await step('main page: session summary cards and the laps table', async () => {
+            await step('main page: session summary cards', async () => {
                 assert.equal(await count('#sessionSummary .stat-card'), 9);
-                assert.equal(await count('#lapsTableContainer tbody tr'), referenceLaps.length);
-                assert.equal(await count('#lapsTableContainer thead th'), 5);           // no voltage / temperature columns
+                assert.equal(await count('#lapsTableContainer'), 0, 'the lap table section should be gone');
                 assert.match(await text('#sessionSummary'), /Avg Transponder/);
                 const summary = await text('#sessionSummary');
                 assert.match(summary, /Active Time/);
@@ -119,7 +188,7 @@ function skip(name, reason) {
                 assert.equal(await count('#mainLapChart'), 1);
                 assert.ok(await page.evaluate('Chart.getChart(document.getElementById("mainLapChart")) !== undefined'));
             });
-            await step('main page: max fast lap slider changes the analysis', async () => {
+            await step('main page: the lap time threshold slider changes the analysis', async () => {
                 const before = await text('#speedStats');
                 await setRange('#maxFastLapSlider', 38.5);
                 assert.notEqual(await text('#speedStats'), before);
@@ -131,6 +200,41 @@ function skip(name, reason) {
                 assert.match(gpx, /^<\?xml/);
                 assert.match(gpx, /<trk><name>Jaap Eden<\/name>/);
                 assert.match(gpx, /<trkpt lat="52\.348051" lon="4\.945358">/);           // first point of the Amsterdam master track
+            });
+            const atTop = id => `Math.abs(document.getElementById("${id}").getBoundingClientRect().top) < 3`;
+            await step('dashboards: Fetch Laps adds the session dashboards, lists them in the navigation and scrolls to Session', async () => {
+                assert.deepEqual(await page.evaluate('Dashboards.available()'), ['dashStart', 'dashSession', 'speedAnalysis']);
+                await page.waitFor(atTop('dashSession'), 'the page to scroll to the Session dashboard');
+                await page.waitFor('document.querySelectorAll("#dashNav .dash-dot").length === 3', 'the navigation');
+                const labels = JSON.parse(await page.evaluate('JSON.stringify([...document.querySelectorAll("#dashNav .dash-dot")].map(d => d.getAttribute("aria-label")))'));
+                assert.deepEqual(labels, ['Start', 'Session', 'Speed laps']);
+                assert.equal(await page.evaluate('document.querySelector("#dashNav .dash-dot.active").dataset.target'), 'dashSession');
+                // every dashboard fills exactly one screen
+                assert.ok(await page.evaluate('[...document.querySelectorAll(".dash")].filter(d => d.getClientRects().length).every(d => Math.round(d.getBoundingClientRect().height) === innerHeight)'));
+                // the hero figure is the best lap
+                assert.ok(Number(await page.evaluate('parseFloat(getComputedStyle(document.querySelector("#sessionSummary .stat-card:nth-child(2) .value")).fontSize)')) >= 48, 'the best lap is not a hero figure (48 px or more)');
+                assert.match(await text('#sessionSummary .stat-card:nth-child(2) .label'), /Best Lap/);
+            });
+            await step('dashboards: the navigation goes to the dashboard you click', async () => {
+                await page.evaluate('document.querySelector("#dashNav .dash-dot[data-target=speedAnalysis]").click()');
+                await page.waitFor(atTop('speedAnalysis'), 'the page to scroll to Speed laps');
+                await page.waitFor('document.querySelector("#dashNav .dash-dot.active").dataset.target === "speedAnalysis"', 'the navigation to follow');
+            });
+            await step('main page: hovering a lap in the session chart shows that lap once, not the bar and the line separately', async () => {
+                await page.evaluate('document.querySelector("#dashNav .dash-dot[data-target=dashSession]").click()');
+                await page.waitFor(atTop('dashSession'), 'the page to scroll back to Session');
+                const chartOf = 'Chart.getChart(document.getElementById("mainLapChart"))';
+                // lap 10: a speed lap, so both its bar and the point of the line are drawn there
+                const point = JSON.parse(await page.evaluate(`JSON.stringify((() => { const chart = ${chartOf}; const p = chart.getDatasetMeta(0).data[9].getCenterPoint(); const r = chart.canvas.getBoundingClientRect(); return { x: r.left + p.x, y: r.top + r.height / 2 }; })())`));   // (bars grow from 0, below the axis: use the middle of the chart for y)
+                await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x - 20, y: point.y });
+                await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y });
+                await page.waitFor(`${chartOf}.tooltip.opacity > 0`, 'the tooltip');
+                const tip = JSON.parse(await page.evaluate(`JSON.stringify((() => { const t = ${chartOf}.tooltip; return { points: t.dataPoints.length, body: t.body.length, lines: t.body.flatMap(b => b.lines) }; })())`));
+                assert.equal(tip.points, 1, 'the tooltip lists more than one item for one lap');
+                assert.equal(tip.body, 1);
+                assert.equal(tip.lines.filter(line => /^Lap \d+:/.test(line)).length, 1, JSON.stringify(tip.lines));
+                assert.equal(tip.lines.filter(line => /^Speed:/.test(line)).length, 1, JSON.stringify(tip.lines));
+                assert.match(tip.lines[0], /^Lap 10:/);
             });
         }
 
@@ -165,6 +269,19 @@ function skip(name, reason) {
             assert.equal(allDay.together, '0 min');
             assert.equal(allDay.dimmed, true);
             assert.equal(cards[cards.length - 1].id, ALL_DAY_ID, 'the rider who skated with nobody should be last');
+        });
+        await step('dashboards: the overlap search opens the Together dashboard, drawn as a timing tower with a position and bars per rider', async () => {
+            await page.waitFor('Math.abs(document.getElementById("overlappingSessions").getBoundingClientRect().top) < 3', 'the page to scroll to Together');
+            const rows = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll("#overlappingSessionsTable .session-card")].map(card => ({
+                rank: card.querySelector(".session-rank").textContent,
+                bars: [...card.querySelectorAll(".session-stat.together .meter > span")].map(s => parseFloat(s.style.width))
+            })))`));
+            assert.equal(rows.length, OVERLAPPING.length);
+            assert.deepEqual(rows.map(r => r.rank), rows.map((_, i) => String(i + 1)));
+            assert.ok(rows.every(r => r.bars.length === 2 && r.bars.every(w => w >= 0 && w <= 100)), 'each rider needs a bar for together and for group');
+            assert.ok(rows[0].bars[0] > 90, 'skating the whole session together should fill the bar');
+            assert.ok(rows[0].bars[1] < rows[0].bars[0], 'the group bar is a part of the together bar');
+            assert.equal(await page.evaluate('document.querySelector("#dashNav .dash-dot.active").dataset.target'), 'overlappingSessions');
         });
         await step('overlapping riders: "Select all" picks only riders who skated with you, and toggles back', async () => {
             assert.match(await text('#replaySelectAllBtn'), new RegExp(`Select all skated together \\(${SKATED_WITH_YOU.length}\\)`));
@@ -225,12 +342,19 @@ function skip(name, reason) {
             assert.ok(details.length > 0 && details.every(text => !/together 0 min/.test(text)), 'a rider with 0 min together is listed');
             assert.match(await text('#riderCount'), new RegExp(`^\\(${SKATED_WITH_YOU.length + 1} shown`));
         });
+        await step('dashboards (replay): Replay and Riders, and the track fits inside its dashboard in its own proportions', async () => {
+            assert.deepEqual(await page.evaluate('Dashboards.available()'), ['dashReplay', 'dashRiders']);
+            const fit = JSON.parse(await page.evaluate('JSON.stringify((() => { const c = document.getElementById("trackCanvas").getBoundingClientRect(); const w = document.getElementById("trackWrap").getBoundingClientRect(); const d = document.getElementById("dashReplay").getBoundingClientRect(); return { inside: c.left >= w.left - 1 && c.right <= w.right + 1 && c.top >= w.top - 1 && c.bottom <= w.bottom + 1, aspect: c.width / c.height, dashHeight: d.height, innerH: innerHeight, graphBottom: document.getElementById("lapCanvas").getBoundingClientRect().bottom }; })())'));
+            assert.equal(fit.inside, true, 'the track spills out of its space');
+            assert.ok(Math.abs(fit.aspect - 1.96) < 0.08, `the track lost its proportions: ${fit.aspect}`);
+            assert.ok(fit.graphBottom <= fit.innerH, 'the lap graph is cut off below the screen');
+        });
         await step('replay: the clock starts when you entered the ice, although other riders loaded first', async () => {
             assert.equal((await text('#clockLabel')).trim(), new Date(data.T0).toLocaleTimeString('en-GB'));
         });
         await step('replay: play and speed sit under the ice track, the lap graph under them, and there is no separate time slider', async () => {
             assert.equal(await count('#timeSlider'), 0);
-            const order = JSON.parse(await page.evaluate('JSON.stringify([...document.querySelectorAll("#replayApp > *")].map(e => e.id || e.className))'));
+            const order = JSON.parse(await page.evaluate('JSON.stringify([...document.querySelectorAll("#dashReplay .dash-inner > *")].map(e => e.id || e.className))'));
             const track = order.indexOf('trackWrap');
             assert.equal(order[track + 1], 'replay-controls');
             assert.equal(order[track + 2], 'lap-chart-head');
@@ -395,7 +519,7 @@ function skip(name, reason) {
             await click('#themeToggle');
             assert.equal(await page.evaluate('document.documentElement.dataset.theme'), 'light');
         });
-        await step('main page: remembers the max fast lap time', async () => {
+        await step('main page: remembers the lap time threshold', async () => {
             const mainPage = `${base}/index.html?transponder=${data.referenceChip}`;
             await page.navigate(mainPage);
             await page.waitFor('document.getElementById("activitySelect").options.length > 1', 'the activity list to load');
@@ -413,7 +537,7 @@ function skip(name, reason) {
                 await page.navigate(`${base}/index.html?transponder=${data.referenceChip}&activity=${REFERENCE.id}`);
                 await page.waitFor('!document.getElementById("lapsData").classList.contains("hidden")', 'the laps of the linked activity');
                 assert.equal(await page.evaluate('document.getElementById("activitySelect").value'), String(REFERENCE.id));
-                assert.equal(await count('#lapsTableContainer tbody tr'), referenceLaps.length);
+                assert.equal(await count('#sessionSummary .stat-card'), 9);
                 assert.equal(await page.evaluate('location.search'), `?transponder=${data.referenceChip}&activity=${REFERENCE.id}`);
             });
             await step('deep link: the address bar follows the chosen activity, so it can be shared', async () => {
@@ -480,8 +604,8 @@ function skip(name, reason) {
         });
         await step('replay: the share button in the top right corner copies the link to this replay', async () => {
             await page.send('Browser.grantPermissions', { permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'], origin: base });
-            const corner = JSON.parse(await page.evaluate('JSON.stringify((() => { const b = document.getElementById("shareBtn").getBoundingClientRect(); const c = document.querySelector(".container").getBoundingClientRect(); return { fromRight: c.right - b.right, fromTop: b.top - c.top, width: b.width }; })())'));
-            assert.ok(corner.fromRight < 40 && corner.fromTop < 40 && corner.width < 50, `the button is not a small button in the top right corner: ${JSON.stringify(corner)}`);
+            const corner = JSON.parse(await page.evaluate('JSON.stringify((() => { const b = document.getElementById("shareBtn").getBoundingClientRect(); return { fromRight: window.innerWidth - b.right, fromTop: b.top, width: b.width }; })())'));
+            assert.ok(corner.fromRight < 260 && corner.fromTop < 40 && corner.width < 50, `the button is not a small button in the top right corner: ${JSON.stringify(corner)}`);
             assert.equal(await count('#shareBtn svg'), 1, 'the share icon is missing');
             await click('#shareBtn');
             await page.waitFor('document.getElementById("shareNote").textContent === "Link copied"', 'the confirmation');

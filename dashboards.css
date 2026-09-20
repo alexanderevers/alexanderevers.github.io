@@ -1,0 +1,573 @@
+/**
+ * Dashboard layout and the racing look (index.html and replay.html).
+ * Loaded after style.css: it only adds the full-screen dashboards, the top bar and the navigation, and gives
+ * the existing components (stat tiles, buttons, tables, rider lists) a sharper, more "timing screen" style.
+ * Colours are the tokens of style.css, so light and dark both work.
+ */
+
+/* ---------- Page: one dashboard per screen, the page snaps from one to the next ---------- */
+html.dashboards {
+    scroll-snap-type: y mandatory;
+    overscroll-behavior-y: none;
+}
+
+body.dashboards-page {
+    padding: 0;
+    min-height: 0;
+    background: var(--page);
+}
+
+.dash {
+    position: relative;
+    display: flex;
+    height: 100vh;
+    height: 100dvh;
+    padding-top: 56px;                 /* the top bar */
+    scroll-snap-align: start;
+    scroll-snap-stop: always;          /* one dashboard at a time, however hard you scroll */
+}
+
+/* A group of dashboards that appear together: the wrapper itself draws nothing */
+.dash-group,
+#lapsData { display: contents; }
+
+.dash-inner {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    width: 100%;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 26px 56px 30px 32px;      /* room on the right for the navigation */
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    overflow-y: auto;                  /* a dashboard that is taller than the screen scrolls inside itself */
+    overscroll-behavior-y: auto;
+}
+
+.dash-inner.fill { overflow: hidden; }
+
+/* ---------- Top bar ---------- */
+.topbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0 20px;
+    background: color-mix(in srgb, var(--page) 86%, transparent);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+}
+
+.topbar::after {                       /* the red stripe under the brand */
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -1px;
+    width: 140px;
+    height: 3px;
+    background: var(--accent);
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text);
+    text-decoration: none;
+    font-weight: 800;
+    font-size: 0.95rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.brand em {
+    font-style: italic;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text-secondary);
+}
+
+.brand-mark {
+    width: 22px;
+    height: 14px;
+    background: var(--accent);
+    transform: skewX(-22deg);
+    border-radius: 2px;
+}
+
+.topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.topbar-link {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.topbar-link:hover { color: var(--text); }
+.topbar .theme-switch { margin: 0; }
+
+/* ---------- Navigation between the dashboards ---------- */
+.dash-nav {
+    position: fixed;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 55;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+
+.dash-nav .dash-dot {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 0;
+    padding: 5px 0;
+    background: none;
+    border: none;
+    border-radius: 0;
+    clip-path: none;
+    color: var(--text-muted);
+    text-transform: none;
+    letter-spacing: 0;
+    cursor: pointer;
+}
+
+.dash-nav .dash-dot:hover:not(:disabled) { background: none; color: var(--text); }
+
+.dash-dot-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translateX(6px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.dash-dot-label b { font-weight: 800; }
+
+.dash-nav:hover .dash-dot-label,
+.dash-nav .dash-dot.active .dash-dot-label,
+.dash-nav .dash-dot:focus-visible .dash-dot-label { opacity: 1; transform: none; }
+
+.dash-dot-mark {
+    width: 4px;
+    height: 20px;
+    border-radius: 2px;
+    background: var(--axis);
+    transform: skewX(-18deg);
+    transition: height 0.18s ease, background-color 0.18s ease;
+}
+
+.dash-nav .dash-dot.active { color: var(--text); }
+.dash-nav .dash-dot.active .dash-dot-mark { height: 34px; background: var(--accent); }
+
+/* ---------- Loading and error messages float above the dashboards ---------- */
+.status-banner {
+    position: fixed;
+    top: 68px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 70;
+    max-width: min(92vw, 640px);
+    padding: 10px 18px;
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 4px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+    font-weight: 600;
+    text-align: left;
+}
+
+.status-banner.error-message { border-left-color: var(--danger); }
+
+/* ---------- Type: heavy, italic, upper case ---------- */
+.dashboards-page h1,
+.dashboards-page h2 {
+    font-style: italic;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: -0.005em;
+}
+
+.dash-head {
+    position: relative;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.dash-head::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -1px;
+    width: 72px;
+    height: 3px;
+    background: var(--accent);
+}
+
+.dash-head h2 { margin: 0; font-size: 1.7rem; line-height: 1.1; }
+.dash-sub { margin: 0; color: var(--text-muted); font-size: 0.9rem; }
+
+.dashboards-page h3 {
+    text-transform: uppercase;
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    color: var(--text-secondary);
+}
+
+.dashboards-page a { color: var(--accent-text, var(--accent)); }
+
+/* ---------- Start dashboard ---------- */
+.start-inner { max-width: 860px; gap: 20px; padding-top: 16px; padding-bottom: 16px; }
+.start-inner > :first-child { margin-top: auto; }
+.start-inner > :last-child { margin-bottom: auto; }
+
+.hero-title h1 {
+    margin: 0;
+    text-align: left;
+    font-size: clamp(1.8rem, 5vw, 2.9rem);
+    line-height: 1;
+}
+
+.hero-title .hot { color: var(--accent); }
+
+.eyebrow {
+    margin-bottom: 14px;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.lede { margin-top: 8px; max-width: 34em; color: var(--text-secondary); font-size: 1rem; }
+
+.start-input .input-row { display: flex; gap: 10px; width: 100%; flex-wrap: wrap; }
+.start-input .input-row input[type="text"] { flex: 1 1 240px; max-width: none; font-size: 1.15rem; font-weight: 600; letter-spacing: 0.04em; }
+
+.dashboards-page .input-group label {
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.dashboards-page .input-group input[type="text"],
+.dashboards-page .input-group select {
+    border-radius: 4px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+}
+
+.dashboards-page .input-group select { max-width: 560px; }
+
+#activitiesList { border-top: none; padding-top: 0; }
+
+#profile-info {
+    border-radius: 4px;
+    border-left: 4px solid var(--accent);
+}
+
+#profile-avatar { border-color: var(--accent); }
+
+/* ---------- Buttons: sharper, with cut corners ---------- */
+.dashboards-page button {
+    border-radius: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.82rem;
+    clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+}
+
+.dashboards-page button:focus-visible {
+    clip-path: none;
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+}
+
+.dashboards-page .secondary-btn,
+.dashboards-page #toggleLapsBtn {
+    background-color: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+
+.dashboards-page .share-btn,
+.dashboards-page .switch-track { clip-path: none; }
+
+/* ---------- Stat tiles ---------- */
+.stat-card {
+    position: relative;
+    padding: 12px 14px 12px 16px;
+    text-align: left;
+    background: var(--surface-2);
+    border: none;
+    border-radius: 0;
+    box-shadow: inset 3px 0 0 var(--accent);
+    clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+}
+
+.stat-card .label {
+    margin-bottom: 6px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.stat-card .value { font-size: 1.55rem; font-weight: 800; line-height: 1.1; }
+
+/* Session summary: 12 cells, the best lap is the hero figure and takes 2 x 2 of them */
+#sessionSummary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    padding-top: 0;
+    border-top: none;
+    flex-shrink: 0;
+}
+
+#sessionSummary .stat-card:nth-child(2) {
+    grid-column: span 2;
+    grid-row: span 2;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-left: 22px;
+    box-shadow: inset 6px 0 0 var(--accent);
+}
+
+#sessionSummary .stat-card:nth-child(2) .value {
+    font-size: clamp(2.6rem, 6.5vw, 4.2rem);
+    line-height: 1;
+    letter-spacing: -0.02em;
+}
+
+#sessionSummary .stat-card:nth-child(2) .best-lap-number { font-size: 0.32em; letter-spacing: 0.04em; }
+
+/* ---------- Session dashboard: the controls and the chart ---------- */
+#maxFastLapControls {
+    flex-shrink: 0;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    margin: 0;
+    padding: 0;
+    border-top: none;
+}
+
+#maxFastLapControls label { flex: 0 0 auto; width: auto; }
+#maxFastLapControls input[type="range"] { flex: 1 1 200px; }
+#maxFastLapInput { width: 120px; }
+#maxFastLapValueError { margin-top: 0; }
+
+.chart-container.grow { flex: 1 1 240px; min-height: 200px; }
+#mainChartContainer { height: auto; margin-bottom: 0; }
+
+/* ---------- Speed laps dashboard ---------- */
+#speedAnalysis { border-top: none; padding-top: 56px; margin-bottom: 0; }   /* these ids are dashboards too: keep the room for the top bar */
+#speedStats { margin-bottom: 0; flex-shrink: 0; }
+.analysis-grid { flex: 1 1 auto; min-height: 0; }
+#distributionSection { display: flex; flex-direction: column; min-height: 0; }
+#distributionChartContainer { flex: 1 1 0; height: auto; min-height: 220px; }
+
+.blocks-table th,
+.laps-table th {
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+/* ---------- Together dashboard: a timing tower ---------- */
+#overlappingSessions { border-top: none; padding-top: 56px; }
+#overlappingSessions .dash-inner { overflow: hidden; }
+#replayToolbar { margin-bottom: 0; flex-shrink: 0; }
+
+#overlappingSessionsTable {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 6px;
+    gap: 6px;
+}
+
+#overlappingSessionsTable .session-card {
+    display: grid;
+    grid-template-columns: 2rem 1.4rem 40px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px 10px 10px;
+    background: var(--surface-2);
+    border: none;
+    border-radius: 0;
+    box-shadow: inset 3px 0 0 var(--axis);
+    clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+}
+
+#overlappingSessionsTable .session-card:hover { box-shadow: inset 3px 0 0 var(--accent); }
+#overlappingSessionsTable .session-card.no-overlap { opacity: 0.55; }
+
+/* The columns are fixed: a rider without a picture (the image hides itself) must not shift the others */
+#overlappingSessionsTable .session-card > .session-rank { grid-column: 1; }
+#overlappingSessionsTable .session-card > .replay-select { grid-column: 2; }
+#overlappingSessionsTable .session-card > .session-card-avatar { grid-column: 3; }
+#overlappingSessionsTable .session-card > .session-card-main { grid-column: 4; }
+
+.session-rank {
+    text-align: right;
+    font-size: 1.15rem;
+    font-weight: 800;
+    font-style: italic;
+    color: var(--text-muted);
+}
+
+#overlappingSessionsTable .session-card:nth-child(-n+3) .session-rank { color: var(--text); }
+
+#overlappingSessionsTable .replay-select { margin: 0; width: 18px; height: 18px; }
+#overlappingSessionsTable .session-card-avatar { width: 40px; height: 40px; border-color: var(--axis); }
+
+#overlappingSessionsTable .session-card-main {
+    display: grid;
+    grid-template-columns: minmax(150px, 1fr) minmax(0, 3.2fr);
+    align-items: center;
+    gap: 6px 18px;
+}
+
+#overlappingSessionsTable .session-card-name { font-size: 1rem; text-transform: none; }
+#overlappingSessionsTable .session-card-stats {
+    grid-template-columns: 1.5fr 1.5fr repeat(4, 1fr);
+    gap: 12px;
+}
+
+#overlappingSessionsTable .session-stat {
+    padding: 0;
+    text-align: left;
+    background: none;
+    border: none;
+}
+
+#overlappingSessionsTable .session-stat .label {
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+#overlappingSessionsTable .session-stat .value { font-size: 1rem; }
+.session-stat.together .value { color: var(--accent-text, var(--accent)); }
+
+/* Bars: the fill is how much of your session, the track is a lighter step of the same red */
+.meter {
+    display: block;
+    height: 4px;
+    margin-top: 6px;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--accent) 20%, transparent);
+    overflow: hidden;
+}
+
+.meter > span { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
+
+/* ---------- Replay: track, controls and graph on one screen; riders on the next ---------- */
+#dashReplay .dash-inner { overflow: hidden; gap: 12px; padding-top: 18px; }
+#dashRiders .dash-inner { overflow: hidden; }
+
+#dashReplay .track-wrap {
+    flex: 1 1 0;
+    min-height: 130px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#dashReplay #trackCanvas { width: auto; height: auto; max-width: 100%; }
+#dashReplay #lapCanvas { flex-shrink: 0; height: clamp(130px, 21vh, 230px); }
+#dashReplay .replay-controls,
+#dashReplay .lap-chart-head,
+#dashReplay .lap-max-controls { flex-shrink: 0; }
+#dashReplay .lap-chart-head h2 { font-size: 1.1rem; }
+
+.replay-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 14px; flex-shrink: 0; }
+.replay-title h1 { margin: 0; font-size: 1.5rem; text-align: left; }
+.replay-title .subtitle { margin: 0; text-align: left; }
+
+#dashRiders .rider-list { flex: 1 1 0; min-height: 0; overflow-y: auto; padding-right: 6px; }
+.rider-row { border-radius: 4px; }
+.rider-row.selected { border-color: var(--accent); }
+
+.topbar .back-link { white-space: nowrap; align-self: auto; color: var(--text-secondary); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.topbar .back-link:hover { color: var(--text); }
+.topbar .share-btn { position: relative; top: auto; right: auto; }
+
+/* ---------- Small screens ---------- */
+@media (max-width: 768px) {
+    .dash-inner { padding: 18px 34px 22px 16px; gap: 14px; }
+    .topbar { padding: 0 12px; }
+    .brand em,
+    .topbar-link,
+    .back-long { display: none; }
+    .dash-nav { right: 6px; }
+    .dash-dot-label { display: none; }
+    .dash-dot-mark { height: 16px; }
+    .dash-nav .dash-dot.active .dash-dot-mark { height: 28px; }
+    .dash-head h2 { font-size: 1.35rem; }
+
+    #sessionSummary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #sessionSummary .stat-card:nth-child(2) { grid-column: span 2; grid-row: auto; order: -1; }   /* the hero first, so no gap is left beside it */
+    .stat-card .value { font-size: 1.3rem; }
+
+    .analysis-grid { grid-template-columns: 1fr; }
+    #distributionChartContainer { flex: 0 0 200px; }
+    #mainChartContainer { height: auto; }
+    #maxFastLapControls { flex-direction: row; align-items: center; }
+    #maxFastLapInput { width: 110px; text-align: right; }
+
+    #overlappingSessionsTable .session-card { grid-template-columns: 1.6rem 1.3rem 34px minmax(0, 1fr); gap: 8px; }
+    #overlappingSessionsTable .session-card-avatar { width: 34px; height: 34px; }
+    #overlappingSessionsTable .session-card-main { grid-template-columns: 1fr; }
+    #overlappingSessionsTable .session-card-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+    #dashReplay .dash-inner { padding-top: 12px; gap: 8px; }
+    #dashReplay #lapCanvas { height: clamp(110px, 20vh, 180px); }
+}
+
+/* Touch screens keep the navigation marks easy to hit */
+@media (pointer: coarse) {
+    .dash-nav .dash-dot { min-height: 0; padding: 8px 4px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dash-dot-label,
+    .dash-dot-mark { transition: none; }
+}

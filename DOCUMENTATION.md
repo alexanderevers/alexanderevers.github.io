@@ -82,11 +82,26 @@ The frontend is a single-page application that handles user input, makes request
 | Key | What | Where |
 |---|---|---|
 | `theme` | light or dark, when you switched it by hand | all pages |
-| `mylaps.maxFastLapSeconds` | the "max fast lap time" slider | main page |
+| `mylaps.maxFastLapSeconds` | the "lap time threshold" slider | main page |
 | `mylaps.replaySpeed` | replay speed (1x to 60x) | replay page |
 | `mylaps.followChip` | transponder of the rider whose lap graph you followed last (used again when that rider is in the replay) | replay page |
 
 Nothing is sent to a server; a browser that blocks storage just forgets the settings.
+
+### Dashboards (the look of the site)
+
+Both pages are a row of **full-screen dashboards** (`<section class="dash">`, one screen each) instead of one long page:
+
+- **Snapping:** `html.dashboards` uses `scroll-snap-type: y mandatory` and every `.dash` has `scroll-snap-align: start` with `scroll-snap-stop: always`, so the page stays put until you move on and then jumps to the next dashboard. A dashboard that is taller than the screen scrolls inside itself (`.dash-inner`), never the page. Phones and keyboards work the same way.
+- **Navigation:** `dashboards.js` builds the numbered marks on the right from the dashboards that are on screen. A dashboard that is hidden with the `hidden` class (for example the session dashboards before laps are loaded) is left out; a MutationObserver keeps the marks up to date. `Dashboards.goTo(id)` scrolls to one; `script.js` calls it after Fetch Laps (Session) and the overlap search (Together).
+- **Main page:** Start (choose transponder, year and activity), Session (summary tiles with the best lap as the hero figure, lap time threshold slider, lap chart), Speed laps and Together (the timing tower: position, rider, bars for skated together and in your group as a share of your session). `#lapsData` is a `display: contents` wrapper that shows and hides the three session dashboards together.
+- **Replay page:** Replay (title, track, play controls, lap graph; the track is drawn as large as fits the space, see `resize()` in `replay.js`) and Riders (list with Compare buttons). Loading and error messages have their own screen (`#replayMessage`).
+- **Hovering the lap chart:** the bars and the line of a speed lap are drawn at the same place, so the tooltip would list the lap twice (and the average line as a third item). `overviewTooltipFilter` in `chart-factory.js` keeps one item per lap and leaves the average line out. There is no separate lap table any more; the tooltip shows the lap number, time, start time, difference, session time and speed.
+- **Look:** `dashboards.css` (layout, top bar, navigation, tiles, timing tower) on top of `style.css` (the colour tokens: near-black surfaces and a racing red accent `--accent`; `--accent-text` is the shade used for text). The data colours (`--cat-*`, `--series-*`) did not change; they were validated again against the new surfaces (`validate_palette.js`). Loading and error banners float above the dashboards (`.status-banner`).
+
+### The transponder field
+
+The number is always written as `XX-12345` (two capital letters, a dash, five digits). `formatTransponderInput` in `utils.js` runs on every keystroke (`script.js`): letters become capitals, the dash is added by itself after the second letter, a typed dash is not added twice, digits before the two letters and letters after them are left out, and a sixth digit is ignored. While deleting the dash is not added back, so it can be removed. The caret stays where you are typing. When you paste text that holds a whole number (for example "Transponder: pz - 28583"), `findTransponderInText` replaces the field with `PZ-28583`; a partial number is pasted as usual and cleaned up by the same input handler.
 
 ### Deep links and phone layout
 

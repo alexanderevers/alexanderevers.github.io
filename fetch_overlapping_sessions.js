@@ -141,7 +141,12 @@ function riderDisplayName(session) {
     return displayName;
 }
 
-function displayOverlappingSessions(sessions) {
+/**
+ * The list of everyone on the ice, drawn like a timing tower: position, rider, and bars that show how much of
+ * your session you skated together and in the same group.
+ * @param {number} [sessionMs] length of your session, the full width of the bars
+ */
+function displayOverlappingSessions(sessions, sessionMs = 0) {
     const overlappingSessionsTable = document.getElementById('overlappingSessionsTable');
     const overlappingSessions = document.getElementById('overlappingSessions');
     const replayToolbar = document.getElementById('replayToolbar');
@@ -155,7 +160,12 @@ function displayOverlappingSessions(sessions) {
     }
     show(replayToolbar);
 
-    sessions.forEach(session => {
+    const meter = ms => {
+        const share = sessionMs > 0 && ms > 0 ? Math.min(100, (ms / sessionMs) * 100) : 0;
+        return `<span class="meter" role="presentation"><span style="width:${share.toFixed(1)}%"></span></span>`;
+    };
+
+    sessions.forEach((session, index) => {
         const stats = session.stats;
         const card = document.createElement('div');
         card.className = 'session-card';
@@ -165,6 +175,7 @@ function displayOverlappingSessions(sessions) {
         const displayName = riderDisplayName(session);
 
         card.innerHTML = `
+            <span class="session-rank">${index + 1}</span>
             <input type="checkbox" class="replay-select" data-activity-id="${session.id}" data-together-ms="${session.togetherMs ?? ''}" aria-label="Include ${escapeHtml(displayName)} in the replay">
             <img src="${avatarUrl}" class="session-card-avatar" alt="Rider Avatar" onerror="this.style.display='none'">
             <div class="session-card-main">
@@ -175,8 +186,8 @@ function displayOverlappingSessions(sessions) {
                     <small>${formatDateTime(session.startTime)}</small>
                 </div>
                 <div class="session-card-stats">
-                    <div class="session-stat together"><span class="label">Skated together</span><span class="value">${formatDurationShort(session.togetherMs)}</span></div>
-                    <div class="session-stat together" title="Time you skated in the same group: riders crossing the finish line within 1 second of you, or within 1 second of the rider before them in that chain, up to a quarter of a lap before and after you"><span class="label">In your group</span><span class="value">${formatEstimate(session.groupMs)}</span></div>
+                    <div class="session-stat together"><span class="label">Skated together</span><span class="value">${formatDurationShort(session.togetherMs)}</span>${meter(session.togetherMs)}</div>
+                    <div class="session-stat together" title="Time you skated in the same group: riders crossing the finish line within 1 second of you, or within 1 second of the rider before them in that chain, up to a quarter of a lap before and after you"><span class="label">In your group</span><span class="value">${formatEstimate(session.groupMs)}</span>${meter(session.groupMs)}</div>
                     <div class="session-stat"><span class="label">Best Lap</span><span class="value">${stats?.fastestTime || 'N/A'}</span></div>
                     <div class="session-stat"><span class="label">Laps</span><span class="value">${stats?.lapCount || 'N/A'}</span></div>
                     <div class="session-stat"><span class="label">Duration</span><span class="value">${stats ? formatTotalTrainingTime(stats.totalTrainingTime) : 'N/A'}</span></div>
@@ -189,6 +200,7 @@ function displayOverlappingSessions(sessions) {
 
     document.dispatchEvent(new CustomEvent('overlapsrendered'));
     show(overlappingSessions);
+    if (typeof Dashboards !== 'undefined') Dashboards.goTo('overlappingSessions');
 }
 
 /**
@@ -304,7 +316,7 @@ function setupOverlappingSessionsEventListeners(getActivities, getReferenceRider
             const overlappingWithDetails = await loadOverlappingRiders(selectedActivity, text => { loadingDiv.textContent = text; });
 
             lastOverlap = { reference: selectedActivity, sessions: overlappingWithDetails };
-            displayOverlappingSessions(overlappingWithDetails);
+            displayOverlappingSessions(overlappingWithDetails, Date.parse(selectedActivity.endTime) - Date.parse(selectedActivity.startTime));
 
         } catch (error) {
             console.error("Error fetching overlapping sessions:", error);

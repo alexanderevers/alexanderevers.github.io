@@ -12,9 +12,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const maxFastLapControls = document.getElementById('maxFastLapControls');
     const mainLapChartCanvas = document.getElementById('mainLapChart');
     const mainChartContainer = document.getElementById('mainChartContainer');
-    const contextLapChartCanvas = document.getElementById('contextLapChart');
-    const tableAndContextSection = document.getElementById('tableAndContextSection');
-    const lapsTableContainer = document.getElementById('lapsTableContainer');
     const maxFastLapSlider = document.getElementById('maxFastLapSlider');
     const maxFastLapInput = document.getElementById('maxFastLapInput');
     const maxFastLapValueError = document.getElementById('maxFastLapValueError');
@@ -40,13 +37,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let userActivities = [];
     let currentUserId = null;
     let mainLapChart = null;
-    let contextLapChart = null;
     let distributionChart = null;
     let currentLapData = [];
     let currentTrackLength = 400; // Standaardwaarde, wordt bijgewerkt bij activiteitselectie
-    let estimatedRowHeight = 28;
-    let hoveredRowIndex = null;
-    // The "max fast lap time" is remembered between visits (when it is a value the slider can show).
+    // The "lap time threshold" is remembered between visits (when it is a value the slider can show).
     const savedMaxFastLap = Number(loadSetting('maxFastLapSeconds', NaN));
     if (Number.isFinite(savedMaxFastLap) && savedMaxFastLap >= parseFloat(maxFastLapSlider.min) && savedMaxFastLap <= parseFloat(maxFastLapSlider.max)) {
         maxFastLapSlider.value = savedMaxFastLap;
@@ -54,6 +48,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
     let generatedGpxFilename = 'training_session.gpx'; // Variabele voor de bestandsnaam
     let showOnlySpeedLaps = false;
+    // The page is a row of full-screen dashboards; after loading something, go to the dashboard that shows it.
+    const goToDashboard = id => { if (typeof Dashboards !== 'undefined') Dashboards.goTo(id); };
     // A shared link (?transponder=XX-12345&activity=123) opens straight on that session.
     let pendingActivityId = null;
 
@@ -76,20 +72,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function destroyCharts() {
         if (mainLapChart) { mainLapChart.destroy(); mainLapChart = null; }
-        if (contextLapChart) { contextLapChart.destroy(); contextLapChart = null; }
         if (distributionChart) { distributionChart.destroy(); distributionChart = null; }
     }
 
     // Charts read their colors from CSS tokens, so redraw when the OS theme flips.
     const redrawForTheme = () => {
-        if (currentLapData.length > 0) updateCharts(currentLapData, contextLapChart?.startIndex || 0);
+        if (currentLapData.length > 0) updateCharts(currentLapData);
     };
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redrawForTheme);
     document.addEventListener('themechange', redrawForTheme);
 
     function resetUI() {
         hide(loadingDiv); hide(errorDiv); hide(activitiesListDiv); hide(lapsDataDiv);
-        hide(maxFastLapControls); hide(tableAndContextSection); hide(sessionSummaryContainer);
+        hide(maxFastLapControls); hide(sessionSummaryContainer);
         hide(activityInfoPanel); resetGpxState(downloadGpxBtn); hide(overlappingSessions); hide(fetchOverlappingBtn);
         profileInfoDiv.style.display = 'none'; // Force hide with inline style
         errorDiv.textContent = '';
@@ -98,7 +93,6 @@ document.addEventListener('DOMContentLoaded', () => {
         activitySelect.innerHTML = '<option value="">Select an activity</option>';
         fetchLapsBtn.disabled = true;
         fetchOverlappingBtn.disabled = true;
-        lapsTableContainer.innerHTML = '';
         sessionSummaryContainer.innerHTML = '';
         activityInfoTable.innerHTML = '';
         overlappingSessionsTable.innerHTML = '';
@@ -136,7 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function updateCharts(lapData, startIndex = 0) {
+    function updateCharts(lapData) {
         if (!lapData || lapData.length === 0) return;
 
         const dataToDisplay = showOnlySpeedLaps
@@ -147,7 +141,6 @@ document.addEventListener('DOMContentLoaded', () => {
             : lapData;
 
         updateMainLapChart(dataToDisplay);
-        updateContextLapChart(dataToDisplay, startIndex);
         updateSpeedAnalysis();
     }
 
@@ -165,28 +158,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const analysis = analyzeSpeedLaps(currentLapData, MAX_FAST_LAP_TIME_SECONDS, currentTrackLength);
         if (mainLapChart) mainLapChart.destroy();
         mainLapChart = new Chart(mainLapChartCanvas, buildOverviewChartConfig(lapData, MAX_FAST_LAP_TIME_SECONDS, analysis?.avg));
-    }
-
-    function updateContextLapChart(lapData, startIndex = 0) {
-        const dataSlice = lapData.slice(startIndex, startIndex + 10);
-        const { lapTimesInSeconds, backgroundColors, yAxisMin } = prepareChartData(dataSlice, MAX_FAST_LAP_TIME_SECONDS);
-        const contextLapNumbers = dataSlice.map(lap => `Lap ${lap.nr}`);
-        if (contextLapChart) contextLapChart.destroy();
-        contextLapChart = new Chart(contextLapChartCanvas, {
-            type: 'bar',
-            data: {
-                labels: contextLapNumbers,
-                datasets: [{
-                    data: lapTimesInSeconds,
-                    backgroundColor: backgroundColors,
-                    borderRadius: { topRight: 4, bottomRight: 4 },
-                    borderSkipped: 'start',
-                    maxBarThickness: 24
-                }]
-            },
-            options: getContextChartOptions(yAxisMin, hoveredRowIndex, MAX_FAST_LAP_TIME_SECONDS, lapData, startIndex)
-        });
-        contextLapChart.startIndex = startIndex;
     }
 
     function displayProfileInfo(account, userId) {
@@ -303,33 +274,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    const handleTableScroll = () => {
-        const scrollTop = lapsTableContainer.scrollTop;
-        const newStartIndex = Math.floor(scrollTop / estimatedRowHeight);
-        if (newStartIndex !== (contextLapChart ? contextLapChart.startIndex : 0)) {
-            updateContextLapChart(currentLapData, newStartIndex);
-        }
-    };
-    let throttleTimer;
-    const throttle = (callback, time) => {
-        if (throttleTimer) return;
-        throttleTimer = true;
-        setTimeout(() => {
-            callback();
-            throttleTimer = false;
-        }, time);
-    };
-    // Single stable reference so the listener can actually be removed.
-    const throttledTableScroll = () => throttle(handleTableScroll, 100);
-
     fetchLapsBtn.addEventListener('click', async () => {
         hide(lapsDataDiv); hide(errorDiv); hide(maxFastLapControls);
-        hide(tableAndContextSection); hide(sessionSummaryContainer);
-        lapsTableContainer.innerHTML = '';
+        hide(sessionSummaryContainer);
         sessionSummaryContainer.innerHTML = '';
         resetGpxState(downloadGpxBtn);
         generatedGpxFilename = 'training_session.gpx';
-        lapsTableContainer.removeEventListener('scroll', throttledTableScroll);
 
         const selectedActivityId = activitySelect.value;
         if (!selectedActivityId) {
@@ -368,7 +318,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="stat-card">
                         <span class="label">Best Lap</span>
                         <span class="value">
-                            ${stats.fastestTime || 'N/A'} /
+                            ${stats.fastestTime || 'N/A'}
                             <br><span class="best-lap-number">(Lap ${bestLap.lapNr || 'N/A'})</span>
                         </span>
                     </div>
@@ -399,50 +349,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             show(lapsDataDiv);
             if (currentLapData.length > 0) {
-                const table = document.createElement('table');
-                table.className = 'laps-table';
-                const thead = table.createTHead();
-                const headerRow = thead.insertRow();
-                const headers = ['Lap', 'Duration', 'S. Duration', 'Diff Prev', 'Speed (km/h)'];
-                headers.forEach(text => {
-                    const th = document.createElement('th');
-                    th.textContent = text;
-                    headerRow.appendChild(th);
-                });
-                const tbody = table.createTBody();
-                currentLapData.forEach((lap, index) => {
-                    const row = tbody.insertRow();
-                    row.addEventListener('mouseenter', () => {
-                        hoveredRowIndex = index;
-                        // Only update the context chart, as redrawing the main chart is slow and not needed for this effect.
-                        if (contextLapChart) {
-                            updateContextLapChart(currentLapData, contextLapChart.startIndex || 0);
-                        }
-                    });
-                    row.addEventListener('mouseleave', () => {
-                        hoveredRowIndex = null;
-                        // Only update the context chart.
-                        if (contextLapChart) {
-                            updateContextLapChart(currentLapData, contextLapChart.startIndex || 0);
-                        }
-                    });
-                    row.insertCell().textContent = lap.nr;
-                    row.insertCell().textContent = lap.duration;
-                    row.insertCell().textContent = lap.sessionDuration || 'N/A';
-                    let diff = 'N/A';
-                    if (lap.diffPrevLap) {
-                        diff = `${lap.status === 'SLOWER' ? '+' : '-'}${lap.diffPrevLap}`;
-                    }
-                    row.insertCell().textContent = diff;
-                    row.insertCell().textContent = lap.speed?.kph?.toFixed(1) || 'N/A';
-                });
-                lapsTableContainer.appendChild(table);
                 show(maxFastLapControls);
-                show(tableAndContextSection);
-                updateCharts(currentLapData, 0);
-                lapsTableContainer.addEventListener('scroll', throttledTableScroll);
-                const firstRow = table.querySelector('tbody tr');
-                if (firstRow) estimatedRowHeight = firstRow.offsetHeight;
+                updateCharts(currentLapData);
 
                 // Bouw de bestandsnaam op
                 if (selectedActivity) {
@@ -457,8 +365,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 generateAndPrepareGpxDownload(currentLapData, downloadGpxBtn, selectedActivity?.location);
+                goToDashboard('dashSession');
             } else {
-                lapsTableContainer.innerHTML = '<p>No lap data found for the selected activity.</p>';
+                hide(lapsDataDiv);
+                errorDiv.textContent = 'No lap data found for the selected activity.';
+                show(errorDiv);
             }
         } catch (error) {
             console.error("Error fetching laps:", error);
@@ -475,8 +386,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     activitySelect.addEventListener('change', () => {
         hide(lapsDataDiv); hide(errorDiv); hide(maxFastLapControls);
-        hide(tableAndContextSection); hide(sessionSummaryContainer); hide(overlappingSessions);
-        lapsTableContainer.removeEventListener('scroll', throttledTableScroll);
+        hide(sessionSummaryContainer); hide(overlappingSessions);
         const hasSelection = !!activitySelect.value;
         fetchLapsBtn.disabled = !hasSelection;
         fetchOverlappingBtn.disabled = !hasSelection;
@@ -515,7 +425,7 @@ document.addEventListener('DOMContentLoaded', () => {
         maxFastLapInput.value = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
         hide(maxFastLapValueError);
         if (currentLapData.length > 0) {
-            updateCharts(currentLapData, contextLapChart?.startIndex || 0);
+            updateCharts(currentLapData);
             updateSpeedLapDistance();
         }
     });
@@ -534,13 +444,34 @@ document.addEventListener('DOMContentLoaded', () => {
             saveSetting('maxFastLapSeconds', MAX_FAST_LAP_TIME_SECONDS);
             maxFastLapSlider.value = parsedSeconds;
             if (currentLapData.length > 0) {
-                updateCharts(currentLapData, contextLapChart?.startIndex || 0);
+                updateCharts(currentLapData);
                 updateSpeedLapDistance();
             }
         }
     });
 
     loadSavedTransponders(TRANSPONDER_COOKIE_KEY, transponderDatalist);
+
+    // The transponder number is written as XX-12345 while typing: capitals, the dash by itself (a typed dash
+    // is not added twice), five digits.
+    transponderInput.addEventListener('input', event => {
+        const deleting = typeof event.inputType === 'string' && event.inputType.startsWith('delete');
+        const options = { trailingDash: !deleting };
+        const formatted = formatTransponderInput(transponderInput.value, options);
+        if (formatted === transponderInput.value) return;
+        const caret = transponderInput.selectionStart;
+        const position = formatTransponderInput(caret === null ? transponderInput.value : transponderInput.value.slice(0, caret), options).length;
+        transponderInput.value = formatted;
+        transponderInput.setSelectionRange(position, position);
+    });
+    // Pasted text that holds a whole number ("Transponder: pz - 28583") replaces the field as XX-12345.
+    transponderInput.addEventListener('paste', event => {
+        const found = findTransponderInText(event.clipboardData && event.clipboardData.getData('text'));
+        if (!found) return;   // otherwise the text is pasted as usual and cleaned up by the input handler
+        event.preventDefault();
+        transponderInput.value = found;
+        transponderInput.setSelectionRange(found.length, found.length);
+    });
     maxFastLapSlider.value = parseFloat(maxFastLapSlider.value).toFixed(1);
     maxFastLapInput.value = formatSecondsToDuration(MAX_FAST_LAP_TIME_SECONDS);
     
@@ -550,7 +481,7 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleLapsBtn.textContent = showOnlySpeedLaps ? 'Show All Laps' : 'Show Speed Laps';
         toggleLapsBtn.classList.toggle('active', showOnlySpeedLaps);
         if (currentLapData.length > 0) {
-            updateCharts(currentLapData, contextLapChart?.startIndex || 0);
+            updateCharts(currentLapData);
         }
     });
 

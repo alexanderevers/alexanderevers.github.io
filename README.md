@@ -11,12 +11,14 @@ talks to MYLAPS through a small proxy on Cloudflare Workers.
 
 ## What it does
 
+The site is a row of full-screen **dashboards** (racing look, dark or light): the page does not scroll in between, it snaps from one dashboard to the next, and a numbered navigation on the right shows where you are. The main page has Start, Session (the best lap as hero figure), Speed laps and Together (a timing tower with a bar per rider); the replay has Replay (track, controls and lap graph on one screen) and Riders.
+
 | Page | Features |
 |---|---|
-| `index.html` (main) | look up a transponder (`XX-12345`); list **all** its activities (up to 500, with a year filter); lap table and charts; a "max fast lap time" slider that separates speed laps from the rest; speed-lap analysis (average, median, best 5, consistency, fade, speed blocks with distance and totals, distribution); session summary cards (including how much of the session you were really skating); **GPX download for Strava** (for rinks that have a track file); **find overlapping sessions**: every rider who was on the ice during the activity, with *skated together* and *in your group* estimates, sorted by in your group first, then by skated together |
+| `index.html` (main) | look up a transponder (`XX-12345`; the field adds capitals and the dash by itself and cleans up pasted text); list **all** its activities (up to 500, with a year filter); session summary tiles and charts; a "lap time threshold" slider that separates speed laps from the rest; speed-lap analysis (average, median, best 5, consistency, fade, speed blocks with distance and totals, distribution); session summary cards (including how much of the session you were really skating); **GPX download for Strava** (for rinks that have a track file); **find overlapping sessions**: every rider who was on the ice during the activity, with *skated together* and *in your group* estimates, sorted by in your group first, then by skated together |
 | `replay.html` | **race replay**: the chosen riders on an oblong 400 m ice track, driven by their real lap times; play/pause/speed, and click or drag the lap graph (under the play controls) to jump to a moment; up to 10 riders with a colour and initials, the rest as small dots (click a rider's dot in the list to give or take a colour); a lap-time graph of one rider with a moving line and a max-lap-time slider, and a **Compare** button on every rider to draw that rider's lap times in the same graph (paler, other colour); riders with 0 min together are left out of the replay; show/hide riders one by one or "all who skated with you" |
 | `search_user.html` | search riders by name and see their last session |
-| all pages | works on a phone (one column, big touch targets); the main page address can be shared as a **deep link**: `index.html?transponder=XX-12345&activity=123` opens straight on that session. A replay can be shared too: its address (`replay.html?transponder=...&activity=...&riders=...`) rebuilds the whole replay on any computer, and the share button in the top right corner of the replay page copies it. Light/dark theme switch (follows the OS until you choose). The theme, the "max fast lap time", the replay speed and the rider you followed last are remembered in your browser |
+| all pages | works on a phone (one column, big touch targets); the main page address can be shared as a **deep link**: `index.html?transponder=XX-12345&activity=123` opens straight on that session. A replay can be shared too: its address (`replay.html?transponder=...&activity=...&riders=...`) rebuilds the whole replay on any computer, and the share button in the top right corner of the replay page copies it. Light/dark theme switch (follows the OS until you choose). The theme, the "lap time threshold", the replay speed and the rider you followed last are remembered in your browser |
 
 ## Architecture
 
@@ -40,6 +42,7 @@ GitHub Pages site (and local test servers), and caches answers so repeated reque
 index.html  script.js  chart-factory.js  stats.js  gpx-generator.js   main page (charts, statistics, GPX)
 fetch_overlapping_sessions.js                                        overlapping riders, sorting, "Open replay"
 replay.html  replay.js  replay-model.js  replay-track.js             race replay, lap model, track geometry
+dashboards.js  dashboards.css                                        the full-screen dashboards: snap scrolling, navigation, racing look
 search_user.html  search_user.js                                     name search
 api.js  utils.js  theme.js  style.css                                proxy calls (retries, paging), helpers, theme, styles
 strava.js                                                            unfinished Strava upload module (not loaded by any page)
@@ -84,7 +87,7 @@ node -e "const {buildFakeData}=require('./tests/fixtures/fake-mylaps-data');cons
 Node.js 22 or newer. No `npm install` is needed.
 
 ```bash
-npm test               # 125 unit tests (about 1.5 s)
+npm test               # 137 unit tests (about 1.5 s)
 npm run test:worker    # the proxy's tests against a fake MYLAPS
 npm run test:e2e       # a real headless Chrome/Edge clicking through the whole flow on fake data (about 11 s)
 npm run test:all       # unit + worker
