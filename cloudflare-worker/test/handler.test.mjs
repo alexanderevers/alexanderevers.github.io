@@ -55,6 +55,12 @@ const finishedResponse = await get('/api/mylaps/laps/1?finished=1');
 check('browser cache is capped at one day', finishedResponse.headers.get('Cache-Control') === 'public, max-age=86400', finishedResponse.headers.get('Cache-Control'));
 const quick = await get('/api/mylaps/laps/1');
 check('short answers get a short browser cache', quick.headers.get('Cache-Control') === 'public, max-age=60');
+check('live requests (?live=1) are kept for 1 second only: laps and the list of a rink', await ttlOf('/api/mylaps/laps/1?live=1') === 1 && await ttlOf('/api/mylaps/locations/2497?year=2026&sport=IceSkating&live=1') === 1);
+check('live wins over finished: a session that is still running is never kept long', await ttlOf('/api/mylaps/laps/1?finished=1&live=1') === 1);
+check('any other value for live is not trusted', await ttlOf('/api/mylaps/laps/1?live=yes') === 60 && await ttlOf('/api/mylaps/locations/2497?live=2') === 300);
+calls = []; await get('/api/mylaps/locations/2497?year=2026&sport=IceSkating&count=60&live=1');
+check('the live parameter is not passed on to MYLAPS', !lastCall().url.includes('live'), lastCall()?.url);
+check('a live answer tells the browser to keep it 1 second at most', (await get('/api/mylaps/laps/1?live=1')).headers.get('Cache-Control') === 'public, max-age=1');
 check('reports Cloudflare cache status', quick.headers.get('X-Upstream-Cache') === 'MISS');
 
 // ---- the answer is passed on unchanged ----

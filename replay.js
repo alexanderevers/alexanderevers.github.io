@@ -192,7 +192,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function loadLaps(rider) {
         try {
-            rider.laps = normalizeLaps(await fetchLaps(rider.id, rider.endTime));
+            rider.laps = normalizeLaps(await fetchLaps(rider.id, rider.endTime, rider.startTime));
             if (rider.laps.length === 0) rider.error = 'No lap data';
         } catch (error) {
             rider.error = error.message || 'Laps unavailable';

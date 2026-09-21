@@ -5,8 +5,9 @@
   "private": true,
   "scripts": {
     "test": "node --test \"tests/unit/*.test.js\"",
-    "test:e2e": "node tests/e2e/replay-flow.e2e.js",
+    "test:e2e": "node tests/e2e/replay-flow.e2e.js && node tests/e2e/live.e2e.js",
     "test:worker": "npm --prefix cloudflare-worker test",
-    "test:all": "npm test && npm run test:worker"
+    "test:all": "npm test && npm run test:worker",
+    "test:e2e:live": "node tests/e2e/live.e2e.js"
   }
 }

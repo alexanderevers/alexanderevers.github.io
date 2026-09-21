@@ -40,7 +40,7 @@ Other useful commands: `npm test` (checks against a fake MYLAPS), `npx wrangler 
 
 | Data | Kept by Cloudflare for |
 |---|---|
-| Laps of a finished activity (the site adds `?finished=1`) | 30 days |
+| Laps of an activity that started on an earlier day (the site adds `?finished=1`) | 30 days |
 | Laps of an activity that may still be recording | 1 minute |
 | Transponder to account, account profile, avatar | 1 day |
 | A rider's activity list, chip activity list | 2 minutes |
@@ -56,7 +56,7 @@ The proxy exposes several endpoints that map to the underlying MYLAPS API:
 -   `/api/mylaps/userid/:transponder`: Fetches the `userId` for a given transponder number.
 -   `/api/mylaps/activities/:userId`: Fetches a list of activities for a user. Supports optional `count` (1 to 500, default 100) and `order` query parameters. The website asks for `count=500` so that the whole list comes back; without it only the newest 100 activities are returned.
 -   `/api/mylaps/search?term=...`: Searches active profiles by name. Supports `count` and `offset`.
--   `/api/mylaps/laps/:activityId`: Fetches lap data for a specific activity. Add `?finished=1` for an activity that ended a while ago so the laps are cached for a long time.
+-   `/api/mylaps/laps/:activityId`: Fetches lap data for a specific activity. Add `?finished=1` for an activity that started on an earlier day (and has ended) so the laps are cached for a long time; activities of today are only cached for a minute (live: one second).
 -   `/api/mylaps/account/:userId`: Fetches a user's profile information (name, etc.).
 -   `/api/mylaps/avatar/:userId`: Fetches a user's profile image.
 -   `/api/mylaps/locations/:locationId`: Fetches a list of activities for a location (`year`, `sport`, `count`, `offset`). A page holds at most 200 activities and the list is sorted by end time, newest first.
@@ -154,6 +154,16 @@ Shows the riders of overlapping sessions on an oblong 400 m track. It is opened 
 -   Each overlapping rider gets a **skated together** time: the time both riders were skating at the same moment, computed from the real laps (`onIceOverlapMs`). Laps slower than 8 km/h count as breaks and are ignored, so riders who only share the same all-day session window show 0 min.
 -   Each overlapping rider also gets an **in your group** time (`groupMembership`, worked out from everyone's finish crossings, see `finishCrossings`): riders who cross the finish line within 1 second of you, and then each next rider who crosses within 1 second of the one before (forwards and backwards), as far as a quarter of your lap time before and after you (about 100 m). Each such crossing counts as one of your laps for that rider. Only skating laps count, and the grouping looks at all riders together, so it runs after every rider's laps are fetched. Riders are sorted by in your group (longest first, in the whole minutes shown on the cards); riders with the same group minutes, in particular everyone at 0 min, go by skated together (whole minutes); exact times only break the remaining ties (`compareOverlappingRiders`). It only uses lap data that is already fetched, so it costs no extra API calls. The constants are `GROUP_GAP_MS` (1 s) and `GROUP_WINDOW_SHARE` (0.25) in `replay-model.js`.
 -   `replay-model.js` turns laps into positions: a lap starts when the rider crosses the finish line, and the position inside a lap is interpolated evenly over the lap time. `replay-track.js` holds the track geometry.
+
+### Live page (`live.html`)
+
+Shows who is on the ice at a rink now (default IJsbaan Twente, 456). Not linked from the menu yet; open it by address (`live.html?rink=456&poll=5`, poll 1-60 s).
+
+-   `api.js`: `fetchLiveActivities` and `fetchLiveLaps` add `?live=1`; the Worker then caches laps and location lists for 1 second (`LIVE_SECONDS`), otherwise 60 s / 5 min. A private rider answers 401, shown under "Results are private".
+-   `live-model.js` (pure, unit tested): `liveCandidates` keeps activities that ended less than 15 minutes ago (`LIVE_WINDOW_MS`); `riderLive` gives the status: **skating** (last crossing less than 2 minutes ago, `LIVE_ACTIVE_MS`), **waiting** (no lap yet, under 2 minutes after the start), **resting** ("Recently on the ice"), **left** (15 minutes or more without a crossing: not listed). It also gives the start time and duration of the activity (up to now while skating, otherwise up to the last crossing).
+-   `lapsFetchDue` decides per rider when to fetch laps again: a second after the next crossing is expected (the shorter of the last lap and the recent average), then with growing pauses (1.5-8 s), a safety refresh every 30 s, resting riders every 20 s. Measured at Twente: a lap is in the API 2-3.6 s after it ended, while the `endTime` of the rink list lags about 6 s, so it is not used as a trigger.
+-   The position of a dot is an estimate: share of the usual lap time since the last crossing.
+-   `live-graph.js`: lap-time graph of the selected rider (like the replay graph), with a max-lap-time slider; slower laps and breaks are greyed out at the top.
 
 ### Data Flow
 

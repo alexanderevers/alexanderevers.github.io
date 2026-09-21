@@ -65,7 +65,7 @@ async function loadOverlappingRiders(selectedActivity, onStatus = () => {}) {
     const trackLengthM = location.trackLength || 400;
     let referenceLaps = null;
     try {
-        referenceLaps = normalizeLaps(await fetchLaps(selectedActivity.id, selectedActivity.endTime));
+        referenceLaps = normalizeLaps(await fetchLaps(selectedActivity.id, selectedActivity.endTime, selectedActivity.startTime));
     } catch (e) {
         console.error('Could not fetch the selected activity laps; skipping the "skated together" times', e);
     }
@@ -74,7 +74,7 @@ async function loadOverlappingRiders(selectedActivity, onStatus = () => {}) {
     const overlappingWithDetails = await mapInBatches(overlapping, 5, async (activity) => {
         try {
             const [sessionDetails, accountDetails] = await Promise.all([
-                fetchLaps(activity.id, activity.endTime),
+                fetchLaps(activity.id, activity.endTime, activity.startTime),
                 fetchAccountDetails(activity.chipCode)
             ]);
             const riderLaps = normalizeLaps(sessionDetails);

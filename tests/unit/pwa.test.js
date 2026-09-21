@@ -7,7 +7,7 @@ const { PROJECT_ROOT, loadBrowserScripts } = require('../helpers/browser-scripts
 
 const read = file => fs.readFileSync(path.join(PROJECT_ROOT, file), 'utf8');
 const manifest = JSON.parse(read('manifest.webmanifest'));
-const PAGES = ['index.html', 'replay.html', 'search_user.html'];
+const PAGES = ['index.html', 'replay.html', 'search_user.html', 'live.html'];
 
 /** Width and height of a PNG file, read from its header. */
 function pngSize(file) {

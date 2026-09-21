@@ -18,6 +18,7 @@ The site is a row of full-screen **dashboards** (racing look, dark or light): th
 | Page | Features |
 |---|---|
 | `index.html` (main) | look up a transponder (`XX-12345`; the field adds capitals and the dash by itself and cleans up pasted text); list **all** its activities (up to 500, with a year filter, each with its day of the week: "Tue 01/09/2026 - 20:00 - ..."); session summary tiles and charts; a "lap time threshold" slider that separates speed laps from the rest; speed-lap analysis (average, median, best 5, consistency, fade, speed blocks with distance and totals, distribution); session summary cards (including how much of the session you were really skating); **GPX download for Strava** (for rinks that have a track file); **find overlapping sessions**: every rider who was on the ice during the activity, with *skated together* and *in your group* estimates, sorted by in your group first, then by skated together |
+| `live.html` | **live**: who is on the ice at a rink right now (default IJsbaan Twente), refreshed every 1-60 s. Riders on the ice (last finish crossing under 2 minutes ago) are moving dots on the track and rows with laps, last and best lap, time since the last crossing, start time and duration of the activity; after 2 minutes without a crossing a rider moves to "Recently on the ice", after 15 minutes he is gone. Click a rider for the lap-time graph. Needs the Worker with `?live=1` (1 s cache) deployed |
 | `replay.html` | **race replay**: the chosen riders on an oblong 400 m ice track, driven by their real lap times; play/pause/speed, and click or drag the lap graph (under the play controls) to jump to a moment; up to 10 riders with a colour and initials, the rest as small dots (click a rider's dot in the list to give or take a colour); a lap-time graph of one rider with a moving line and a max-lap-time slider, and a **Compare** button on every rider to draw that rider's lap times in the same graph (paler, other colour); riders with 0 min together are left out of the replay; show/hide riders one by one or "all who skated with you" |
 | `search_user.html` | search riders by name and see their last session (not linked from the other pages: open it by its address) |
 | all pages | works on a phone (one column, big touch targets); the main page address can be shared as a **deep link**: `index.html?transponder=XX-12345&activity=123` opens straight on that session. A replay can be shared too: its address (`replay.html?transponder=...&activity=...&riders=...`) rebuilds the whole replay on any computer, and the share button in the top right corner of the replay page copies it. Light/dark theme switch (follows the OS until you choose). The theme, the "lap time threshold", the replay speed and the rider you followed last are remembered in your browser |
@@ -48,6 +49,7 @@ GitHub Pages site (and local test servers), and caches answers so repeated reque
 index.html  script.js  chart-factory.js  stats.js  gpx-generator.js   main page (charts, statistics, GPX)
 fetch_overlapping_sessions.js                                        overlapping riders, sorting, "Open replay"
 replay.html  replay.js  replay-model.js  replay-track.js             race replay, lap model, track geometry
+live.html  live.js  live-model.js  live-graph.js                     live page (rink, riders on the ice, lap graph); not linked from the menu yet
 dashboards.js  dashboards.css                                        the full-screen dashboards: snap scrolling, navigation, racing look
 manifest.webmanifest  sw.js  pwa.js  icons/                          installable app: manifest, service worker, install button, app icons
 tools/generate-icons.js                                              draws the app icons (icons/*.png)
@@ -121,8 +123,8 @@ Everything about running, expected output, exit codes, the fake data, mutation c
 - **Skated together** = time both riders were skating at the same moment. **In your group** = time you crossed
   the finish line together with a group: riders who cross the finish line within 1 second of you, and then each next rider who crosses within 1 second of the one before (forwards and backwards), as far as a quarter of your lap time before and after you (about 100 m). Each such crossing counts as one of your laps for that rider.
 - The rink's activity list has pages of at most 200 and is sorted by **end** time; the code pages accordingly.
-- Laps of activities that ended more than 15 minutes ago are requested with `?finished=1`, which lets the proxy cache
-  them for 30 days.
+- Laps of activities that started on an earlier day (and have ended) are requested with `?finished=1`, which lets the proxy cache
+  them for 30 days. Activities of today, and live ones, are only cached for a minute (live: a second).
 - One master GPX lap per rink in `tracks/`, registered in `gpx-generator.js` by MYLAPS location id.
 
 The full list of rules, each backed by a test, is in [tests/README.md](tests/README.md#10-rules-the-tests-protect-domain-knowledge).
