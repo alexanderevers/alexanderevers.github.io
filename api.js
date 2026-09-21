@@ -175,6 +175,16 @@ async function fetchLiveLaps(activityId) {
     return response.json();
 }
 
+/** The profile of an account by its user id (as the lists of a rink give it: gaUId), or null. */
+async function fetchAccountByUserId(userId) {
+    try {
+        const response = await fetchWithRetry(`${PROXY_BASE_URL}/account/${encodeURIComponent(userId)}`);
+        return response.ok ? await response.json() : null;
+    } catch (error) {
+        return null;
+    }
+}
+
 async function fetchAccountDetails(transponder) {
     try {
         const url = `${PROXY_BASE_URL}/userid/${transponder}`;

@@ -481,6 +481,17 @@ describe('marathon mode: the crossings of the race and the list of a lap', () =>
         assert.equal(result.pending.length, 0);
         assert.deepEqual(hostCopy(result.rows.map(r => r.label)), ['Anna', 'Ben', 'Cor']);      // he has 8 laps, not 5
     });
+    it('placesOf: the place of a rider in the list of every lap (for the graph)', () => {
+        // Ben leads the first lap, then Anna is first every lap; Cor is last
+        const entries = [rider(1, 'Anna', [31, 60, 90, 120]), rider(2, 'Ben', [30, 61, 91, 121]), rider(3, 'Cor', [32, 63, 93, 123])];
+        const result = marathonStandings(entries, { nowMs: RACE_START + 130 * SECOND });
+        assert.deepEqual(hostCopy(result.placesOf(1).map(p => [p.lapNr, p.place])), [[1, 2], [2, 1], [3, 1], [4, 1]]);
+        assert.deepEqual(hostCopy(result.placesOf(2).map(p => [p.lapNr, p.place])), [[1, 1], [2, 2], [3, 2], [4, 2]]);
+        assert.deepEqual(hostCopy(result.placesOf(3).map(p => p.place)), [3, 3, 3, 3]);
+        assert.equal(result.placesOf(3)[0].riders, 3);
+        assert.deepEqual(hostCopy(result.placesOf(99)), []);                                  // a rider who is not in the race
+        assert.equal(result.placesOf(1)[3].place, result.rows.find(r => r.id === 1).place);     // the newest lap: the place in the list
+    });
     it('nobody in the race yet: nothing to list', () => {
         assert.equal(marathonStandings([], {}), null);
         assert.equal(marathonStandings([{ id: 1, label: 'A', laps: [] }], {}), null);

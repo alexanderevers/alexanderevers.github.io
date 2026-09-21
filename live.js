@@ -119,6 +119,21 @@ document.addEventListener('DOMContentLoaded', () => {
     // Click on a rider (in the list or on the track): the first rider is selected. Another rider is compared with him or her (his
     // lap times appear paler in the same graph, like Compare on the replay page); clicking that rider again makes him or her the
     // only selection. Clicking the selected rider lets go of everything.
+    // The real name of a rider (given name and surname of his account), looked up when his name is pressed; kept for the rest of the visit.
+    const fullNames = new Map();            // activity id -> name ('' when the rider has none or keeps it private)
+    async function lookUpName(id) {
+        if (fullNames.has(id)) return;
+        const known = riders.get(id);
+        if (!known) return;
+        fullNames.set(id, '');
+        const account = known.activity.gaUId ? await fetchAccountByUserId(known.activity.gaUId) : await fetchAccountDetails(known.activity.chipCode);
+        if (account) {
+            const given = account.givenName || (account.name && account.name.givenName) || '';
+            const sur = (account.name && account.name.surName) || '';
+            fullNames.set(id, `${given} ${sur}`.trim());
+            dirty = true;
+        }
+    }
     function selectRider(id) {
         const letGo = id === selectedId;                                     // (pressing the selected rider again)
         if (id === selectedId || selectedId === null) {
@@ -133,6 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Colours (live page): every rider is a small blue dot until his name is pressed; then he gets a colour and initials. Up to ten riders
         // have one: pressing an eleventh takes the colour of the one who was pressed first. Letting go of the selected rider takes his colour.
         pinnedId = letGo ? null : id;                                       // the last name pressed is on top of the list
+        if (!letGo) lookUpName(id);
         if (!marathon) {
             if (letGo) dropColour(id);
             else if (!colourSlot.has(id)) addColour(id);
@@ -787,13 +803,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (otherColour === colour) otherColour = colors.series[((slot === undefined ? 0 : slot) + 1) % colors.series.length] || colors.series[1];
             compare = { label: otherState.label, laps: lapsAt(otherRider.laps, clock()), colour: otherColour };
         }
-        lapGraph.draw({ label: state.label, laps: lapsAt(rider.laps, clock()), isPrivate: rider.isPrivate }, {
+        const place = marathon && marathonResult ? (marathonResult.rows.find(r => r.id === selectedId) || {}).place : undefined;
+        lapGraph.draw({ label: state.label, fullName: fullNames.get(selectedId) || '', place, laps: lapsAt(rider.laps, clock()), isPrivate: rider.isPrivate }, {
             trackLengthM: rink.length,
             colour,
             skating: state.status === 'skating',
             nowMs: clock(),
             marks: marathon && marathonResult ? { startMs: marathonResult.startMs, finishMs: marathonResult.finishMs } : null,
-            zoom: !movingStart                       // while the start is being moved the whole activity is shown
+            zoom: !movingStart,                      // while the start is being moved the whole activity is shown
+            places: marathon && marathonResult && marathonResult.placesOf ? marathonResult.placesOf(selectedId) : null       // the place in the list of every lap
         }, compare);
     }
 

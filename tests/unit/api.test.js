@@ -199,3 +199,20 @@ describe('fetchActivities: the whole activity list', () => {
         await assert.rejects(() => app.sandbox.fetchActivities('PZ-28583'), /Activities fetch failed: 500/);
     });
 });
+
+describe('fetchAccountByUserId: the real name behind a transponder name', () => {
+    const { fetchAccountByUserId } = app.sandbox;
+    it('asks for the account of the user id of the list of a rink, and gives the profile', async () => {
+        const requested = [];
+        app.sandbox.fetch = async url => { requested.push(url); return ok({ userId: 'MYLAPS-GA-1', name: { givenName: 'Peter', surName: 'van Buiten' } }); };
+        const account = await fetchAccountByUserId('MYLAPS-GA-1');
+        assert.equal(account.name.surName, 'van Buiten');
+        assert.deepEqual(requested, [`${PROXY}/account/MYLAPS-GA-1`]);
+    });
+    it('gives null for a profile that cannot be read (private, unknown, or the proxy is down)', async () => {
+        app.sandbox.fetch = async () => failure(404, { error: 'not found' });
+        assert.equal(await fetchAccountByUserId('x'), null);
+        app.sandbox.fetch = async () => { throw new TypeError('Failed to fetch'); };
+        assert.equal(await fetchAccountByUserId('x'), null);
+    });
+});

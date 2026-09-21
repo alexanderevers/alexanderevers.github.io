@@ -3,13 +3,15 @@
  * a copy of Chart.js. Live data is never kept here: the MYLAPS proxy answers (and caches) those requests itself.
  *
  *  - Pages, scripts and styles of this site: network first, so a new deploy shows up at once; the copy in the
- *    cache is only used when the network is not available.
+ *    cache is only used when the network is not available. The request asks the server whether the file changed
+ *    (cache: 'no-cache'), because GitHub Pages lets the browser keep files for 10 minutes: without it a new
+ *    deploy could take that long to show up.
  *  - Chart.js from the CDN: the cached copy is used at once and refreshed in the background.
  *  - Everything else (the proxy, avatars) goes straight to the network.
  *
  * Change VERSION when the list of files below changes: the caches of older versions are removed.
  */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL_CACHE = `icesights-shell-${VERSION}`;
 const CDN_CACHE = `icesights-cdn-${VERSION}`;
 
@@ -45,7 +47,8 @@ function cacheKey(request) {
 async function networkFirst(request) {
     const cache = await caches.open(SHELL_CACHE);
     try {
-        const response = await fetch(request);
+        // a fresh request (a navigation request cannot be changed): the browser checks with the server instead of using its own copy
+        const response = await fetch(new Request(request.url, { cache: 'no-cache', credentials: 'same-origin' }));
         if (response.ok) cache.put(cacheKey(request), response.clone());
         return response;
     } catch (error) {

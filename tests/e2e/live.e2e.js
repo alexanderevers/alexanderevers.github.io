@@ -184,7 +184,8 @@ async function step(name, run) {
             const pick = name => page.evaluate('[...document.querySelectorAll(".live-row")].find(r => r.cells[0].textContent.includes(' + JSON.stringify(name) + ')).click()');
             await pick('Steady Sam');
             await page.waitFor('window.__live.lapGraph().drawn > 0', 'graph drawn');
-            assert.equal(await text('#liveLapTitle'), 'Lap times · Steady Sam');
+            // TRANSPONDERNAME, name surname: the real name of the account is looked up when the rider is selected
+            await page.waitFor('document.getElementById("liveLapTitle").textContent === "Lap times · Steady Sam, Samuel de Steady"', 'the real name behind the transponder name');
             assert.match(await text('#liveLapReadout'), /^[0-9]+ laps · last 9 · best 9 · average 9$/);
             let info = await page.evaluate('JSON.stringify(window.__live.lapGraph())').then(JSON.parse);
             assert.equal(info.greyed, 0);
@@ -200,7 +201,7 @@ async function step(name, run) {
             await pick('Fast Fanny');
             await page.waitFor('window.__live.compared() === 9001 && window.__live.lapGraph().auto === true && window.__live.lapGraph().inView >= 3', 'the compared rider');
             assert.equal(await page.evaluate('window.__live.selected()'), 9002);
-            assert.equal(await text('#liveLapTitle'), 'Lap times · Steady Sam and Fast Fanny');
+            assert.equal(await text('#liveLapTitle'), 'Lap times · Steady Sam, Samuel de Steady and Fast Fanny');
             assert.equal(await count('.live-row.selected'), 1);
             assert.equal(await count('.live-row.compared'), 1);
             assert.match(await text('.live-row.compared'), /Fast Fanny/);
@@ -253,6 +254,13 @@ async function step(name, run) {
             assert.match(await page.evaluate('document.getElementById("marathonStartTime").value'), /^[0-9]{2}:[0-9]{2}:[0-9]{2}$/);
             await page.evaluate('[...document.querySelectorAll(".marathon-row")].find(r => r.cells[1].textContent.includes("Bob")).click()');
             await page.waitFor('window.__live.selected() === 9102 && window.__live.lapGraph().marks === true', 'the flags in the lap graph');
+            // the title of the lap times: TRANSPONDERNAME, name surname, position in the list
+            await page.waitFor('/^Lap times · Bob, Bob Bouwer · position [0-9]+$/.test(document.getElementById("liveLapTitle").textContent)', 'name and position in the title');
+            // the place of the rider in the list of every lap is drawn in the graph (a second line, on an axis of its own)
+            await page.waitFor('window.__live.lapGraph().places >= 3', 'the places in the graph');
+            const bobPlaces = JSON.parse(await page.evaluate('JSON.stringify(window.__live.marathon().placesOf(9102))'));
+            assert.ok(bobPlaces.length >= 3 && bobPlaces.every(p => p.place >= 1 && p.place <= p.riders), JSON.stringify(bobPlaces));
+            assert.equal(bobPlaces[bobPlaces.length - 1].place, window_rows(await page.evaluate('JSON.stringify(window.__live.marathon().rows)')).indexOf('Bob') + 1);      // (the newest lap: his place in the list)
             // the selected rider is on top of the list as well, with his place, and is still in the list below
             await page.waitFor('document.querySelectorAll(".live-row[data-id=\\"9102\\"]").length === 2', 'Bob twice');
             const pinned = JSON.parse(await page.evaluate('JSON.stringify([...document.querySelector(".live-row").cells].map(c => c.textContent.trim()))'));

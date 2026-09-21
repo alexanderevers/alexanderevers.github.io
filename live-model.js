@@ -273,6 +273,7 @@ const MARATHON_BEFORE_START_MS = 20 * 1000;
  *   the finish lap: the same start for every rider) }
  *   pending: (newest lap only) the riders who are not in the list: { id, label, laps (his last lap), behind (laps), status
  *   'coming'|'lapped', lastEndMs }
+ *   placesOf(id): the place of a rider in the list of every lap: [{ lapNr, place, endMs, riders }] (for the graph)
  */
 function marathonStandings(entries, options = {}) {
     const { raceLaps = null, trackLengthM = 400, nowMs = Date.now() } = options;
@@ -363,9 +364,14 @@ function marathonStandings(entries, options = {}) {
     };
     // everybody who comes in during the finish lap: from the moment the first rider finishes it until the first rider finishes the next lap
     const firstAt = firstOf(lapNr) ?? timeOfLap(lapNr);
-    const windowEnd = latest ? Infinity : (firstOf(lapNr + 1) ?? timeOfLap(lapNr + 1));
-    const crossed = inRace.map(r => ({ rider: r, at: r.crossings.find(c => c.endMs >= firstAt && c.endMs < windowEnd) })).filter(c => c.at)
-        .sort((x, y) => y.at.lapNo - x.at.lapNo || x.at.endMs - y.at.endMs);
+    // the riders who came in during lap n, in the order of the list: most laps first, then the time of crossing
+    const crossedIn = n => {
+        const from = firstOf(n) ?? timeOfLap(n);
+        const to = n >= leaderCount ? Infinity : (firstOf(n + 1) ?? timeOfLap(n + 1));
+        return inRace.map(r => ({ rider: r, at: r.crossings.find(c => c.endMs >= from && c.endMs < to) })).filter(c => c.at)
+            .sort((x, y) => y.at.lapNo - x.at.lapNo || x.at.endMs - y.at.endMs);
+    };
+    const crossed = crossedIn(lapNr);
     const rows = crossed.map((c, i) => ({
         place: i + 1, id: c.rider.id, label: c.rider.label, laps: c.at.lapNo, endMs: c.at.endMs, gapMs: c.at.endMs - firstAt,
         distanceM: ((c.at.endMs - firstAt) * trackLengthM) / Math.min(c.at.lapMs, MARATHON_MISSED * usual), lapMs: c.at.lapMs, segmentMs: c.at.endMs - startMs
@@ -378,7 +384,17 @@ function marathonStandings(entries, options = {}) {
             return { id: r.id, label: r.label, laps: r.lastLap, behind, status: behind === 1 && !finished ? 'coming' : 'lapped', lastEndMs: r.byLap.get(r.lastLap).endMs };
         })
         .sort((x, y) => y.laps - x.laps || x.lastEndMs - y.lastEndMs);
-    return { lapNr, startMs, autoStartMs, firstMs, lastMs, finishMs: firstAt, leaderCount, latest, finished, first: rows.length ? { id: rows[0].id, label: rows[0].label } : null, rows, pending };
+    // the place of one rider in the list of every lap (for the graph): [{ lapNr, place, endMs, riders (in that list) }]
+    const placesOf = id => {
+        const places = [];
+        for (let n = 1; n <= leaderCount; n++) {
+            const list = crossedIn(n);
+            const i = list.findIndex(c => c.rider.id === id);
+            if (i >= 0) places.push({ lapNr: n, place: i + 1, endMs: list[i].at.endMs, riders: list.length });
+        }
+        return places;
+    };
+    return { lapNr, startMs, autoStartMs, firstMs, lastMs, finishMs: firstAt, leaderCount, latest, finished, first: rows.length ? { id: rows[0].id, label: rows[0].label } : null, rows, pending, placesOf };
 }
 
 if (typeof module !== 'undefined') {

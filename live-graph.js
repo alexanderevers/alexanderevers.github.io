@@ -17,6 +17,7 @@ function createLiveLapGraph(els, hooks) {
     let newestPoint = null;              // where the newest lap is drawn (for the tests)
     let hasMarks = false;                // the flags of the start and the finish are drawn (for the tests)
     let zoomed = false;                  // the graph is zoomed in on the flags (for the tests)
+    let placeByEnd = new Map();          // the place of the rider at the end of a lap (second of the crossing), for the tooltip and the tests
 
     const time = (ms, withSeconds) => new Date(ms).toLocaleTimeString('en-GB', withSeconds ? undefined : { hour: '2-digit', minute: '2-digit' });
     const lapLabel = seconds => formatSecondsToDuration(seconds).replace(/^0/, '').replace(/\.?0+$/, '');
@@ -32,6 +33,7 @@ function createLiveLapGraph(els, hooks) {
         newestPoint = null;
         hasMarks = false;
         zoomed = false;
+        placeByEnd = new Map();
     }
 
     els.slider.addEventListener('input', () => {
@@ -41,10 +43,13 @@ function createLiveLapGraph(els, hooks) {
     });
 
     /**
-     * @param {object|null} rider  { label, laps (normalized or null), isPrivate } of the selected rider, or null
+     * @param {object|null} rider  { label, fullName (real name, optional), place (position in the list, optional), laps (normalized or null),
+     *                             isPrivate } of the selected rider, or null
      * @param {object} options     { trackLengthM, colour, skating, nowMs, marks (optional: { startMs, finishMs }, real times of the start
      *                             lap and the finish lap of the marathon list, drawn as a start and a finish flag), zoom (false: while the
-     *                             start is being moved the whole activity is shown, to see where the start line goes) }
+     *                             start is being moved the whole activity is shown, to see where the start line goes), places (optional:
+     *                             [{ endMs, place }] the place of the selected rider in the list of every lap: drawn as a second line on
+     *                             its own axis on the right, place 1 at the top) }
      * @param {object} [compare]   { label, laps, colour } of a second rider, drawn paler in the same graph
      */
     function draw(rider, options, compare) {
@@ -92,7 +97,8 @@ function createLiveLapGraph(els, hooks) {
         const lastEnd = last.startMs + last.durMs;
         const otherEnd = other ? otherLaps[otherLaps.length - 1].startMs + otherLaps[otherLaps.length - 1].durMs : 0;
         const right = zoomed ? Math.max(marks.finishMs, first + 10000) : Math.max(skating ? nowMs : lastEnd, otherEnd, marks ? marks.finishMs : 0, first + 60000);
-        const plotW = w - PAD.l - PAD.r;
+        const padRight = options.places && options.places.length ? PAD.r + 26 : PAD.r;      // room for the axis of the places
+        const plotW = w - PAD.l - padRight;
         const plotH = h - PAD.t - PAD.b;
         const x = ms => PAD.l + ((ms - first) / (right - first)) * plotW;
         const y = seconds => PAD.t + (1 - (seconds - view.yMin) / (view.yMax - view.yMin)) * plotH;
@@ -168,6 +174,32 @@ function createLiveLapGraph(els, hooks) {
             ctx.lineWidth = 2; ctx.strokeStyle = colors.surface; ctx.stroke();
         }
 
+        // the place of the rider in the list of every lap: a dashed line on an axis of its own (right), place 1 at the top
+        placeByEnd = new Map();
+        const places = (options.places || []).filter(p => p.endMs >= first - 1000 && p.endMs <= right + 1000);
+        if (places.length) {
+            const maxPlace = Math.max(2, ...places.map(p => p.place));
+            const yPlace = place => PAD.t + ((place - 1) / (maxPlace - 1)) * plotH;
+            const step = Math.max(1, Math.ceil((maxPlace - 1) / 4));
+            ctx.font = '11px system-ui, sans-serif';
+            ctx.fillStyle = colors.muted;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            for (let p = 1; p <= maxPlace; p += step) ctx.fillText(String(p), PAD.l + plotW + 6, yPlace(p));
+            ctx.fillText('place', PAD.l + plotW + 6, PAD.t + plotH + 10);
+            ctx.strokeStyle = colors.text;
+            ctx.globalAlpha = 0.75;
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            places.forEach((p, i) => { const px = x(p.endMs); if (i === 0) ctx.moveTo(px, yPlace(p.place)); else ctx.lineTo(px, yPlace(p.place)); });
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = colors.text;
+            places.forEach(p => { ctx.fillRect(x(p.endMs) - 2.5, yPlace(p.place) - 2.5, 5, 5); placeByEnd.set(Math.round(p.endMs / 1000), p.place); });
+            ctx.globalAlpha = 1;
+        }
+
         // the start and the finish of the marathon list: the same real time for every rider
         if (marks) {
             ctx.setLineDash([]);
@@ -197,7 +229,9 @@ function createLiveLapGraph(els, hooks) {
         const skatingLaps = laps.filter(lap => isSkatingLapMs(lap, trackLengthM));
         const best = skatingLaps.reduce((a, b) => (!a || b.durMs < a.durMs ? b : a), null);
         const average = skatingLaps.length ? skatingLaps.reduce((sum, lap) => sum + lap.durMs, 0) / skatingLaps.length : null;
-        els.title.textContent = otherLaps.length ? `Lap times · ${rider.label} and ${compare.label}` : `Lap times · ${rider.label}`;
+        // TRANSPONDERNAME, name surname · position (the real name and the place in the list are there when they are known)
+        const who = `${rider.label}${rider.fullName ? `, ${rider.fullName}` : ''}${rider.place ? ` · position ${rider.place}` : ''}`;
+        els.title.textContent = otherLaps.length ? `Lap times · ${who} and ${compare.label}` : `Lap times · ${who}`;
         const readout = `${skatingLaps.length} laps · last ${lapLabel(last.durMs / 1000)}${best ? ` · best ${lapLabel(best.durMs / 1000)}` : ''}${average ? ` · average ${lapLabel(average / 1000)}` : ''}`;
         if (els.readout.textContent !== readout) els.readout.textContent = readout;
     }
@@ -211,7 +245,7 @@ function createLiveLapGraph(els, hooks) {
             .sort((a, b) => Math.hypot(a.x - px, a.y - py) - Math.hypot(b.x - px, b.y - py))[0];
         if (!near) { els.tooltip.classList.add('hidden'); return; }
         const lap = near.lap;
-        els.tooltip.innerHTML = `<strong>${near.label ? near.label + ' · ' : ''}Lap ${lap.nr}${near.greyed ? ' (not in view)' : ''}</strong><br>${lapLabel(lap.durMs / 1000)} · ${time(lap.startMs + lap.durMs, true)}`;
+        els.tooltip.innerHTML = `<strong>${near.label ? near.label + ' · ' : ''}Lap ${lap.nr}${near.greyed ? ' (not in view)' : ''}</strong><br>${lapLabel(lap.durMs / 1000)} · ${time(lap.startMs + lap.durMs, true)}${placeByEnd.has(Math.round((lap.startMs + lap.durMs) / 1000)) && !near.label ? ` · place ${placeByEnd.get(Math.round((lap.startMs + lap.durMs) / 1000))}` : ''}`;
         els.tooltip.style.left = `${Math.min(near.x + 12, els.canvas.clientWidth - 150)}px`;
         els.tooltip.style.top = `${Math.max(near.y - 40, 0)}px`;
         els.tooltip.classList.remove('hidden');
@@ -221,6 +255,6 @@ function createLiveLapGraph(els, hooks) {
     return {
         draw,
         resetMax() { auto = true; },
-        info: () => ({ maxSeconds, auto, drawn: hits.length, inView: shown.fast, greyed: shown.slow, newest: newestPoint, marks: hasMarks, zoomed })
+        info: () => ({ maxSeconds, auto, drawn: hits.length, inView: shown.fast, greyed: shown.slow, newest: newestPoint, marks: hasMarks, zoomed, places: placeByEnd.size })
     };
 }

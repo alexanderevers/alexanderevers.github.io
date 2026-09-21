@@ -11,6 +11,8 @@
  *   9005  "Old Olga"      her last lap ended 40 minutes ago: not looked at at all
  *   9006  "Just Started"  started 2 s after the page loaded; the first lap arrives 12 s after that
  *
+ * The account of 9002 (Samuel de Steady) and of 9102 (Bob Bouwer) has a name; the others have none.
+ *
  * A marathon at rink 2040 (the group crosses the finish line together, a lap every 10 s, started 100 s before the page loaded):
  *   9101 "Ann" first, 9102 "Bob" 0.3 s behind, 9103 "Cas" 0.8 s behind, 9104 "Dirk" 1.5 s behind, 9105 "Fay" a lapped rider (12 s laps)
  *
@@ -56,7 +58,7 @@ function buildLiveStubScript() {
         const laps = lapsOf(rider, now);
         const end = laps.length ? rider.start + laps.length * rider.pace : rider.start;
         return {
-            id: rider.id, name: 'Practice', chipCode: rider.chip, chipLabel: rider.label,
+            id: rider.id, name: 'Practice', chipCode: rider.chip, chipLabel: rider.label, gaUId: 'GA-' + rider.id,
             startTime: new Date(rider.start).toISOString(), endTime: new Date(end).toISOString(), accountId: rider.id,
             location: { id: rider.rink || 2497, name: 'Fake rink', sport: 'IceSkating', trackLength: 0 }
         };
@@ -79,6 +81,11 @@ function buildLiveStubScript() {
             const list = RIDERS.filter(r => String(r.rink || 2497) === id && r.start <= now + 60000).map(r => activityOf(r, now))
                 .sort((a, b) => Date.parse(b.endTime) - Date.parse(a.endTime));
             return ok({ activities: offset === 0 ? list : [] });
+        }
+        if (endpoint === 'account') {
+            // only a few riders have a name in their account; the others answer with an error (a private profile)
+            const names = { 'GA-9002': { givenName: 'Samuel', surName: 'de Steady' }, 'GA-9102': { givenName: 'Bob', surName: 'Bouwer' } };
+            return names[id] ? ok({ userId: id, name: names[id] }) : failure(404, 'not found');
         }
         if (endpoint === 'laps') {
             const rider = RIDERS.find(r => String(r.id) === id);
