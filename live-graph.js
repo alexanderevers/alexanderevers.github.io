@@ -39,8 +39,9 @@ function createLiveLapGraph(els, hooks) {
     /**
      * @param {object|null} rider  { label, laps (normalized or null), isPrivate } of the selected rider, or null
      * @param {object} options     { trackLengthM, colour, skating, nowMs }
+     * @param {object} [compare]   { label, laps, colour } of a second rider, drawn paler in the same graph
      */
-    function draw(rider, options) {
+    function draw(rider, options, compare) {
         if (!rider) return setMessage('Select a rider in the list or on the track to see his or her lap times.');
         if (rider.isPrivate) return setMessage(`${rider.label} keeps the results private: there are no lap times to show.`);
         if (!rider.laps || rider.laps.length === 0) return setMessage(`${rider.label}: waiting for the first lap…`);
@@ -50,8 +51,9 @@ function createLiveLapGraph(els, hooks) {
         const { trackLengthM, colour, skating, nowMs } = options;
         const colors = hooks.getColors();
         const laps = rider.laps;
+        const otherLaps = compare && compare.laps ? compare.laps : [];
 
-        if (auto) maxSeconds = Math.min(180, Math.max(5, liveShowAllMax(laps, trackLengthM)));
+        if (auto) maxSeconds = Math.min(180, Math.max(5, liveShowAllMax(laps.concat(otherLaps), trackLengthM)));
         els.slider.value = String(maxSeconds);
         els.sliderValue.textContent = lapLabel(maxSeconds);
 
@@ -67,12 +69,16 @@ function createLiveLapGraph(els, hooks) {
         ctx.clearRect(0, 0, w, h);
         if (w < 80 || h < 60) return;
 
-        const view = liveLapWindow(laps, maxSeconds, trackLengthM);
-        shown = { fast: view.fast.length, slow: view.slow.length };
-        const first = laps[0].startMs;
+        // the laps of the rider that is compared with (drawn paler, in his own colour) share the axes
+        const other = compare && compare.laps && compare.laps.length ? compare : null;
+        const view = liveLapWindow(other ? laps.concat(otherLaps) : laps, maxSeconds, trackLengthM);
+        const isMine = lap => laps.includes(lap);
+        shown = { fast: view.fast.filter(isMine).length, slow: view.slow.filter(isMine).length };
+        const first = Math.min(laps[0].startMs, other ? otherLaps[0].startMs : Infinity);
         const last = laps[laps.length - 1];
         const lastEnd = last.startMs + last.durMs;
-        const right = Math.max(skating ? nowMs : lastEnd, first + 60000);
+        const otherEnd = other ? otherLaps[otherLaps.length - 1].startMs + otherLaps[otherLaps.length - 1].durMs : 0;
+        const right = Math.max(skating ? nowMs : lastEnd, otherEnd, first + 60000);
         const plotW = w - PAD.l - PAD.r;
         const plotH = h - PAD.t - PAD.b;
         const x = ms => PAD.l + ((ms - first) / (right - first)) * plotW;
@@ -104,37 +110,43 @@ function createLiveLapGraph(els, hooks) {
         hits = [];
         const endX = lap => x(lap.startMs + lap.durMs);
 
-        // laps that are not in view: grey dots, pinned to the top edge when they do not fit
-        ctx.fillStyle = colors.slow;
-        view.slow.forEach(lap => {
-            const py = isSkatingLapMs(lap, trackLengthM) ? Math.max(y(lap.durMs / 1000), yTop) : yTop;
-            ctx.beginPath(); ctx.arc(endX(lap), py, laps.length <= 120 ? 3 : 2, 0, Math.PI * 2); ctx.fill();
-            hits.push({ x: endX(lap), y: py, lap, greyed: true });
-        });
+        // one rider: the laps that are not in view as grey dots (pinned to the top edge when they do not fit), the laps in
+        // view as a line (a greyed-out lap or a gap in the laps interrupts it) with dots
+        const plot = (list, lineColour, alpha, label) => {
+            const radius = list.length <= 120 ? 3 : 2;
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = colors.slow;
+            view.slow.filter(lap => list.includes(lap)).forEach(lap => {
+                const py = isSkatingLapMs(lap, trackLengthM) ? Math.max(y(lap.durMs / 1000), yTop) : yTop;
+                ctx.beginPath(); ctx.arc(endX(lap), py, radius, 0, Math.PI * 2); ctx.fill();
+                hits.push({ x: endX(lap), y: py, lap, greyed: true, label });
+            });
+            ctx.strokeStyle = lineColour;
+            ctx.lineWidth = 2;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            let connected = false;
+            let previousEnd = null;
+            list.forEach(lap => {
+                if (previousEnd !== null && lap.startMs - previousEnd > LAP_GAP_TOLERANCE_MS) connected = false;
+                previousEnd = lap.startMs + lap.durMs;
+                if (!view.fast.includes(lap)) { connected = false; return; }
+                if (connected) ctx.lineTo(endX(lap), y(lap.durMs / 1000)); else ctx.moveTo(endX(lap), y(lap.durMs / 1000));
+                connected = true;
+            });
+            ctx.stroke();
+            ctx.fillStyle = lineColour;
+            view.fast.filter(lap => list.includes(lap)).forEach(lap => {
+                ctx.beginPath(); ctx.arc(endX(lap), y(lap.durMs / 1000), radius, 0, Math.PI * 2); ctx.fill();
+                hits.push({ x: endX(lap), y: y(lap.durMs / 1000), lap, greyed: false, label });
+            });
+            ctx.globalAlpha = 1;
+        };
+        if (other) plot(otherLaps, other.colour, 0.45, other.label);      // paler, like the compared rider of the replay
+        plot(laps, colour, 1, null);
 
-        // the laps in view as a line; a greyed-out lap or a gap in the laps interrupts it
-        ctx.strokeStyle = colour;
-        ctx.lineWidth = 2;
-        ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        let connected = false;
-        let previousEnd = null;
-        laps.forEach(lap => {
-            if (previousEnd !== null && lap.startMs - previousEnd > LAP_GAP_TOLERANCE_MS) connected = false;
-            previousEnd = lap.startMs + lap.durMs;
-            if (!view.fast.includes(lap)) { connected = false; return; }
-            if (connected) ctx.lineTo(endX(lap), y(lap.durMs / 1000)); else ctx.moveTo(endX(lap), y(lap.durMs / 1000));
-            connected = true;
-        });
-        ctx.stroke();
-        ctx.fillStyle = colour;
-        view.fast.forEach(lap => {
-            ctx.beginPath(); ctx.arc(endX(lap), y(lap.durMs / 1000), laps.length <= 120 ? 3 : 2, 0, Math.PI * 2); ctx.fill();
-            hits.push({ x: endX(lap), y: y(lap.durMs / 1000), lap, greyed: false });
-        });
-
-        // the newest lap, ringed
+        // the newest lap of the selected rider, ringed
         const newest = hits.find(hit => hit.lap === last);
         newestPoint = newest ? { x: newest.x, y: newest.y } : null;
         if (newest) {
@@ -156,7 +168,7 @@ function createLiveLapGraph(els, hooks) {
         const skatingLaps = laps.filter(lap => isSkatingLapMs(lap, trackLengthM));
         const best = skatingLaps.reduce((a, b) => (!a || b.durMs < a.durMs ? b : a), null);
         const average = skatingLaps.length ? skatingLaps.reduce((sum, lap) => sum + lap.durMs, 0) / skatingLaps.length : null;
-        els.title.textContent = `Lap times · ${rider.label}`;
+        els.title.textContent = otherLaps.length ? `Lap times · ${rider.label} and ${compare.label}` : `Lap times · ${rider.label}`;
         const readout = `${skatingLaps.length} laps · last ${lapLabel(last.durMs / 1000)}${best ? ` · best ${lapLabel(best.durMs / 1000)}` : ''}${average ? ` · average ${lapLabel(average / 1000)}` : ''}`;
         if (els.readout.textContent !== readout) els.readout.textContent = readout;
     }
@@ -170,7 +182,7 @@ function createLiveLapGraph(els, hooks) {
             .sort((a, b) => Math.hypot(a.x - px, a.y - py) - Math.hypot(b.x - px, b.y - py))[0];
         if (!near) { els.tooltip.classList.add('hidden'); return; }
         const lap = near.lap;
-        els.tooltip.innerHTML = `<strong>Lap ${lap.nr}${near.greyed ? ' (not in view)' : ''}</strong><br>${lapLabel(lap.durMs / 1000)} · ${time(lap.startMs + lap.durMs, true)}`;
+        els.tooltip.innerHTML = `<strong>${near.label ? near.label + ' · ' : ''}Lap ${lap.nr}${near.greyed ? ' (not in view)' : ''}</strong><br>${lapLabel(lap.durMs / 1000)} · ${time(lap.startMs + lap.durMs, true)}`;
         els.tooltip.style.left = `${Math.min(near.x + 12, els.canvas.clientWidth - 150)}px`;
         els.tooltip.style.top = `${Math.max(near.y - 40, 0)}px`;
         els.tooltip.classList.remove('hidden');

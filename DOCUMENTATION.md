@@ -157,13 +157,13 @@ Shows the riders of overlapping sessions on an oblong 400 m track. It is opened 
 
 ### Live page (`live.html`)
 
-Shows who is on the ice at a rink now (default IJsbaan Twente, 456). Not linked from the menu yet; open it by address (`live.html?rink=456&poll=5`, poll 1-60 s).
+Shows who is on the ice at a rink now (default IJsbaan Twente, 456). Opened with the "Live" button in the menu of the main page, or by address (`live.html?rink=456&poll=5`, poll 1-60 s).
 
 -   `api.js`: `fetchLiveActivities` and `fetchLiveLaps` add `?live=1`; the Worker then caches laps and location lists for 1 second (`LIVE_SECONDS`), otherwise 60 s / 5 min. A private rider answers 401, shown under "Results are private".
 -   `live-model.js` (pure, unit tested): `liveCandidates` keeps activities that ended less than 15 minutes ago (`LIVE_WINDOW_MS`); `riderLive` gives the status: **skating** (last crossing less than 2 minutes ago, `LIVE_ACTIVE_MS`), **waiting** (no lap yet, under 2 minutes after the start), **resting** ("Recently on the ice"), **left** (15 minutes or more without a crossing: not listed). It also gives the start time and duration of the activity (up to now while skating, otherwise up to the last crossing).
 -   `lapsFetchDue` decides per rider when to fetch laps again: a second after the next crossing is expected (the shorter of the last lap and the recent average), then with growing pauses (1.5-8 s), a safety refresh every 30 s, resting riders every 20 s. Measured at Twente: a lap is in the API 2-3.6 s after it ended, while the `endTime` of the rink list lags about 6 s, so it is not used as a trigger.
 -   The position of a dot is an estimate: share of the usual lap time since the last crossing.
--   `live-graph.js`: lap-time graph of the selected rider (like the replay graph), with a max-lap-time slider; slower laps and breaks are greyed out at the top.
+-   `live-graph.js`: lap-time graph of the selected rider (like the replay graph), with a max-lap-time slider; slower laps and breaks are greyed out at the top. The first click on a rider selects; a click on another rider compares (his laps are drawn paler in the same graph, one compared rider at a time); a click on the compared rider makes it the only selection; a click on the selected rider lets go of everything (`selectRider` in `live.js`).
 
 ### Data Flow
 

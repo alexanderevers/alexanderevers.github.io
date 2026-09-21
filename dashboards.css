@@ -112,6 +112,17 @@ body.dashboards-page {
     gap: 16px;
 }
 
+.topbar-link {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.topbar-link:hover { color: var(--text); }
+
 /* Phones with a notch or rounded corners (and the installed app): keep the bar and the navigation inside them */
 .topbar {
     padding-left: max(20px, env(safe-area-inset-left));
@@ -657,9 +668,11 @@ body.dashboards-page {
 .lap-max-value { min-width: 4.5em; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 
 .live-table { width: 100%; }
-.live-table td.best { font-weight: 700; }
+.live-table td.best,
+.live-table td.laps { font-weight: 700; }
 .live-row { cursor: pointer; }
 .live-row.selected td { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.live-row.compared td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
 .live-row.resting td { color: var(--text-secondary); }
 .live-row.private td, .live-row.waiting td { color: var(--text-muted); }
 .live-group th {

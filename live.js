@@ -77,15 +77,26 @@ document.addEventListener('DOMContentLoaded', () => {
     let polling = false;
     let pollTimer = null;
     let selectedId = null;
+    let compareId = null;             // the rider that is compared with the selected one in the lap graph
     let requestsThisMinute = [];              // moments of the requests of the last minute
     let states = [];                          // the live picture of every rider, refreshed about ten times a second
     let dirty = true;
 
     const countRequest = () => { requestsThisMinute.push(Date.now()); };
 
-    // Click on a rider (in the list or on the track) selects him or her; a second click on the same rider lets go again.
+    // Click on a rider (in the list or on the track): the first rider is selected. Another rider is compared with him or her (his
+    // lap times appear paler in the same graph, like Compare on the replay page); clicking that rider again makes him or her the
+    // only selection. Clicking the selected rider lets go of everything.
     function selectRider(id) {
-        selectedId = id === selectedId ? null : id;
+        if (id === selectedId || selectedId === null) {
+            selectedId = id === selectedId ? null : id;
+            compareId = null;
+        } else if (id === compareId) {
+            selectedId = id;
+            compareId = null;
+        } else {
+            compareId = id;
+        }
         lapGraph.resetMax();
         dirty = true;
     }
@@ -165,6 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
         riders = new Map();
         states = [];
         selectedId = null;
+        compareId = null;
         lastPollAt = null;
         pollError = null;
         dirty = true;
@@ -241,16 +253,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const slot = slots.get(state.id);
         const dot = slot === undefined ? '' : `<i class="live-dot" style="background:${colors.series[slot] || colors.series[0]}"></i>`;
         const name = `${dot}${escapeHtml(state.label)}`;
-        const chosen = state.id === selectedId ? ' selected' : '';
+        const chosen = state.id === selectedId ? ' selected' : state.id === compareId ? ' compared' : '';
         if (state.isPrivate) {
-            return `<tr class="live-row private${chosen}" data-id="${state.id}"><td>${name}</td><td colspan="4" class="muted-note">results are private</td><td>${startText(state.startMs)}</td><td>${durationText(state.durationMs)}</td></tr>`;
+            return `<tr class="live-row private${chosen}" data-id="${state.id}"><td>${name}</td><td>${startText(state.startMs)}</td><td>${durationText(state.durationMs)}</td><td colspan="4" class="muted-note">results are private</td></tr>`;
         }
         if (state.status === 'waiting') {
-            return `<tr class="live-row waiting${chosen}" data-id="${state.id}"><td>${name}</td><td colspan="4" class="muted-note">${state.error ? escapeHtml(state.error) : 'waiting for the first lap'}</td><td>${startText(state.startMs)}</td><td>${durationText(state.durationMs)}</td></tr>`;
+            return `<tr class="live-row waiting${chosen}" data-id="${state.id}"><td>${name}</td><td>${startText(state.startMs)}</td><td>${durationText(state.durationMs)}</td><td colspan="4" class="muted-note">${state.error ? escapeHtml(state.error) : 'waiting for the first lap'}</td></tr>`;
         }
         return `<tr class="live-row ${state.status}${chosen}" data-id="${state.id}">
-            <td>${name}</td><td>${state.lapCount}</td><td>${seconds(state.lastMs)}</td>
-            <td class="best">${seconds(state.bestMs)}</td><td>${sinceText(state.sinceMs)}</td><td>${startText(state.startMs)}</td><td>${durationText(state.durationMs)}</td></tr>`;
+            <td>${name}</td><td>${startText(state.startMs)}</td><td>${durationText(state.durationMs)}</td><td class="laps">${state.lapCount}</td><td>${seconds(state.lastMs)}</td>
+            <td class="best">${seconds(state.bestMs)}</td><td>${sinceText(state.sinceMs)}</td></tr>`;
     }
 
     function renderList() {
@@ -258,7 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const onIce = onIceStates();
         const resting = sortLiveRiders(states.filter(s => s.status === 'resting' && !s.isPrivate), 'recent');
         const isPrivate = states.filter(s => s.isPrivate);
-        const head = '<thead><tr><th>Rider</th><th>Laps</th><th>Last lap</th><th>Best lap</th><th>Since</th><th>Started</th><th>Duration</th></tr></thead>';
+        const head = '<thead><tr><th>Rider</th><th>Started</th><th>Duration</th><th>Laps</th><th>Last lap</th><th>Best lap</th><th>Since</th></tr></thead>';
         const group = (title, count, rows) => `<tr class="live-group"><th colspan="7">${title} <small>(${count})</small></th></tr>${rows}`;
         let body = '';
         if (onIce.length) body += group('On the ice', onIce.length, onIce.map(s => rowHtml(s, slots)).join(''));
@@ -285,7 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!lastPollAt) text = pollError ? 'Could not load this rink yet' : 'Loading…';
         else {
             const age = Math.round((now - lastPollAt) / 1000);
-            text = `${rink.name} · ${onIce} on the ice${waiting ? ` (+${waiting} just started)` : ''} · updated ${age} s ago · about ${requestsThisMinute.length} requests a minute`;
+            text = `${rink.name} · ${onIce} on the ice${waiting ? ` (+${waiting} just started)` : ''} · updated ${age} s ago`;
         }
         if (statusEl.textContent !== text) statusEl.textContent = text;
         $('liveBadge').classList.toggle('idle', !onIce);
@@ -396,17 +408,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ---------- The lap graph of the selected rider ----------
     function drawLapPanel() {
-        if (selectedId !== null && !riders.has(selectedId)) selectedId = null;      // the rider is no longer in the list
+        if (selectedId !== null && !riders.has(selectedId)) { selectedId = compareId; compareId = null; }      // the rider is no longer in the list
+        if (compareId !== null && !riders.has(compareId)) compareId = null;
         const rider = selectedId === null ? null : riders.get(selectedId);
         const state = selectedId === null ? null : states.find(s => s.id === selectedId);
         if (!rider || !state) { lapGraph.draw(null, {}); return; }
-        const slot = colourSlots().get(selectedId);
+        const slots = colourSlots();
+        const slot = slots.get(selectedId);
+        const colour = colors.series[slot === undefined ? 0 : slot] || colors.series[0];
+        let compare = null;
+        const otherRider = compareId === null ? null : riders.get(compareId);
+        const otherState = compareId === null ? null : states.find(s => s.id === compareId);
+        if (otherRider && otherState && !otherRider.isPrivate && otherRider.laps) {
+            // the colour of the compared rider; when that is the colour of the selected one (two small dots), the next colour
+            const otherSlot = slots.get(compareId);
+            let otherColour = colors.series[otherSlot === undefined ? 0 : otherSlot] || colors.series[0];
+            if (otherColour === colour) otherColour = colors.series[((slot === undefined ? 0 : slot) + 1) % colors.series.length] || colors.series[1];
+            compare = { label: otherState.label, laps: otherRider.laps, colour: otherColour };
+        }
         lapGraph.draw({ label: state.label, laps: rider.laps, isPrivate: rider.isPrivate }, {
             trackLengthM: rink.length,
-            colour: colors.series[slot === undefined ? 0 : slot] || colors.series[0],
+            colour,
             skating: state.status === 'skating',
             nowMs: Date.now()
-        });
+        }, compare);
     }
 
     // ---------- Redraw ----------
@@ -437,5 +462,5 @@ document.addEventListener('DOMContentLoaded', () => {
     requestAnimationFrame(frame);
 
     // for the browser test: a way to see the state
-    window.__live = { states: () => states, rink: () => rink, pollNow: poll, requests: () => requestsThisMinute.length, selected: () => selectedId, lapGraph: () => lapGraph.info() };
+    window.__live = { states: () => states, rink: () => rink, pollNow: poll, requests: () => requestsThisMinute.length, selected: () => selectedId, compared: () => compareId, lapGraph: () => lapGraph.info() };
 });

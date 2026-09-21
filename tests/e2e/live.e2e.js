@@ -41,7 +41,7 @@ async function step(name, run) {
 
         await step('live: the page is called Live, shows the rink and how many are on the ice, and reports itself in the title', async () => {
             assert.match(await page.evaluate('document.title'), /^\(\d+\) Live · Thialf \(Heerenveen\) · Icesights$/);
-            assert.match(await text('#liveStatus'), /^Thialf \(Heerenveen\) · \d+ on the ice.* · updated \d+ s ago · about \d+ requests a minute$/);
+            assert.match(await text('#liveStatus'), /^Thialf \(Heerenveen\) · \d+ on the ice.* · updated \d+ s ago$/);
             assert.equal(await page.evaluate('document.getElementById("rinkSelect").value'), '2497');
             assert.equal(await count('#rinkSelect option'), 19);
         });
@@ -60,7 +60,7 @@ async function step(name, run) {
             assert.ok(groups.some(g => g.startsWith('Recently on the ice')), JSON.stringify(groups));
             assert.ok(groups.some(g => g.startsWith('Results are private')), JSON.stringify(groups));
             assert.deepEqual(await rowNames('.live-row.resting'), ['RE-10003']);                 // no label: the transponder code
-            assert.match(await text('.live-row.private'), /Private Pete\s*results are private/);
+            assert.match(await text('.live-row.private'), /Private Pete.*results are private/);
             assert.equal(await count('.live-row.private'), 1, 'a private rider must be listed once, in his own group');
             const onIce = await page.evaluate('document.querySelector(".live-group th").textContent.trim()');
             assert.match(onIce, /^On the ice \((\d+)\)$/);
@@ -70,12 +70,13 @@ async function step(name, run) {
         await step('live: each rider on the ice has laps, last lap, best lap and the time since the last crossing', async () => {
             const cells = await page.evaluate('JSON.stringify([...[...document.querySelectorAll(".live-row.skating")].find(r => r.cells[0].textContent.includes("Fast Fanny")).cells].map(c => c.textContent.trim()))').then(JSON.parse);
             assert.equal(cells[0], 'Fast Fanny');
-            assert.ok(Number(cells[1]) >= 8, `laps: ${cells[1]}`);          // 60 s at a lap every 6 s
-            assert.equal(cells[2], '6.000');
-            assert.equal(cells[3], '6.000');
-            assert.match(cells[4], /^\d+ s$/);
-            assert.match(cells[5], /^[0-9]{2}:[0-9]{2}$/);                    // started
-            assert.match(cells[6], /^[0-9]+ min$|^[0-9]+ h [0-9]{2} min$/);      // duration
+            assert.match(cells[1], /^[0-9]{2}:[0-9]{2}$/);                    // started
+            assert.match(cells[2], /^[0-9]+ min$|^[0-9]+ h [0-9]{2} min$/);      // duration
+            assert.ok(Number(cells[3]) >= 8, `laps: ${cells[3]}`);          // 60 s at a lap every 6 s
+            assert.equal(cells[4], '6.000');
+            assert.equal(cells[5], '6.000');
+            assert.match(cells[6], /^\d+ s$/);
+            assert.equal(await page.evaluate('getComputedStyle(document.querySelector(".live-row.skating td.laps")).fontWeight'), '700');
         });
 
         await step('live: new laps arrive by themselves, and the page only asks for live data (live=1)', async () => {
@@ -124,6 +125,12 @@ async function step(name, run) {
             assert.equal(await count('.live-row.selected'), 0);
         });
 
+        await step('live: the main page has a Live button in the menu that opens this page', async () => {
+            const html = await page.evaluate('fetch("index.html").then(r => r.text())');
+            assert.match(html, /<a class="topbar-link" href="live[.]html"[^>]*>Live<[/]a>/);
+            assert.equal(await page.evaluate('fetch("live.html").then(r => r.status)'), 200);
+        });
+
         await step('live: the lap graph: a message first, then the lap times of the selected rider, with a slider for the maximum', async () => {
             assert.match(await text('#liveLapEmpty'), /Select a rider/);
             assert.ok(!/estimate/i.test(await text('body')), 'the estimate note is still there');
@@ -142,13 +149,30 @@ async function step(name, run) {
             // the slider: everything slower than 5 s is greyed out, no lap is lost
             await page.evaluate('(() => { const s = document.getElementById("liveLapMax"); s.value = "5"; s.dispatchEvent(new Event("input")); })()');
             await page.waitFor('window.__live.lapGraph().inView === 0 && window.__live.lapGraph().greyed >= 3', 'laps greyed out');
-            // another rider: the maximum is automatic again
+            // a second rider is compared: his laps appear (paler) in the same graph, the selection stays
             await pick('Fast Fanny');
-            await page.waitFor('window.__live.lapGraph().auto === true && window.__live.lapGraph().inView >= 3', 'automatic maximum');
+            await page.waitFor('window.__live.compared() === 9001 && window.__live.lapGraph().auto === true && window.__live.lapGraph().inView >= 3', 'the compared rider');
+            assert.equal(await page.evaluate('window.__live.selected()'), 9002);
+            assert.equal(await text('#liveLapTitle'), 'Lap times · Steady Sam and Fast Fanny');
+            assert.equal(await count('.live-row.selected'), 1);
+            assert.equal(await count('.live-row.compared'), 1);
+            assert.match(await text('.live-row.compared'), /Fast Fanny/);
+            assert.match(await text('#liveLapReadout'), /average 9$/);           // the numbers are those of the selected rider
+            const both = await page.evaluate('window.__live.lapGraph().drawn');
+            await page.evaluate('(() => { const c = document.getElementById("liveLapCanvas"); const r = c.getBoundingClientRect(); c.dispatchEvent(new MouseEvent("mousemove", { clientX: r.left + window.__live.lapGraph().newest.x, clientY: r.top + window.__live.lapGraph().newest.y, bubbles: true })); })()');
+            assert.match(await text('#liveLapTooltip'), /Lap [0-9]+/);
+            // clicking the compared rider again makes him the only selection
+            await pick('Fast Fanny');
+            await page.waitFor('window.__live.selected() === 9001 && window.__live.compared() === null && document.getElementById("liveLapTitle").textContent === "Lap times · Fast Fanny"', 'the only selection');
             assert.equal(await text('#liveLapTitle'), 'Lap times · Fast Fanny');
+            assert.equal(await count('.live-row.compared'), 0);
+            assert.ok(await page.evaluate('window.__live.lapGraph().drawn') < both, 'the paler laps should be gone');
+            // clicking the selected rider lets go of the selection
+            await pick('Fast Fanny');
+            await page.waitFor('window.__live.selected() === null', 'no selection');
             // a private rider has no lap times
             await pick('Private Pete');
-            await page.waitFor('!document.getElementById("liveLapEmpty").classList.contains("hidden")', 'private message');
+            await page.waitFor('/keeps the results private/.test(document.getElementById("liveLapEmpty").textContent)', 'private message');
             assert.match(await text('#liveLapEmpty'), /keeps the results private/);
             await pick('Private Pete');       // let go
             await page.waitFor('/Select a rider/.test(document.getElementById("liveLapEmpty").textContent)', 'placeholder');
