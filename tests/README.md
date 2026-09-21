@@ -25,7 +25,7 @@ needs the real MYLAPS API, a Cloudflare account or a personal transponder.
 Run from the repository root (the folder that contains `package.json` and `index.html`):
 
 ```bash
-npm test               # unit tests            -> expect 234 tests, 52 suites, 0 failures  (~1.5 s)
+npm test               # unit tests            -> expect 244 tests, 55 suites, 0 failures  (~1.5 s)
 npm run test:worker    # Cloudflare Worker     -> expect the last line "ALL PASS"           (~2 s)
 npm run test:e2e       # real browser          -> expect the last line "ALL PASSED"         (~11 s)
 npm run test:all       # unit + worker (does not start a browser)

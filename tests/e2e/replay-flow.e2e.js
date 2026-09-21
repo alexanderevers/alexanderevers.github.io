@@ -269,6 +269,8 @@ function skip(name, reason) {
             assert.equal(card.order[1], 'session-card-tname');
             assert.equal(card.order[2], 'SMALL');
             assert.equal(card.weight, '400');                                        // small, not bold
+            // a session of a few riders is not a marathon: no marathon analysis button
+            assert.equal(await page.evaluate('document.getElementById("marathonBtn").classList.contains("hidden")'), true);
         });
         await step('overlapping riders: sorted by time in your group, then by time skated together; each card shows both values', async () => {
             const cards = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll("#overlappingSessionsTable .session-card")].map(card => ({

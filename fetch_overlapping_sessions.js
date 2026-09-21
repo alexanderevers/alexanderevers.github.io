@@ -98,6 +98,13 @@ async function loadOverlappingRiders(selectedActivity, onStatus = () => {}) {
             session.groupMs = session.riderLaps ? (groupById.get(session.id) ?? 0) : null;
         });
     }
+    // Was it a marathon? A break before the start and a group of at least 25 riders that started around the same time: then the main page
+    // offers the marathon analysis (the result is kept on the list: sessions.marathon)
+    if (referenceLaps && typeof marathonDetect === 'function') {
+        overlappingWithDetails.marathon = marathonDetect(
+            [{ id: selectedActivity.id, laps: referenceLaps }, ...overlappingWithDetails.filter(session => session.riderLaps).map(session => ({ id: session.id, laps: session.riderLaps }))],
+            selectedActivity.id);
+    }
     overlappingWithDetails.forEach(session => { delete session.riderLaps; });
 
     overlappingWithDetails.sort(compareOverlappingRiders);
@@ -111,6 +118,12 @@ async function loadOverlappingRiders(selectedActivity, onStatus = () => {}) {
 function replayAddress(transponder, activityId, riderIds) {
     const riders = riderIds && riderIds.length ? riderIds.join(',') : 'none';
     return `replay.html?transponder=${encodeURIComponent(transponder)}&activity=${activityId}&riders=${riders}`;
+}
+
+/** Address of the marathon page for an activity (the page finds the rest itself: everybody who skated at the same time). */
+function marathonAddress(activity) {
+    const rink = activity.location && activity.location.id ? `&rink=${activity.location.id}` : '';
+    return `marathon.html?activity=${activity.id}${rink}`;
 }
 
 /** The rider activity ids of a "riders" address parameter: null when it is absent, [] for "none". */
@@ -148,6 +161,13 @@ function displayOverlappingSessions(sessions, sessionMs = 0) {
 
     overlappingSessionsTable.innerHTML = ''; // Clear previous results
     hide(replayToolbar);
+    // the marathon analysis button only when this was a marathon
+    const marathonBtn = document.getElementById('marathonBtn');
+    if (marathonBtn) {
+        const found = sessions.marathon && sessions.marathon.isMarathon;
+        marathonBtn.classList.toggle('hidden', !found);
+        marathonBtn.title = found ? `A marathon: ${sessions.marathon.riders} riders started around the same time, ${sessions.marathon.withBreak} of them after a break` : '';
+    }
     if (sessions.length === 0) {
         overlappingSessionsTable.innerHTML = '<p>No overlapping sessions found.</p>';
         show(overlappingSessions);
@@ -240,6 +260,7 @@ function setupOverlappingSessionsEventListeners(getActivities, getReferenceRider
     const overlappingSessions = document.getElementById('overlappingSessions');
     const overlappingSessionsTable = document.getElementById('overlappingSessionsTable');
     const openReplayBtn = document.getElementById('openReplayBtn');
+    const marathonBtn = document.getElementById('marathonBtn');
     const selectAllBtn = document.getElementById('replaySelectAllBtn');
     const selectedCount = document.getElementById('replaySelectedCount');
 
@@ -277,6 +298,9 @@ function setupOverlappingSessionsEventListeners(getActivities, getReferenceRider
             targets.forEach(cb => { cb.checked = true; });
         }
         updateReplaySelection();
+    });
+    if (marathonBtn) marathonBtn.addEventListener('click', () => {
+        if (lastOverlap) window.open(marathonAddress(lastOverlap.reference), '_blank');
     });
     openReplayBtn.addEventListener('click', () => {
         if (!lastOverlap) return;

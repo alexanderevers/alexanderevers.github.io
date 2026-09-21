@@ -244,6 +244,65 @@ function marathonTrackLaps(laps, startMs, nowMs) {
     return fromStart > 0 && fromStart < first.durMs ? [{ ...first, startMs: firstEnd - fromStart, durMs: fromStart }, ...race.slice(1)] : race;
 }
 
+// ---------- Was it a marathon? (for the overlapping sessions of the main page) ----------
+// A break of at least this long (2.5 minutes) before the start (the waiting for the start)
+const MARATHON_DETECT_BREAK_MS = 2.5 * 60 * 1000;
+// "Around the same start time": the first crossings of the race lie within this long of each other (before and after the reference rider)
+const MARATHON_DETECT_WINDOW_MS = 5 * 60 * 1000;
+// A marathon needs at least this many riders that cross the finish line as a group around the same start time ...
+const MARATHON_DETECT_MIN_RIDERS = 15;
+// ... of whom at least this share had a break before the start (a busy training session has riders coming and going all the time)
+const MARATHON_DETECT_MIN_BREAK_SHARE = 0.3;
+// A lap later (the first lap after the start, the "empty lap") at least this share of the riders of the group crosses the finish line
+// again as a group: within this long of the crossing of the reference rider. Riders who only pass by, or stop, do not.
+const MARATHON_DETECT_NEXT_SHARE = 0.75;
+const MARATHON_DETECT_NEXT_WINDOW_MS = 30 * 1000;
+
+/** The first crossing of the race of a rider: the end of the lap after the break of 2.5 minutes or more that starts his main run of laps, else his first crossing; and the crossing one lap later. */
+function marathonRaceStart(laps) {
+    if (!laps || laps.length === 0) return null;
+    const breaks = [];
+    laps.forEach((lap, i) => {
+        const gapBefore = i > 0 ? lap.startMs - (laps[i - 1].startMs + laps[i - 1].durMs) : 0;
+        if (lap.durMs >= MARATHON_DETECT_BREAK_MS || gapBefore >= MARATHON_DETECT_BREAK_MS) breaks.push(i);
+    });
+    // The race is the main run of the rider: the stretch after a break (or from the start) in which he skated the most laps. A long lap
+    // at the very end (a lap to skate out, a stop) is a break as well, but nothing follows it, so it is not taken for the start.
+    let breakAt = -1;
+    let longest = -1;
+    [-1, ...breaks].forEach((candidate, k, list) => {
+        const next = k + 1 < list.length ? list[k + 1] : laps.length;
+        const run = next - 1 - Math.max(candidate, 0);
+        if (run > longest) { longest = run; breakAt = candidate; }
+    });
+    const index = Math.max(breakAt, 0);
+    const lap = laps[index];
+    const next = laps[index + 1];                                          // the crossing one lap later (the "empty lap")
+    return { startMs: lap.startMs + lap.durMs, afterBreak: breakAt >= 0, nextMs: next ? next.startMs + next.durMs : null };
+}
+
+/**
+ * Was the activity of the reference rider a marathon? That is: a break of 2.5 minutes or more before the start, and at least 15 riders
+ * (the reference rider included) that cross the finish line as a group around the same start time, of whom at least 75 % cross the
+ * finish line as a group again one lap later (the first lap after the start).
+ * @param {Array} entries      [{ id, laps }] the reference rider and everybody who skated at the same time, with normalized laps
+ * @param {*} referenceId      the id of the reference rider's entry
+ * @returns {{ isMarathon: boolean, riders: number, withBreak: number, again (riders in the group that crossed again a lap later), startMs: number|null }}
+ */
+function marathonDetect(entries, referenceId) {
+    const starts = entries.map(e => ({ id: e.id, start: marathonRaceStart(e.laps) })).filter(x => x.start);
+    const reference = starts.find(x => x.id === referenceId);
+    if (!reference) return { isMarathon: false, riders: 0, withBreak: 0, startMs: null };
+    const group = starts.filter(x => Math.abs(x.start.startMs - reference.start.startMs) <= MARATHON_DETECT_WINDOW_MS);
+    const withBreak = group.filter(x => x.start.afterBreak).length;
+    // a lap later the group crosses the finish line together again
+    const nextMs = reference.start.nextMs;
+    const again = nextMs === null ? 0 : group.filter(x => x.start.nextMs !== null && Math.abs(x.start.nextMs - nextMs) <= MARATHON_DETECT_NEXT_WINDOW_MS).length;
+    const isMarathon = group.length >= MARATHON_DETECT_MIN_RIDERS && withBreak >= MARATHON_DETECT_MIN_BREAK_SHARE * group.length
+        && again >= MARATHON_DETECT_NEXT_SHARE * group.length;
+    return { isMarathon, riders: group.length, withBreak, again, startMs: reference.start.startMs };
+}
+
 // The riders are selected from this long before the start time: what they are doing then is their first lap.
 const MARATHON_BEFORE_START_MS = 20 * 1000;
 
@@ -398,5 +457,5 @@ function marathonStandings(entries, options = {}) {
 }
 
 if (typeof module !== 'undefined') {
-    module.exports = { liveCandidates, riderLive, sortLiveRiders, liveInitials, lapsFetchDue, marathonTrackLaps, marathonCrossings, marathonStandings, liveFraction, liveShownStep, liveNiceTicks, liveShowAllMax, liveLapWindow, LIVE_WINDOW_MS, LIVE_ACTIVE_MS };
+    module.exports = { liveCandidates, riderLive, sortLiveRiders, liveInitials, lapsFetchDue, marathonRaceStart, marathonDetect, marathonTrackLaps, marathonCrossings, marathonStandings, liveFraction, liveShownStep, liveNiceTicks, liveShowAllMax, liveLapWindow, LIVE_WINDOW_MS, LIVE_ACTIVE_MS };
 }

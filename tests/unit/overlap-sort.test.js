@@ -34,7 +34,7 @@ describe('compareOverlappingRiders: the order of the overlapping riders', () => 
     });
 });
 
-const { replayAddress, parseReplayRiders } = loadBrowserScripts(['utils.js', 'fetch_overlapping_sessions.js']).sandbox;
+const { replayAddress, parseReplayRiders, marathonAddress } = loadBrowserScripts(['utils.js', 'fetch_overlapping_sessions.js']).sandbox;
 
 describe('replay links: everything needed to open the same replay on another computer', () => {
     it('holds the transponder, the activity and the riders that are shown', () => {
@@ -53,5 +53,12 @@ describe('replay links: everything needed to open the same replay on another com
     it('a written address can be read back', () => {
         const address = replayAddress('AB-12345', 5, [21, 22]);
         assert.deepEqual(hostCopy(parseReplayRiders(new URLSearchParams(address.split('?')[1]).get('riders'))), [21, 22]);
+    });
+});
+
+describe('marathonAddress: the marathon page for an activity', () => {
+    it('opens the marathon page on the activity, on the rink of the activity', () => {
+        assert.equal(marathonAddress({ id: 7522190945, location: { id: 2040 } }), 'marathon.html?activity=7522190945&rink=2040');
+        assert.equal(marathonAddress({ id: 5 }), 'marathon.html?activity=5');
     });
 });

@@ -498,6 +498,80 @@ describe('marathon mode: the crossings of the race and the list of a lap', () =>
     });
 });
 
+describe('marathonDetect: was the activity a marathon?', () => {
+    const { marathonDetect, marathonRaceStart } = app.sandbox;
+    const START = NOW - 3600 * SECOND;
+    // n riders: 12 laps of 40 s from the start; the first "withBreak" of them had a warm-up 20 minutes before (a break of more than 2.5 minutes)
+    const riderAt = (id, offsetS, breakBefore) => ({
+        id,
+        laps: [
+            ...(breakBefore ? [{ nr: 1, startMs: START - 1500 * SECOND, durMs: 40 * SECOND }, { nr: 2, startMs: START - 1400 * SECOND, durMs: 40 * SECOND }] : []),
+            ...Array.from({ length: 12 }, (_, i) => ({ nr: 3 + i, startMs: START + (offsetS + i * 40) * SECOND, durMs: 40 * SECOND }))
+        ]
+    });
+    const group = (n, withBreak, spreadS = 20) => Array.from({ length: n }, (_, i) => riderAt(i + 1, (i % 5) * (spreadS / 5), i < withBreak));
+    // the same, but the riders from number "from" on do not come by a lap later (they stop or leave the ice after the start)
+    const leaving = (entries, from) => entries.map((e, i) => (i + 1 >= from ? { id: e.id, laps: e.laps.slice(0, e.laps.findIndex(l => l.startMs >= START) + 1) } : e));
+
+    it('a marathon: 15 or more riders start around the same time, a good part of them after a break', () => {
+        const result = marathonDetect(group(40, 20), 1);
+        assert.equal(result.isMarathon, true);
+        assert.equal(result.riders, 40);
+        assert.equal(result.withBreak, 20);
+        assert.ok(Math.abs(result.startMs - (START + 40 * SECOND)) <= 40 * SECOND);
+    });
+    it('the reference rider does not need a break himself (he may have been at the line already), the others do', () => {
+        const entries = group(40, 20);
+        entries[24] = riderAt(25, 10, false);                                              // the reference: no break
+        assert.equal(marathonDetect(entries, 25).isMarathon, true);
+    });
+    it('not a marathon with fewer than 15 riders, or without a break before the start (a busy training session)', () => {
+        assert.equal(marathonDetect(group(14, 7), 1).isMarathon, false);
+        assert.equal(marathonDetect(group(15, 8), 1).isMarathon, true);                    // 15 is enough
+        assert.equal(marathonDetect(group(40, 0), 1).isMarathon, false);
+        assert.equal(marathonDetect(group(40, 5), 1).isMarathon, false);                   // only 12 % after a break
+    });
+    it('the riders have to start around the same time: riders of another race (an hour later) do not count', () => {
+        const other = Array.from({ length: 30 }, (_, i) => ({ id: 100 + i, laps: riderAt(100 + i, 3600, true).laps }));
+        assert.equal(marathonDetect([...group(10, 5), ...other], 1).isMarathon, false);
+        assert.equal(marathonDetect([...group(10, 5), ...other], 1).riders, 10);
+    });
+    it('a lap later at least 75 % of the group has to cross the finish line as a group again (the empty lap)', () => {
+        const entries = group(40, 20);
+        assert.equal(marathonDetect(entries, 1).again, 40);
+        assert.equal(marathonDetect(leaving(entries, 32), 1).isMarathon, true);            // 31 of 40 (77 %) come by again
+        const twoThirds = marathonDetect(leaving(entries, 28), 1);                        // 27 of 40 (67 %)
+        assert.equal(twoThirds.isMarathon, false);
+        assert.equal(twoThirds.again, 27);
+        assert.equal(marathonDetect(leaving(entries, 1), 1).isMarathon, false);            // the reference rider himself does not come by again
+    });
+    it('a lap later means together: riders who come by minutes later do not count', () => {
+        const entries = group(40, 20).map((e, i) => (i < 25 ? e : { id: e.id, laps: e.laps.map((l, j) => (j >= 1 ? { ...l, startMs: l.startMs + 200 * SECOND } : l)) }));
+        assert.equal(marathonDetect(entries, 1).isMarathon, false);
+    });
+    it('a reference rider without laps (or who is not in the list) gives no marathon', () => {
+        assert.equal(marathonDetect(group(40, 20), 999).isMarathon, false);
+        assert.equal(marathonDetect([{ id: 1, laps: [] }], 1).isMarathon, false);
+    });
+    it('a long lap at the end of the activity (a lap to skate out) is not taken for the break before the start', () => {
+        const entries = group(40, 20).map(e => ({ id: e.id, laps: [...e.laps, { nr: 99, startMs: e.laps[e.laps.length - 1].startMs + e.laps[e.laps.length - 1].durMs, durMs: 200 * SECOND }] }));
+        const result = marathonDetect(entries, 1);
+        assert.equal(result.isMarathon, true);
+        assert.ok(Math.abs(result.startMs - (START + 40 * SECOND)) <= 40 * SECOND);          // the start of the race, not the end of the activity
+        // the main run counts, not the last break: 10 laps, a break, 20 laps, a break, 3 laps: the start is after the first break
+        const mk = (dur, start) => ({ nr: 1, startMs: start, durMs: dur * SECOND });
+        const laps = [...Array.from({ length: 10 }, (_, i) => mk(40, START + i * 40 * SECOND)), mk(300, START + 400 * SECOND), ...Array.from({ length: 20 }, (_, i) => mk(40, START + (700 + i * 40) * SECOND)), mk(300, START + 1500 * SECOND), ...Array.from({ length: 3 }, (_, i) => mk(40, START + (1800 + i * 40) * SECOND))];
+        assert.equal(marathonRaceStart(laps).startMs, START + 700 * SECOND);
+    });
+    it('marathonRaceStart: the end of the lap after his break, else his first crossing', () => {
+        const withBreak = marathonRaceStart(riderAt(1, 0, true).laps);
+        assert.equal(withBreak.afterBreak, true);
+        assert.equal(withBreak.startMs, START + 40 * SECOND);                            // his first race lap ends 40 s after the start
+        assert.equal(marathonRaceStart(riderAt(2, 0, false).laps).afterBreak, false);
+        assert.equal(marathonRaceStart([]), null);
+    });
+});
+
 describe('marathonTrackLaps: riders are shown from their first real crossing since the start', () => {
     const { marathonTrackLaps } = app.sandbox;
     it('a rider is not on the track until the API gives a crossing from 20 seconds before the start time', () => {
