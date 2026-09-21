@@ -498,6 +498,25 @@ describe('marathon mode: the crossings of the race and the list of a lap', () =>
     });
 });
 
+describe('knownFraction: a replay knows the lap time, so nothing is predicted', () => {
+    const { knownFraction } = app.sandbox;
+    it('between two crossings the rider is as far as the time since the last crossing is a share of the real lap', () => {
+        const list = [{ nr: 1, startMs: NOW, durMs: 30 * SECOND }, { nr: 2, startMs: NOW + 30 * SECOND, durMs: 40 * SECOND }];
+        assert.equal(knownFraction(list, NOW + 15 * SECOND), 0.5);
+        assert.equal(knownFraction(list, NOW + 30 * SECOND), 0);                       // at the crossing: at the finish line
+        assert.equal(knownFraction(list, NOW + 50 * SECOND), 0.5);                     // the second lap took 40 s, not the 30 s of the first
+        assert.ok(Math.abs(knownFraction(list, NOW + 69 * SECOND) - 39 / 40) < 1e-9);
+    });
+    it('null before the first lap, after the last, and in a break (the caller then predicts, or shows nobody)', () => {
+        const list = [{ nr: 1, startMs: NOW, durMs: 30 * SECOND }, { nr: 2, startMs: NOW + 30 * SECOND, durMs: 300 * SECOND }];    // the second lap is a break
+        assert.equal(knownFraction(list, NOW - 5 * SECOND), null);
+        assert.equal(knownFraction(list, NOW + 100 * SECOND), null);
+        assert.equal(knownFraction(list, NOW + 400 * SECOND), null);
+        assert.equal(knownFraction([], NOW), null);
+        assert.equal(knownFraction(null, NOW), null);
+    });
+});
+
 describe('marathonDetect: was the activity a marathon?', () => {
     const { marathonDetect, marathonRaceStart } = app.sandbox;
     const START = NOW - 3600 * SECOND;

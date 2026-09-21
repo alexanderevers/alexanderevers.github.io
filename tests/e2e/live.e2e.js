@@ -358,6 +358,10 @@ async function step(name, run) {
             await page.waitFor('window.__live.marathon().rows.length >= 4', 'the riders of that moment');
             assert.deepEqual(window_rows(await page.evaluate('JSON.stringify(window.__live.marathon().rows)')).filter(name => name !== 'Fay').slice(0, 4), ['Ann', 'Bob Bouwer', 'Cas', 'Dirk']);
             assert.ok(await page.evaluate('window.__live.states().length >= 4'));
+            // the whole activity is known in a replay: the place on the track comes from the real lap, not from a prediction
+            await page.waitFor('window.__live.states().some(s => typeof s.exactFrac === "number")', 'riders placed from their real lap times');
+            assert.ok(await page.evaluate('window.__live.states().filter(s => typeof s.exactFrac === "number").every(s => s.exactFrac >= 0 && s.exactFrac < 1)'));
+            assert.ok(await page.evaluate('window.__live.states().filter(s => s.status === "skating").every(s => s.exactFrac === undefined || s.sinceMs !== null)'));
             // play from there: the clock runs (at speed 10)
             await set('replaySpeed', '30', 'change');
             await page.evaluate('document.getElementById("replayPlay").click()');

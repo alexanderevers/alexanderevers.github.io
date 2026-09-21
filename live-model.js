@@ -185,6 +185,21 @@ function liveInitials(rider) {
     return words.slice(0, 2).map(word => word[0].toUpperCase()).join('');
 }
 
+/**
+ * Where on the track a rider is at a moment when the whole activity is known (a replay): between two crossings he is exactly as far as
+ * the time since the last crossing is a share of the real time of the lap, so nothing has to be predicted from his pace.
+ * @param {Array} laps    normalized laps of the whole activity
+ * @param {number} nowMs  the moment
+ * @param {number} trackLengthM
+ * @returns {number|null} 0 to 1, or null when he is not in a lap of skating at that moment (before the first lap, after the last, or in a break)
+ */
+function knownFraction(laps, nowMs, trackLengthM = 400) {
+    if (!laps || laps.length === 0) return null;
+    const lap = laps.find(l => l.startMs <= nowMs && nowMs < l.startMs + l.durMs);
+    if (!lap || !isSkatingLapMs(lap, trackLengthM)) return null;
+    return (nowMs - lap.startMs) / lap.durMs;
+}
+
 // ---------- Marathon mode ----------
 // A group of about 50 riders crosses the finish line more or less together. Every lap gives a new list: the order in which the riders
 // crossed the line, with the time and the distance to the first rider (the one who crossed first).
@@ -457,5 +472,5 @@ function marathonStandings(entries, options = {}) {
 }
 
 if (typeof module !== 'undefined') {
-    module.exports = { liveCandidates, riderLive, sortLiveRiders, liveInitials, lapsFetchDue, marathonRaceStart, marathonDetect, marathonTrackLaps, marathonCrossings, marathonStandings, liveFraction, liveShownStep, liveNiceTicks, liveShowAllMax, liveLapWindow, LIVE_WINDOW_MS, LIVE_ACTIVE_MS };
+    module.exports = { liveCandidates, riderLive, sortLiveRiders, liveInitials, lapsFetchDue, knownFraction, marathonRaceStart, marathonDetect, marathonTrackLaps, marathonCrossings, marathonStandings, liveFraction, liveShownStep, liveNiceTicks, liveShowAllMax, liveLapWindow, LIVE_WINDOW_MS, LIVE_ACTIVE_MS };
 }

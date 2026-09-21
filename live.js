@@ -456,12 +456,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const list = [...riders.values()];
         if (replay) {
             // the rink as it was at that moment: only the laps that had ended, and only the riders who had started
-            states = list.filter(rider => Date.parse(rider.activity.startTime) <= now).map(rider => ({
-                ...riderLive({ ...rider.activity, endTime: Date.parse(rider.activity.endTime) <= now ? rider.activity.endTime : null }, trackLaps(lapsAt(rider.laps, now), now), now, rink.length),
-                label: nameOf(rider.activity),
-                isPrivate: rider.isPrivate,
-                error: rider.error
-            }));
+            states = list.filter(rider => Date.parse(rider.activity.startTime) <= now).map(rider => {
+                const state = {
+                    ...riderLive({ ...rider.activity, endTime: Date.parse(rider.activity.endTime) <= now ? rider.activity.endTime : null }, trackLaps(lapsAt(rider.laps, now), now), now, rink.length),
+                    label: nameOf(rider.activity),
+                    isPrivate: rider.isPrivate,
+                    error: rider.error
+                };
+                // In a replay the whole activity is known: the lap he is in has a real time, so his place on the track is worked out from it
+                // and not predicted from his pace (only for a rider who is skating, from his first crossing since the start).
+                if (state.status === 'skating') {
+                    const known = knownFraction(trackLaps(rider.laps, now), now, rink.length);
+                    if (known !== null) state.exactFrac = known;
+                }
+                return state;
+            });
             return;
         }
         states = list.map(rider => ({
@@ -760,7 +769,7 @@ document.addEventListener('DOMContentLoaded', () => {
         skating.forEach((state, index) => {
             const slot = slots.get(state.id);
             const lane = ((slot ?? index) % LANES) - Math.floor(LANES / 2);
-            const p = toPx(pointOnTrack(shownFraction(state, dtS), lane * LANE_STEP));
+            const p = toPx(pointOnTrack(state.exactFrac !== undefined ? state.exactFrac : shownFraction(state, dtS), lane * LANE_STEP));       // (replay: the real lap time is known)
             const labelled = slot !== undefined;
             const radius = labelled ? 10 : 4;
             const fill = labelled ? colors.series[slot] : colors.series[0];
