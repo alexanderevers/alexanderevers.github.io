@@ -175,6 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
         saveSetting('liveRink', rink.id);
         riders = new Map();
         states = [];
+        shown.clear();
         selectedId = null;
         compareId = null;
         lastPollAt = null;
@@ -342,6 +343,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     let hitTargets = [];
+    // The dots are moved by the page, not put where the model says: a dot never stands still and never jumps. Every rider has a
+    // shown position (in laps, going up all the time). It runs at his usual speed, a little faster or slower to close in on the
+    // position the model estimates (target = state.progress): a difference, for example when a real lap arrives, is worked away
+    // during the coming lap. The speed stays between 40 % and 200 % of the usual one, so the dot cannot stop at the finish line.
+    const shown = new Map();
+    let shownAt = performance.now();
+    function shownFraction(state, dtS) {
+        const target = state.progress;
+        let entry = shown.get(state.id);
+        if (!entry || Math.abs(target - entry.pos) > 1.5) entry = { pos: target };   // new, or far off (a hidden tab): put it in place
+        entry.pos = liveShownStep(entry.pos, target, state.paceMs, dtS);
+        shown.set(state.id, entry);
+        return ((entry.pos % 1) + 1) % 1;
+    }
+
     function drawTrack() {
         ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
         ctx.clearRect(0, 0, view.w, view.h);
@@ -364,13 +380,16 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.fillText(new Date().toLocaleTimeString('en-GB'), view.w / 2, view.h / 2);
 
         hitTargets = [];
+        const nowAt = performance.now();
+        const dtS = Math.min((nowAt - shownAt) / 1000, 1);
+        shownAt = nowAt;
         const slots = colourSlots();
-        const skating = states.filter(s => s.status === 'skating' && s.frac !== null)
+        const skating = states.filter(s => s.status === 'skating' && s.progress !== null)
             .sort((a, b) => Number(slots.has(a.id)) - Number(slots.has(b.id)));          // the coloured dots on top
         skating.forEach((state, index) => {
             const slot = slots.get(state.id);
             const lane = ((slot ?? index) % LANES) - Math.floor(LANES / 2);
-            const p = toPx(pointOnTrack(state.frac, lane * LANE_STEP));
+            const p = toPx(pointOnTrack(shownFraction(state, dtS), lane * LANE_STEP));
             const labelled = slot !== undefined;
             const radius = labelled ? 10 : 4;
             const fill = labelled ? colors.series[slot] : colors.series[0];

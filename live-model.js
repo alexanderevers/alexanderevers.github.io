@@ -25,6 +25,37 @@ function liveCandidates(activities, nowMs, windowMs = LIVE_WINDOW_MS) {
 }
 
 /**
+ * How far into the current lap a rider is, from the time since his last crossing. The laps arrive a few seconds after the
+ * crossing, so the estimate never waits at the line:
+ *  - a rider who is not getting slower keeps going at the usual lap time (paceMs), past the line into the next lap (the result
+ *    is then above 1: it is the number of laps since the last known crossing);
+ *  - a rider who was slower in his last lap than in the one before is still in the current lap (else it would be in already):
+ *    that lap is expected to take longer by the same difference (lastMs + (lastMs - previousMs)), and when even that time has
+ *    passed the dot slows down further and creeps towards the line without reaching it.
+ */
+function liveFraction(sinceMs, paceMs, lastMs, previousMs) {
+    const slowing = previousMs !== null && previousMs !== undefined && lastMs > previousMs;
+    if (!slowing) return paceMs ? sinceMs / paceMs : 0;
+    const expectedMs = lastMs + (lastMs - previousMs);
+    const share = sinceMs / expectedMs;
+    const KNEE = 0.9;                                  // from here on the dot slows down, smoothly, towards 0.99
+    return share <= KNEE ? share : KNEE + (0.99 - KNEE) * (1 - Math.exp(-(share - KNEE) / (0.99 - KNEE)));
+}
+
+/**
+ * One step of the dot that is shown: from position pos (laps, going up all the time) it moves dtS seconds towards the estimated
+ * position target. It runs at the usual speed of the rider (1 lap per paceMs), a little faster or slower to close in on the
+ * target: a difference, for example when a real lap arrives, is worked away during the coming lap. The speed stays between 40 %
+ * and 200 % of the usual one, so the dot never stops (at the finish line or anywhere) and never jumps.
+ */
+function liveShownStep(pos, target, paceMs, dtS) {
+    const lapS = paceMs ? paceMs / 1000 : 30;
+    const usual = 1 / lapS;
+    const speed = Math.min(2 * usual, Math.max(0.4 * usual, usual + (target - pos) / Math.max(0.4 * lapS, 3)));
+    return pos + speed * dtS;
+}
+
+/**
  * What the page shows for one rider. `laps` are normalized laps ([{nr, startMs, durMs}]) or null when not loaded yet.
  * startMs and durationMs are those of the activity: when the rider started, and how long he has been at it (up to now
  * while he is on the ice, otherwise up to his last crossing).
@@ -35,7 +66,7 @@ function riderLive(activity, laps, nowMs, trackLengthM = 400) {
     const listEndMs = activity.endTime ? Date.parse(activity.endTime) : NaN;
     const base = {
         id: activity.id, chipCode: activity.chipCode, label, startMs: Number.isFinite(startMs) ? startMs : null, durationMs: null,
-        lapCount: 0, lastLap: null, lastMs: null, bestMs: null, bestNr: null, paceMs: null, sinceMs: null, frac: null
+        lapCount: 0, lastLap: null, lastMs: null, bestMs: null, bestNr: null, paceMs: null, sinceMs: null, frac: null, progress: null
     };
     const durationUntil = endMs => (base.startMs === null ? null : Math.max(0, endMs - base.startMs));
 
@@ -64,8 +95,11 @@ function riderLive(activity, laps, nowMs, trackLengthM = 400) {
     };
 
     if (isSkatingLapMs(last, trackLengthM) && sinceMs <= LIVE_ACTIVE_MS) {
-        // in the lap after the last crossing: as far along as the time since then is a share of the usual lap time
-        return { ...result, status: 'skating', durationMs: durationUntil(nowMs), frac: paceMs ? Math.min(sinceMs / paceMs, 0.99) : 0 };
+        const previous = skating.length >= 2 ? skating[skating.length - 2] : null;
+        const into = liveFraction(sinceMs, paceMs, last.durMs, previous ? previous.durMs : null);
+        // frac: where on the track (0..1); progress: laps since the first known crossing, never going back, which the page uses to
+        // move the dot smoothly (see the track in live.js)
+        return { ...result, status: 'skating', durationMs: durationUntil(nowMs), frac: into % 1, progress: laps.length + into };
     }
     return { ...result, status: sinceMs > LIVE_WINDOW_MS ? 'left' : 'resting', durationMs: durationUntil(Math.max(lastEndMs, Number.isFinite(listEndMs) ? listEndMs : 0)) };
 }
@@ -152,5 +186,5 @@ function liveInitials(rider) {
 }
 
 if (typeof module !== 'undefined') {
-    module.exports = { liveCandidates, riderLive, sortLiveRiders, liveInitials, lapsFetchDue, liveNiceTicks, liveShowAllMax, liveLapWindow, LIVE_WINDOW_MS, LIVE_ACTIVE_MS };
+    module.exports = { liveCandidates, riderLive, sortLiveRiders, liveInitials, lapsFetchDue, liveFraction, liveShownStep, liveNiceTicks, liveShowAllMax, liveLapWindow, LIVE_WINDOW_MS, LIVE_ACTIVE_MS };
 }

@@ -65,14 +65,23 @@ describe('riderLive: the picture of one rider', () => {
         assert.equal(rider.bestNr, 2);
         assert.equal(rider.paceMs, (30000 + 30000 + 36000) / 3);
     });
-    it('estimates the position: the time since the last crossing as a share of the lap time', () => {
+    it('estimates the position: the time since the last crossing as a share of the lap time (and keeps going round)', () => {
         assert.equal(riderLive(activity(1, 400, 15), laps(8, 30, 15), NOW).frac, 0.5);
         assert.equal(riderLive(activity(1, 400, 0), laps(8, 30, 0), NOW).frac, 0);
     });
-    it('keeps the dot just before the finish line while the next crossing is late', () => {
+    it('does not wait at the finish line while the next lap is not in yet: the dot goes on into the next lap', () => {
         const rider = riderLive(activity(1, 400, 40), laps(8, 30, 40), NOW);      // 40 s since the last crossing, laps of 30 s
-        assert.equal(rider.status, 'skating');                                     // still within 1.5 x the lap time
-        assert.equal(rider.frac, 0.99);
+        assert.equal(rider.status, 'skating');
+        assert.ok(Math.abs(rider.frac - 10 / 30) < 1e-9, String(rider.frac));     // a third into the next lap
+        assert.ok(Math.abs(rider.progress - (8 + 40 / 30)) < 1e-9, String(rider.progress));   // 8 laps known, then 4/3 of a lap
+        const later = riderLive(activity(1, 400, 40), laps(8, 30, 40), NOW + 5 * SECOND);
+        assert.ok(later.frac > rider.frac, 'the dot must keep moving');
+    });
+    it('the position stays continuous when the real crossing arrives: the lap is as long as expected, so the dot does not jump', () => {
+        const before = riderLive(activity(1, 400, 33), laps(8, 30, 33), NOW);      // 33 s since the last crossing, the new lap is not in yet
+        const after = riderLive(activity(1, 400, 3), laps(9, 30, 3), NOW);         // the new lap arrives: the crossing was 3 s ago
+        assert.ok(Math.abs(before.frac - after.frac) < 1e-9, before.frac + ' against ' + after.frac);
+        assert.ok(Math.abs(before.progress - after.progress) < 1e-9, before.progress + " against " + after.progress);   // one more lap known, one less lap since: the same place
     });
     it('is on the ice while the last crossing is less than 2 minutes ago, whatever the lap time; a lap of more than 2 minutes sends him to "Recently on the ice"', () => {
         assert.equal(riderLive(activity(1, 900, 119), laps(8, 30, 119), NOW).status, 'skating');
@@ -225,6 +234,72 @@ describe('the lap graph: what is in view and the axis', () => {
         const laps = [{ nr: 1, startMs: NOW, durMs: 60 * SECOND }];
         assert.equal(liveLapWindow(laps, 90, 400).fast.length, 1);
         assert.equal(liveLapWindow(laps, 90, 75).fast.length, 0);        // 75 m in 60 s is 4.5 km/h: a break
+    });
+});
+
+describe('liveFraction: where the dot is while the next lap is not in yet', () => {
+    const { liveFraction } = app.sandbox;
+    it('not slowing down: goes on at the usual lap time, past the line into the next lap', () => {
+        assert.equal(liveFraction(15000, 30000, 30000, 30000), 0.5);
+        assert.ok(Math.abs(liveFraction(40000, 30000, 30000, 30000) - 4 / 3) < 1e-9);      // 1 = the line: a third into the next lap
+        assert.ok(Math.abs(liveFraction(40000, 30000, 30000, 32000) - 4 / 3) < 1e-9);      // speeding up: the same
+        assert.equal(liveFraction(15000, 30000, 30000, null), 0.5);                          // only one lap known
+    });
+    it('slowing down: the current lap is expected to take as much longer as the last lap was slower than the one before', () => {
+        // laps of 30 s, then 33 s: the current lap is expected to take 36 s
+        assert.ok(Math.abs(liveFraction(18000, 33000, 33000, 30000) - 0.5) < 1e-9);
+        assert.ok(Math.abs(liveFraction(30000, 33000, 33000, 30000) - 30 / 36) < 1e-9);
+    });
+    it('slowing down: it never goes past the finish line while the lap is not in, and keeps creeping forward', () => {
+        let previous = 0;
+        for (const seconds of [20, 30, 32.4, 36, 40, 50, 80]) {
+            const frac = liveFraction(seconds * 1000, 33000, 33000, 30000);
+            assert.ok(frac > previous && frac < 1, seconds + ' s: ' + frac);
+            previous = frac;
+        }
+    });
+    it('slowing down: the change where the dot starts to slow is smooth', () => {
+        const a = liveFraction(0.9 * 36000 - 1, 33000, 33000, 30000);
+        const b = liveFraction(0.9 * 36000 + 1, 33000, 33000, 30000);
+        assert.ok(b > a && b - a < 1e-4);
+    });
+    it('riderLive uses it: a rider who slowed down in his last lap stays in front of the line', () => {
+        const all = laps(7, 30, 34 + 33);                                                       // seven laps of 30 s ...
+        all.push({ nr: 8, startMs: NOW - 34 * SECOND - 33 * SECOND, durMs: 33 * SECOND });      // ... then 33 s, the last crossing 34 s ago
+        const rider = riderLive(activity(1, 900, 34), all, NOW);
+        assert.equal(rider.status, 'skating');
+        assert.ok(rider.frac > 0.9 && rider.frac < 0.99, String(rider.frac));                  // expected 36 s: 34 s is 94 %
+    });
+});
+
+describe('liveShownStep: the shown dot never stops and never jumps', () => {
+    const { liveShownStep } = app.sandbox;
+    const run = (pos, targetAt, seconds, paceMs = 30000) => {          // 10 steps a second; targetAt(t) is the estimate at second t
+        const path = [pos];
+        for (let t = 0; t < seconds; t += 0.1) path.push(pos = liveShownStep(pos, targetAt(t), paceMs, 0.1));
+        return path;
+    };
+    it('runs at the usual speed when it is where it should be', () => {
+        const path = run(8, t => 8 + t / 30, 30);
+        assert.ok(Math.abs(path[path.length - 1] - 9) < 1e-6);
+    });
+    it('never stands still, whatever the estimate does (also when the estimate stops at the line)', () => {
+        const path = run(8.95, () => 8.99, 20);                          // the estimate waits in front of the line
+        for (let i = 1; i < path.length; i++) assert.ok(path[i] - path[i - 1] >= 0.4 * 0.1 / 30 - 1e-12, 'stood still at step ' + i);
+        const back = run(9.5, () => 9.0, 20);                            // the estimate is behind the dot
+        for (let i = 1; i < back.length; i++) assert.ok(back[i] > back[i - 1]);
+    });
+    it('never runs faster than twice, never slower than 0.4 times the usual speed', () => {
+        const path = run(8, () => 20, 10);
+        for (let i = 1; i < path.length; i++) assert.ok(path[i] - path[i - 1] <= 2 * 0.1 / 30 + 1e-12);
+    });
+    it('a difference is worked away during the coming lap: a dot 0.05 lap behind the estimate is level again after about a lap', () => {
+        const path = run(8.95, t => 9 + t / 30, 60);                     // the real lap has arrived: the estimate is 0.05 lap ahead
+        const gap = i => (9 + (i * 0.1) / 30) - path[i];
+        assert.ok(gap(0) > 0.04);
+        assert.ok(Math.abs(gap(300)) < 0.01, 'still ' + gap(300) + ' laps off after 30 s');
+        const speeds = path.slice(1).map((p, i) => (p - path[i]) / 0.1 * 30);      // relative to the usual speed
+        assert.ok(Math.max(...speeds) < 1.6 && Math.min(...speeds) > 0.9, speeds[0] + ' .. ' + speeds[speeds.length - 1]);   // only a gentle speeding up
     });
 });
 
