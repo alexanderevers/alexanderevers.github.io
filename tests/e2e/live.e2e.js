@@ -263,6 +263,16 @@ async function step(name, run) {
             await page.waitFor('/^Lap times · Bob Bouwer, MB-10102 · position [0-9]+$/.test(document.getElementById("liveLapTitle").textContent)', 'name and position in the title');
             // the place of the rider in the list of every lap is drawn in the graph (a second line, on an axis of its own)
             await page.waitFor('window.__live.lapGraph().places >= 3', 'the places in the graph');
+            // the last lap is there too: Dirk crosses 1.5 s after the first rider, after the flag of the finish, and still has his place in the graph
+            await page.evaluate('[...document.querySelectorAll(".marathon-row")].find(r => r.cells[1].textContent.includes("Dirk")).click()');
+            await page.waitFor('window.__live.selected() === 9104 || window.__live.compared() === 9104', 'Dirk pressed');
+            await page.evaluate('window.__live.selected() === 9104 || [...document.querySelectorAll(".marathon-row")].find(r => r.cells[1].textContent.includes("Dirk")).click()');
+            await page.waitFor('window.__live.selected() === 9104', 'Dirk selected');
+            await page.waitFor('window.__live.lapGraph().places >= 3', 'the places of Dirk');
+            await page.waitFor("(() => { const p = window.__live.marathon().placesOf(9104); return p.length > 0 && window.__live.lapGraph().lastPlaceEndMs === p[p.length - 1].endMs; })()", 'the last lap of Dirk in the place graph');
+            await page.evaluate('[...document.querySelectorAll(".marathon-row")].find(r => r.cells[1].textContent.includes("Bob")).click()');
+            await page.evaluate('window.__live.selected() === 9102 || [...document.querySelectorAll(".marathon-row")].find(r => r.cells[1].textContent.includes("Bob")).click()');
+            await page.waitFor('window.__live.selected() === 9102', 'Bob selected again');
             const bobPlaces = JSON.parse(await page.evaluate('JSON.stringify(window.__live.marathon().placesOf(9102))'));
             assert.ok(bobPlaces.length >= 3 && bobPlaces.every(p => p.place >= 1 && p.place <= p.riders), JSON.stringify(bobPlaces));
             assert.equal(bobPlaces[bobPlaces.length - 1].place, window_rows(await page.evaluate('JSON.stringify(window.__live.marathon().rows)')).indexOf('Bob Bouwer') + 1);      // (the newest lap: his place in the list)

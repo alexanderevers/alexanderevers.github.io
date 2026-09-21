@@ -831,7 +831,7 @@ document.addEventListener('DOMContentLoaded', () => {
             colour,
             skating: state.status === 'skating',
             nowMs: clock(),
-            marks: marathon && marathonResult ? { startMs: marathonResult.startMs, finishMs: marathonResult.finishMs } : null,
+            marks: marathon && marathonResult ? { startMs: marathonResult.startMs, finishMs: marathonResult.finishMs, endMs: Math.max(marathonResult.finishMs, ...marathonResult.rows.map(r => r.endMs)) } : null,
             zoom: !movingStart,                      // while the start is being moved the whole activity is shown
             places: marathon && marathonResult && marathonResult.placesOf ? marathonResult.placesOf(selectedId) : null       // the place in the list of every lap
         }, compare);
