@@ -61,25 +61,34 @@ describe('readErrorMessage', () => {
     });
 });
 
-describe('fetchLaps: the "finished" hint for the proxy cache', () => {
+describe('fetchLaps: the "finished" hint for the proxy cache (only for activities that started on an earlier day)', () => {
     let requested;
     beforeEach(() => { requested = []; app.sandbox.fetch = async url => { requested.push(url); return ok({ sessions: [] }); }; });
     const ago = minutes => new Date(Date.now() - minutes * 60000).toISOString();
+    const yesterday = hour => { const d = new Date(); d.setDate(d.getDate() - 1); d.setHours(hour, 0, 0, 0); return d.toISOString(); };
+    const today = (hour, minute = 0) => { const d = new Date(); d.setHours(hour, minute, 0, 0); return d.toISOString(); };
 
-    it('adds ?finished=1 for an activity that ended more than 15 minutes ago', async () => {
-        await fetchLaps(7561524117, ago(60));
-        assert.equal(requested[0], `${PROXY}/laps/7561524117?finished=1`);
+    it('adds ?finished=1 for an activity that started yesterday (or earlier) and has ended', async () => {
+        await fetchLaps(7561524117, yesterday(20), yesterday(19));
+        await fetchLaps(2, '2026-01-05T11:00:00Z', '2026-01-05T10:00:00Z');
+        assert.deepEqual(requested, [`${PROXY}/laps/7561524117?finished=1`, `${PROXY}/laps/2?finished=1`]);
     });
-    it('leaves it out for an activity that ended just now, or is still going', async () => {
-        await fetchLaps(1, ago(5));
-        await fetchLaps(2, null);
+    it('leaves it out for an activity of today, even when it ended hours ago', async () => {
+        await fetchLaps(1, ago(300), today(0, 0));
+        assert.equal(requested[0], `${PROXY}/laps/1`);
+        assert.equal(isFinishedActivity(today(0, 0), ago(0.1)), false);
+    });
+    it('leaves it out when the start or the end is unknown, or the activity has only just ended', async () => {
+        await fetchLaps(1, yesterday(20));                // no start time
+        await fetchLaps(2, null, yesterday(19));          // still going
         await fetchLaps(3);
-        assert.deepEqual(requested, [`${PROXY}/laps/1`, `${PROXY}/laps/2`, `${PROXY}/laps/3`]);
+        await fetchLaps(4, ago(5), yesterday(0));         // ended 5 minutes ago (started before midnight)
+        assert.deepEqual(requested, [1, 2, 3, 4].map(id => `${PROXY}/laps/${id}`));
     });
-    it('isFinishedActivity ignores end times it cannot read', () => {
-        assert.equal(isFinishedActivity('nonsense'), false);
-        assert.equal(isFinishedActivity(ago(16)), true);
-        assert.equal(isFinishedActivity(ago(14)), false);
+    it('isFinishedActivity ignores times it cannot read', () => {
+        assert.equal(isFinishedActivity('nonsense', yesterday(20)), false);
+        assert.equal(isFinishedActivity(yesterday(19), 'nonsense'), false);
+        assert.equal(isFinishedActivity(yesterday(19), yesterday(20)), true);
     });
     it('turns an error answer into an Error with a readable message', async () => {
         app.sandbox.fetch = async () => failure(500, null, false);

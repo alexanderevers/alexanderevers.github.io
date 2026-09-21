@@ -36,6 +36,11 @@ const DEFAULT_ALLOWED_ORIGINS = [
 // Never keep an answer in the visitor's browser longer than this, however long Cloudflare keeps it.
 const MAX_BROWSER_CACHE_SECONDS = DAY;
 
+// The live page asks for ?live=1: a session may be running, so the answer is kept for one second only,
+// which lets the page refresh every second.
+const LIVE_SECONDS = 1;
+const isLive = url => url.searchParams.get('live') === '1';
+
 // Ids are letters, digits, dot, dash and underscore; nothing that could change the path we call.
 const SAFE_ID = /^[A-Za-z0-9._-]{1,100}$/;
 
@@ -72,9 +77,10 @@ const ENDPOINTS = {
     },
     laps: {
         url: id => `https://practice-api.speedhive.com/api/v1/training/activities/${id}/sessions`,
-        // The website adds ?finished=1 for an activity that ended a while ago. Its laps can no longer change,
-        // so they are kept for a long time. A session that may still be recording is only kept for a minute.
-        ttl: url => (url.searchParams.get('finished') === '1' ? 30 * DAY : MINUTE)
+        // The website adds ?finished=1 for an activity that started on an earlier day and has ended. Its laps can no longer
+        // change, so they are kept for a long time. Activities of today are only kept for a minute.
+        // ?live=1 (the live page) keeps it one second.
+        ttl: url => (isLive(url) ? LIVE_SECONDS : url.searchParams.get('finished') === '1' ? 30 * DAY : MINUTE)
     },
     locations: {
         url: id => `https://practice-api.speedhive.com/api/v1/locations/${id}/activities`,
@@ -84,7 +90,7 @@ const ENDPOINTS = {
             count: { check: intBetween(1, 1000) },
             offset: { check: intBetween(0, 1000000) }
         },
-        ttl: () => 5 * MINUTE
+        ttl: url => (isLive(url) ? LIVE_SECONDS : 5 * MINUTE)   // ?live=1 (the live page): one second
     },
     chips: {
         url: id => `https://practice-api.speedhive.com/api/v1/chips/code/${id}/training/activities`,

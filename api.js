@@ -82,21 +82,27 @@ async function fetchActivities(transponder) {
     return { activities, account: accountData, userId: userID };
 }
 
-// An activity that ended a while ago can no longer get new laps, so the proxy may keep its laps for a long time.
+// An activity that started on an earlier day (and has ended) can no longer get new laps, so the proxy may keep its laps for a long
+// time. Activities of today, and the ones that are live, are not kept: they can still change and are seen once or twice only.
 const FINISHED_AFTER_MS = 15 * 60 * 1000;
 
-function isFinishedActivity(endTime) {
+function isFinishedActivity(startTime, endTime) {
+    const start = Date.parse(startTime);
     const end = Date.parse(endTime);
-    return Number.isFinite(end) && Date.now() - end > FINISHED_AFTER_MS;
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
+    const midnight = new Date();
+    midnight.setHours(0, 0, 0, 0);
+    return start < midnight.getTime() && Date.now() - end > FINISHED_AFTER_MS;
 }
 
 /**
  * @param {number|string} activityId
- * @param {string} [endTime] the activity's endTime, when known. Passing it lets the proxy cache the laps
- *                           of a finished activity for a long time.
+ * @param {string} [endTime]   the activity's endTime, when known
+ * @param {string} [startTime] the activity's startTime, when known. With both, the laps of an activity that started on an
+ *                             earlier day are cached by the proxy for a long time; those of today are not.
  */
-async function fetchLaps(activityId, endTime) {
-    const finished = endTime && isFinishedActivity(endTime) ? '?finished=1' : '';
+async function fetchLaps(activityId, endTime, startTime) {
+    const finished = isFinishedActivity(startTime, endTime) ? '?finished=1' : '';
     const url = `${PROXY_BASE_URL}/laps/${activityId}${finished}`;
     const response = await fetchWithRetry(url);
     if (!response.ok) {
@@ -143,6 +149,30 @@ async function fetchAllActivitiesFromLocation(locationId, year, sport, sessionSt
     }
 
     return [...activitiesById.values()];
+}
+
+/**
+ * The newest activities of a rink, for the live page. ?live=1 makes the proxy keep the answer for one second
+ * only (see cloudflare-worker/src/index.js). The list is sorted by END time, newest first, and a page holds at most 200.
+ */
+async function fetchLiveActivities(locationId, sport = 'IceSkating', count = 100) {
+    const year = new Date().getFullYear();
+    const url = `${PROXY_BASE_URL}/locations/${locationId}?year=${year}&sport=${sport}&count=${count}&offset=0&live=1`;
+    const response = await fetchWithRetry(url);
+    if (!response.ok) throw new Error(await readErrorMessage(response, 'The rink could not be loaded'));
+    const data = await response.json();
+    return data.activities || [];
+}
+
+/**
+ * The laps of an activity that may still be running (kept only one second by the proxy).
+ * Riders who keep their results private answer 401/403: that gives { private: true }.
+ */
+async function fetchLiveLaps(activityId) {
+    const response = await fetchWithRetry(`${PROXY_BASE_URL}/laps/${activityId}?live=1`);
+    if (response.status === 401 || response.status === 403) return { private: true };
+    if (!response.ok) throw new Error(await readErrorMessage(response, 'Laps fetch failed'));
+    return response.json();
 }
 
 async function fetchAccountDetails(transponder) {

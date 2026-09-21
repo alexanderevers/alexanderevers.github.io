@@ -98,11 +98,12 @@ default, and `npm` and `npx` start through such a script. Nothing is wrong with 
 
 | Data | Cloudflare keeps it | Why |
 |---|---|---|
-| Laps of a **finished** activity (the site adds `?finished=1`) | 30 days | Laps of a finished session never change |
-| Laps of an activity that may still be recording | 1 minute | They can still change |
+| Laps of an activity from **yesterday or earlier** (the site adds `?finished=1`) | 30 days | Laps of a finished session never change |
+| Laps of an activity of **today** (or that may still be recording) | 1 minute | They can still change |
 | Transponder to account, account profile, avatar | 1 day | Almost never changes |
 | A rider's activity list, chip activity list | 2 minutes | New sessions show up here |
 | Activity list of a location (overlapping sessions) | 5 minutes | Grows all day |
+| Laps and location lists with `?live=1` (the live page) | 1 second | Live data; `live=1` beats `finished=1`, any other value is ignored |
 | Name search | 10 minutes | |
 
 Error answers are never cached. The visitor's browser also keeps answers (at most one day).

@@ -25,7 +25,7 @@ needs the real MYLAPS API, a Cloudflare account or a personal transponder.
 Run from the repository root (the folder that contains `package.json` and `index.html`):
 
 ```bash
-npm test               # unit tests            -> expect 157 tests, 42 suites, 0 failures  (~1.5 s)
+npm test               # unit tests            -> expect 194 tests, 48 suites, 0 failures  (~1.5 s)
 npm run test:worker    # Cloudflare Worker     -> expect the last line "ALL PASS"           (~2 s)
 npm run test:e2e       # real browser          -> expect the last line "ALL PASSED"         (~11 s)
 npm run test:all       # unit + worker (does not start a browser)
@@ -94,6 +94,8 @@ tests/                               everything in this document
   unit/*.test.js                     unit tests (node:test)
   e2e/browser.js                     static server + headless browser driver (no dependencies)
   e2e/replay-flow.e2e.js             the end-to-end scenario
+  e2e/live.e2e.js                    the live page (`npm run test:e2e:live`): list, laps arriving, sorting, track, lap graph, other rink, hidden tab
+  fixtures/fake-live-stub.js         fake live rink (fast, steady, resting, private, old and just-started riders)
 cloudflare-worker/test/handler.test.mjs   Worker tests
 ```
 
@@ -110,6 +112,8 @@ Which source file is covered by which test:
 | `gpx-generator.js` | GPX file for Strava, which rink gets which track file | `unit/gpx-generator.test.js` |
 | `cloudflare-worker/src/index.js` | the proxy: routing, validation, CORS, caching rules | `cloudflare-worker/test/handler.test.mjs` |
 | `script.js`, `fetch_overlapping_sessions.js`, `replay.js`, `chart-factory.js`, `theme.js`, `style.css`, the HTML pages | user interface | `e2e/replay-flow.e2e.js` |
+| `live.html`, `live.js`, `live-graph.js` | live page | `e2e/live.e2e.js` |
+| `live-model.js` | 15 min / 2 min rules, start and duration, fetch timing, graph window | `unit/live-model.test.js` |
 | `search_user.*`, `strava.js` | name search page, unfinished Strava upload | not covered (see 13) |
 
 ## 4. The three suites
@@ -132,7 +136,7 @@ node --test --test-name-pattern="break lap" "tests/unit/*.test.js"  # tests whos
 | `replay-model.test.js` | positions and the two ranking numbers | interpolation inside a lap, lap boundaries, small gaps, long pauses, **break laps** (< 8 km/h) are off the ice, overlap time is symmetric and ignores breaks, **group membership**: crossing within 1 s of you, chains of riders 1 s apart, the quarter-lap window, break laps, drifting riders |
 | `pwa.test.js` | the installable app | the manifest (name Icesights, standalone, start page and scope, hex colours), real PNG icons of the right sizes (192, 512, maskable 512, iOS 180), every page links manifest/icons/theme colour and loads `pwa.js`, the service worker lists only existing files and **every script, stylesheet and icon the pages load**, versioned cache names, and it never touches the proxy; **the manifest made for one transponder** (own id and name, starts on `index.html?transponder=...`, inside the site, same icons with full addresses) |
 | `chart-factory.test.js` | the session chart's tooltip | one item per lap (bar kept, line dropped), the average line never listed, slower laps and different laps kept, and the chart really uses the filter and describes the hovered lap |
-| `api.test.js` | retries, paging and the activity list | retries only on 5xx/network errors (max 3 tries), readable error messages for non-JSON error bodies, `?finished=1` only for activities that ended > 15 min ago, **paging through a rink advances by what was received (page cap 200) and stops based on END time** | **`fetchActivities` asks for `count=500`** (the whole list, not only the newest 100), still works without a profile, readable errors for an unknown transponder |
+| `api.test.js` | retries, paging and the activity list | retries only on 5xx/network errors (max 3 tries), readable error messages for non-JSON error bodies, `?finished=1` only for activities that started on an earlier day and have ended (not for today's), **paging through a rink advances by what was received (page cap 200) and stops based on END time** | **`fetchActivities` asks for `count=500`** (the whole list, not only the newest 100), still works without a profile, readable errors for an unknown transponder |
 | `overlap-sort.test.js` | order of the overlapping riders | longest time in your group first, ties (in particular 0 min) by time skated together, whole minutes before exact times, unmeasured riders last |
 | `gpx-generator.test.js` | rinks and files | id and name matching to a track file, unknown rinks get none, **every `.gpx` in `/tracks` is registered and is a closed ~400 m lap with increasing timestamps**, GPX output has strictly increasing times and no duplicate finish-line point |
 
@@ -373,7 +377,7 @@ Understanding these makes the tests (and the code) easy to read.
 - **"Select all" / "Show all"** only pick riders with more than 0 min together (fallback: everyone, when nobody could be measured).
 - **Colours.** The reference rider and the first riders that were shown (10 in total) get a coloured dot with initials; every other rider is a small blue dot. Clicking the dot in the rider list gives or takes away a colour; when all 10 colours are taken, the rider picked longest ago gives one up. Ten colours are validated for both themes.
 - **The rink activity list** (`/locations/:id`): a page holds **at most 200** activities even if 250 are requested, so the next offset must advance by the number received; the list is sorted by **end time**, newest first, so paging stops when the last activity of a page ended before the session started (comparing start times stops too early).
-- **Caching.** Laps of an activity that ended more than 15 minutes ago are requested with `?finished=1`, which lets the proxy cache them for 30 days.
+- **Caching.** Laps of an activity that started on an earlier day (and has ended) are requested with `?finished=1`, which lets the proxy cache them for 30 days. Activities of today and live ones are not kept long.
 - **The whole activity list.** Without a count the proxy returns only the newest 100 activities; the website asks for `count=500` (the proxy's maximum), so older sessions (back to 2011 for the developer's account) appear. A year filter narrows the list; a selected activity stays selected only when it is in the chosen year.
 - **Active time.** MYLAPS reports the total training time (first to last lap) and the active training time (the laps). The session summary shows the active time and its share of the total; the card says "N/A" when either time is missing.
 - **Remembered settings.** `localStorage` keys `mylaps.maxFastLapSeconds` (main page slider), `mylaps.replaySpeed` and `mylaps.followChip` (the transponder of the rider whose lap graph was followed last), plus `theme`. Values that no longer fit (for example a slider value outside its range) are ignored, and a browser that blocks storage simply forgets the settings.

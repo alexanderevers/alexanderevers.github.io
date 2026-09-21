@@ -17,7 +17,7 @@ const MIME = {
 };
 
 /** Serves the project folder. HTML pages get `injectIntoHead` (the fake API script) right after <head>. */
-function startStaticServer(injectIntoHead) {
+function startStaticServer(injectIntoHead, listenPort = 0) {
     const server = http.createServer((request, response) => {
         const relative = decodeURIComponent(request.url.split('?')[0]).replace(/^\/+/, '') || 'index.html';
         const file = path.resolve(PROJECT_ROOT, relative);
@@ -32,7 +32,7 @@ function startStaticServer(injectIntoHead) {
         response.writeHead(200, { 'Content-Type': type });
         response.end(body);
     });
-    return new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port })));
+    return new Promise(resolve => server.listen(listenPort, '127.0.0.1', () => resolve({ server, port: server.address().port })));
 }
 
 /** The first Chrome, Chromium or Edge found (or the one in CHROME_PATH). */
