@@ -498,6 +498,31 @@ describe('marathon mode: the crossings of the race and the list of a lap', () =>
     });
 });
 
+describe('the settings of the marathon: the dots follow the last lap and catch up quickly', () => {
+    const { liveShownStep } = app.sandbox;
+    const MARATHON_ESTIMATE_OPTIONS = app.get('MARATHON_ESTIMATE_OPTIONS');
+    const MARATHON_SHOWN_OPTIONS = app.get('MARATHON_SHOWN_OPTIONS');
+    it('live: the pace of the last three laps and the rule for a rider who is slowing down; marathon: the last lap, without that rule', () => {
+        // laps of 30, 30, 36 s; 40 s since the last crossing
+        const list = [...laps(2, 30, 76), { nr: 3, startMs: NOW - 76 * SECOND, durMs: 36 * SECOND }];
+        const live = riderLive(activity(1, 900, 40), list, NOW);
+        const marathon = riderLive(activity(1, 900, 40), list, NOW, 400, MARATHON_ESTIMATE_OPTIONS);
+        assert.ok(live.frac > 0.9 && live.frac < 0.99, String(live.frac));                    // slowing: still in front of the line (expected 42 s)
+        assert.ok(Math.abs(marathon.frac - (40 / 36 - 1)) < 1e-9, String(marathon.frac));     // his last lap was 36 s: he is 4/36 into the next lap
+        assert.equal(marathon.paceMs, live.paceMs);                                          // (the pace shown in the list is the same)
+    });
+    it('the marathon dot catches up with the estimate faster than the live dot, and never stops', () => {
+        const step = options => { let pos = 8.9; for (let i = 0; i < 20; i++) pos = liveShownStep(pos, 9.0, 40000, 0.1, options); return pos; };
+        const live = step({});
+        const marathon = step(MARATHON_SHOWN_OPTIONS);
+        assert.ok(marathon > live, live + ' against ' + marathon);                             // 2 s later the marathon dot is closer to the estimate
+        assert.ok(marathon <= 9.0 + 1e-9 || marathon - 9.0 < 0.05);
+        // it does not stand still when the estimate is behind it
+        assert.ok(liveShownStep(9.5, 9.0, 40000, 0.1, MARATHON_SHOWN_OPTIONS) > 9.5);
+        assert.deepEqual(hostCopy(MARATHON_SHOWN_OPTIONS), { catchUp: 0.05, minCatchUpS: 1, minSpeed: 0.2, maxSpeed: 3 });
+    });
+});
+
 describe('knownFraction: a replay knows the lap time, so nothing is predicted', () => {
     const { knownFraction } = app.sandbox;
     it('between two crossings the rider is as far as the time since the last crossing is a share of the real lap', () => {

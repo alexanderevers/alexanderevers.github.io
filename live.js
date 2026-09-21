@@ -458,7 +458,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // the rink as it was at that moment: only the laps that had ended, and only the riders who had started
             states = list.filter(rider => Date.parse(rider.activity.startTime) <= now).map(rider => {
                 const state = {
-                    ...riderLive({ ...rider.activity, endTime: Date.parse(rider.activity.endTime) <= now ? rider.activity.endTime : null }, trackLaps(lapsAt(rider.laps, now), now), now, rink.length),
+                    ...riderLive({ ...rider.activity, endTime: Date.parse(rider.activity.endTime) <= now ? rider.activity.endTime : null }, trackLaps(lapsAt(rider.laps, now), now), now, rink.length, marathon ? MARATHON_ESTIMATE_OPTIONS : {}),
                     label: nameOf(rider.activity),
                     isPrivate: rider.isPrivate,
                     error: rider.error
@@ -474,7 +474,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         states = list.map(rider => ({
-            ...riderLive(rider.activity, trackLaps(rider.laps, now), now, rink.length),
+            ...riderLive(rider.activity, trackLaps(rider.laps, now), now, rink.length, marathon ? MARATHON_ESTIMATE_OPTIONS : {}),
             label: nameOf(rider.activity),
             isPrivate: rider.isPrivate,
             error: rider.error
@@ -729,7 +729,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const target = state.progress;
         let entry = shown.get(state.id);
         if (!entry || Math.abs(target - entry.pos) > 1.5) entry = { pos: target };   // new, or far off (a hidden tab): put it in place
-        entry.pos = liveShownStep(entry.pos, target, state.paceMs, dtS);
+        entry.pos = liveShownStep(entry.pos, target, state.paceMs, dtS, marathon ? MARATHON_SHOWN_OPTIONS : {});
         shown.set(state.id, entry);
         return ((entry.pos % 1) + 1) % 1;
     }

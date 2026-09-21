@@ -48,19 +48,27 @@ function liveFraction(sinceMs, paceMs, lastMs, previousMs) {
  * target: a difference, for example when a real lap arrives, is worked away during the coming lap. The speed stays between 40 %
  * and 200 % of the usual one, so the dot never stops (at the finish line or anywhere) and never jumps.
  */
-function liveShownStep(pos, target, paceMs, dtS) {
+function liveShownStep(pos, target, paceMs, dtS, options = {}) {
+    const { catchUp = 0.4, minCatchUpS = 3, minSpeed = 0.4, maxSpeed = 2 } = options;
     const lapS = paceMs ? paceMs / 1000 : 30;
     const usual = 1 / lapS;
-    const speed = Math.min(2 * usual, Math.max(0.4 * usual, usual + (target - pos) / Math.max(0.4 * lapS, 3)));
+    const speed = Math.min(maxSpeed * usual, Math.max(minSpeed * usual, usual + (target - pos) / Math.max(catchUp * lapS, minCatchUpS)));
     return pos + speed * dtS;
 }
+
+// The settings of the marathon (marathon.html). Measured against the real lap times of the marathon of 11/03/2026 at Jaap Eden (33 riders,
+// 343,000 moments, a lap known 3 s after it ended): the place of a dot was 15.5 m off on average with the settings of the live page, and
+// 11.7 m (median 7.9 m instead of 11.6 m) with these: the estimate from the last lap, without the rule for a rider who is slowing down (a
+// pack skates evenly), and a dot that catches up with the estimate quickly (in 5 % of a lap instead of 40 %) within 0.2 to 3 times his speed.
+const MARATHON_ESTIMATE_OPTIONS = { fromLastLap: true, slowingRule: false };
+const MARATHON_SHOWN_OPTIONS = { catchUp: 0.05, minCatchUpS: 1, minSpeed: 0.2, maxSpeed: 3 };
 
 /**
  * What the page shows for one rider. `laps` are normalized laps ([{nr, startMs, durMs}]) or null when not loaded yet.
  * startMs and durationMs are those of the activity: when the rider started, and how long he has been at it (up to now
  * while he is on the ice, otherwise up to his last crossing).
  */
-function riderLive(activity, laps, nowMs, trackLengthM = 400) {
+function riderLive(activity, laps, nowMs, trackLengthM = 400, options = {}) {
     const label = (activity.chipLabel || '').trim() || activity.chipCode;
     const startMs = Date.parse(activity.startTime);
     const listEndMs = activity.endTime ? Date.parse(activity.endTime) : NaN;
@@ -96,7 +104,10 @@ function riderLive(activity, laps, nowMs, trackLengthM = 400) {
 
     if (isSkatingLapMs(last, trackLengthM) && sinceMs <= LIVE_ACTIVE_MS) {
         const previous = skating.length >= 2 ? skating[skating.length - 2] : null;
-        const into = liveFraction(sinceMs, paceMs, last.durMs, previous ? previous.durMs : null);
+        // the estimate: normally from his pace over the last laps, with the rule for a rider who is slowing down; in a marathon (options) from
+        // his last lap and without that rule (measured on the marathon of 11/03/2026: about 25 % less error)
+        const estimatePace = options.fromLastLap ? last.durMs : paceMs;
+        const into = liveFraction(sinceMs, estimatePace, last.durMs, options.slowingRule === false || !previous ? null : previous.durMs);
         // frac: where on the track (0..1); progress: laps since the first known crossing, never going back, which the page uses to
         // move the dot smoothly (see the track in live.js)
         return { ...result, status: 'skating', durationMs: durationUntil(nowMs), frac: into % 1, progress: laps.length + into };
@@ -472,5 +483,5 @@ function marathonStandings(entries, options = {}) {
 }
 
 if (typeof module !== 'undefined') {
-    module.exports = { liveCandidates, riderLive, sortLiveRiders, liveInitials, lapsFetchDue, knownFraction, marathonRaceStart, marathonDetect, marathonTrackLaps, marathonCrossings, marathonStandings, liveFraction, liveShownStep, liveNiceTicks, liveShowAllMax, liveLapWindow, LIVE_WINDOW_MS, LIVE_ACTIVE_MS };
+    module.exports = { liveCandidates, riderLive, sortLiveRiders, liveInitials, lapsFetchDue, knownFraction, marathonRaceStart, marathonDetect, marathonTrackLaps, marathonCrossings, marathonStandings, liveFraction, liveShownStep, MARATHON_ESTIMATE_OPTIONS, MARATHON_SHOWN_OPTIONS, liveNiceTicks, liveShowAllMax, liveLapWindow, LIVE_WINDOW_MS, LIVE_ACTIVE_MS };
 }
