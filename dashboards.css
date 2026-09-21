@@ -481,6 +481,7 @@ body.dashboards-page {
 }
 
 #overlappingSessionsTable .session-card-name { font-size: 1rem; text-transform: none; }
+.session-card-tname { margin: 0 0 2px; font-size: 0.78rem; font-weight: 400; color: var(--text-muted); letter-spacing: 0; text-transform: none; }
 #overlappingSessionsTable .session-card-stats {
     grid-template-columns: 1.5fr 1.5fr repeat(4, 1fr);
     gap: 12px;

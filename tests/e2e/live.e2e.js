@@ -34,12 +34,14 @@ async function step(name, run) {
     const count = async selector => page.evaluate(`document.querySelectorAll(${JSON.stringify(selector)}).length`);
     const states = async () => JSON.parse(await page.evaluate('JSON.stringify(window.__live.states())'));
     const listTitle = () => page.evaluate('[...document.querySelectorAll(".live-group th")].map(t => t.textContent).find(t => t.startsWith("Lap")) || ""');
+    const namesIn = () => page.waitFor('window.__live.namesPending() === 0', 'the names of the riders');
     const window_rows = json => JSON.parse(json).map(r => r.label);
     const rowNames = selector => page.evaluate(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(selector)})].map(r => r.cells[0].textContent.trim()))`).then(JSON.parse);
 
     try {
         await page.navigate(`${base}/live.html?rink=2497&poll=2`);
         await page.waitFor('window.__live && window.__live.states().length >= 5 && window.__live.states().filter(s => s.status === "skating").length >= 2', 'the riders of the fake rink');
+        await namesIn();
 
         await step('live: the page is called Live, shows the rink and how many are on the ice, and reports itself in the title', async () => {
             assert.match(await page.evaluate('document.title'), /^\(\d+\) Live · Thialf \(Heerenveen\) · Icesights$/);
@@ -86,7 +88,8 @@ async function step(name, run) {
             await page.waitFor(`window.__live.states().find(s => s.id === 9001).lapCount > ${before}`, 'a new lap of the fast rider', 15000);
             const requests = JSON.parse(await page.evaluate('JSON.stringify(window.__liveRequests)'));
             assert.ok(requests.length > 4);
-            assert.ok(requests.every(url => /[?&]live=1(&|$)/.test(url)), 'a request without live=1: ' + requests.find(url => !/live=1/.test(url)));
+            const live = requests.filter(url => !/[/]account[/]/.test(url));       // (the names of the riders come from their accounts: not live data)
+            assert.ok(live.every(url => /[?&]live=1(&|$)/.test(url)), 'a request without live=1: ' + live.find(url => !/live=1/.test(url)));
             assert.ok(requests.some(url => /\/locations\/2497\?/.test(url) && /sport=IceSkating/.test(url) && /count=100/.test(url)));
         });
 
@@ -123,15 +126,15 @@ async function step(name, run) {
             const firstRow = () => page.evaluate('document.querySelector(".live-row").cells[0].textContent.trim()');
             await page.waitFor('document.querySelector(".live-row").cells[0].textContent.trim() === "Fast Fanny"', 'the first row is Fast Fanny');
             assert.match(await text('.live-group th'), /^Selected/);
-            await press('Steady Sam');                                              // (compared: also gets a colour, and is on top now)
+            await press('Sam Steady');                                              // (compared: also gets a colour, and is on top now)
             await page.waitFor('Object.keys(window.__live.colours()).length === 2', 'the second colour');
             assert.deepEqual(await slots(), { 9001: 0, 9002: 1 });
-            await page.waitFor('document.querySelector(".live-row").cells[0].textContent.trim() === "Steady Sam"', 'the first row is Steady Sam');
+            await page.waitFor('document.querySelector(".live-row").cells[0].textContent.trim() === "Sam Steady"', 'the first row is Sam Steady');
             assert.equal(await count('.live-row.skating, .live-row.waiting'), (await states()).filter(s => s.status === 'skating' || s.status === 'waiting').filter(s => !s.isPrivate).length);      // nobody twice
             // newer crossings and faster laps stay under him: sorting by the latest crossing does not move him
             await page.evaluate('(() => { const s = document.getElementById("sortSelect"); s.value = "best"; s.dispatchEvent(new Event("change")); })()');
             await page.sleep(500);
-            await page.waitFor('document.querySelector(".live-row").cells[0].textContent.trim() === "Steady Sam"', 'the first row is Steady Sam');                            // (Fast Fanny has the fastest laps)
+            await page.waitFor('document.querySelector(".live-row").cells[0].textContent.trim() === "Sam Steady"', 'the first row is Sam Steady');                            // (Fast Fanny has the fastest laps)
             // letting go of the selected rider takes his colour and his place on top
             await press('Fast Fanny');
             await page.waitFor('!(9001 in window.__live.colours()) && document.querySelectorAll(".live-group th").length >= 1 && !/^Selected/.test(document.querySelector(".live-group th").textContent)', 'let go');
@@ -139,12 +142,12 @@ async function step(name, run) {
             assert.equal((await rowNames('.live-row.skating'))[0], 'Fast Fanny');    // sorted by the fastest lap again
             // a compared rider who is pressed again becomes the selection and keeps his colour
             await press('Fast Fanny');                                              // selected (colour 1)
-            await press('Steady Sam');                                              // compared
+            await press('Sam Steady');                                              // compared
             await page.waitFor('window.__live.compared() === 9002', 'Sam is compared');
-            await press('Steady Sam');                                              // ... and now the only selection
+            await press('Sam Steady');                                              // ... and now the only selection
             await page.waitFor('window.__live.selected() === 9002 && window.__live.compared() === null', 'Sam is the selection');
             assert.deepEqual(await slots(), { 9001: 0, 9002: 1 });                   // (both keep their colour: no small blue dot)
-            await page.waitFor('document.querySelectorAll(".live-row .live-dot").length === 2 && document.querySelector(".live-row").cells[0].textContent.includes("Steady Sam")', 'both coloured, the last pressed on top');
+            await page.waitFor('document.querySelectorAll(".live-row .live-dot").length === 2 && document.querySelector(".live-row").cells[0].textContent.includes("Sam Steady")', 'both coloured, the last pressed on top');
             await page.evaluate('window.__live.colourTest()');                     // presses eleven names: the first loses its colour
             const eleven = await slots();
             assert.equal(Object.keys(eleven).length, 10);
@@ -154,6 +157,7 @@ async function step(name, run) {
             // reset for the next steps: pressing the coloured ones again takes their colours (and selections) away
             await page.navigate(base + '/live.html?rink=2497&poll=2');
             await page.waitFor('window.__live && window.__live.states().length >= 5 && window.__live.states().filter(s => s.status === "skating").length >= 2', 'the riders again');
+            await namesIn();
         });
 
         await step('live: the track shows the riders as moving dots; clicking a row selects the rider', async () => {
@@ -163,10 +167,10 @@ async function step(name, run) {
             assert.notEqual(await canvasImage(), first, 'the dots did not move');
             const dots = await page.evaluate(`(() => { const c = document.getElementById("liveTrack"); const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i + 3] === 255 && (Math.abs(d[i] - d[i + 1]) > 60 || Math.abs(d[i + 1] - d[i + 2]) > 60)) n++; return n; })()`);
             assert.ok(dots > 20, `only ${dots} coloured pixels on the track`);
-            await page.evaluate('[...document.querySelectorAll(".live-row.skating")].find(r => r.cells[0].textContent.includes("Steady Sam")).click()');
+            await page.evaluate('[...document.querySelectorAll(".live-row.skating")].find(r => r.cells[0].textContent.includes("Sam Steady")).click()');
             await page.sleep(400);
             assert.equal(await count('.live-row.selected'), 1);
-            assert.match(await text('.live-row.selected'), /Steady Sam/);
+            assert.match(await text('.live-row.selected'), /Sam Steady/);
             await page.evaluate('document.querySelector(".live-row.selected").click()');
             await page.sleep(400);
             assert.equal(await count('.live-row.selected'), 0);
@@ -182,10 +186,10 @@ async function step(name, run) {
             assert.match(await text('#liveLapEmpty'), /Select a rider/);
             assert.ok(!/estimate/i.test(await text('body')), 'the estimate note is still there');
             const pick = name => page.evaluate('[...document.querySelectorAll(".live-row")].find(r => r.cells[0].textContent.includes(' + JSON.stringify(name) + ')).click()');
-            await pick('Steady Sam');
+            await pick('Sam Steady');
             await page.waitFor('window.__live.lapGraph().drawn > 0', 'graph drawn');
             // TRANSPONDERNAME, name surname: the real name of the account is looked up when the rider is selected
-            await page.waitFor('document.getElementById("liveLapTitle").textContent === "Lap times · Steady Sam, Samuel de Steady"', 'the real name behind the transponder name');
+            await page.waitFor('document.getElementById("liveLapTitle").textContent === "Lap times · Sam Steady, ST-10002"', 'the name and the transponder number in the title');
             assert.match(await text('#liveLapReadout'), /^[0-9]+ laps · last 9 · best 9 · average 9$/);
             let info = await page.evaluate('JSON.stringify(window.__live.lapGraph())').then(JSON.parse);
             assert.equal(info.greyed, 0);
@@ -201,7 +205,7 @@ async function step(name, run) {
             await pick('Fast Fanny');
             await page.waitFor('window.__live.compared() === 9001 && window.__live.lapGraph().auto === true && window.__live.lapGraph().inView >= 3', 'the compared rider');
             assert.equal(await page.evaluate('window.__live.selected()'), 9002);
-            assert.equal(await text('#liveLapTitle'), 'Lap times · Steady Sam, Samuel de Steady and Fast Fanny');
+            assert.equal(await text('#liveLapTitle'), 'Lap times · Sam Steady, ST-10002 and Fast Fanny');
             assert.equal(await count('.live-row.selected'), 1);
             assert.equal(await count('.live-row.compared'), 1);
             assert.match(await text('.live-row.compared'), /Fast Fanny/);
@@ -211,8 +215,8 @@ async function step(name, run) {
             assert.match(await text('#liveLapTooltip'), /Lap [0-9]+/);
             // clicking the compared rider again makes him the only selection
             await pick('Fast Fanny');
-            await page.waitFor('window.__live.selected() === 9001 && window.__live.compared() === null && document.getElementById("liveLapTitle").textContent === "Lap times · Fast Fanny"', 'the only selection');
-            assert.equal(await text('#liveLapTitle'), 'Lap times · Fast Fanny');
+            await page.waitFor('window.__live.selected() === 9001 && window.__live.compared() === null && document.getElementById("liveLapTitle").textContent === "Lap times · Fast Fanny, FA-10001"', 'the only selection');
+            assert.equal(await text('#liveLapTitle'), 'Lap times · Fast Fanny, FA-10001');
             assert.equal(await count('.live-row.compared'), 0);
             assert.ok(await page.evaluate('window.__live.lapGraph().drawn') < both, 'the paler laps should be gone');
             // clicking the selected rider lets go of the selection
@@ -231,6 +235,7 @@ async function step(name, run) {
             const hidden = id => page.evaluate('document.getElementById(' + JSON.stringify(id) + ').classList.contains("hidden")');
             await page.navigate(base + '/marathon.html?rink=2040&poll=1');
             await page.waitFor('window.__live && !!window.__live.marathon() && window.__live.marathon().rows.length >= 4', 'the marathon list', 30000);
+            await namesIn();
             assert.equal(await hidden('marathonLapsLabel'), false);
             assert.equal(await hidden('marathonLapLabel'), false);
             assert.equal(await hidden('sortLabel'), true);
@@ -239,7 +244,7 @@ async function step(name, run) {
             const newest = JSON.parse(await page.evaluate('JSON.stringify(window.__live.marathon())'));
             assert.equal(newest.latest, true);
             const group = rows => rows.filter(r => r.label !== 'Fay');           // Fay (12 s laps) is a lapped rider who crosses somewhere in between
-            assert.deepEqual(group(newest.rows).slice(0, 4).map(r => r.label), ['Ann', 'Bob', 'Cas', 'Dirk']);
+            assert.deepEqual(group(newest.rows).slice(0, 4).map(r => r.label), ['Ann', 'Bob Bouwer', 'Cas', 'Dirk']);
             assert.deepEqual(group(newest.rows).slice(0, 4).map(r => r.gapMs), [0, 300, 800, 1500]);
             const cells = JSON.parse(await page.evaluate('JSON.stringify([...document.querySelectorAll(".marathon-row")].filter(r => !r.cells[1].textContent.includes("Fay")).slice(0, 4).map(r => [...r.cells].map(c => c.textContent.trim())))'));
             assert.equal(cells[0][4], 'first');
@@ -255,18 +260,18 @@ async function step(name, run) {
             await page.evaluate('[...document.querySelectorAll(".marathon-row")].find(r => r.cells[1].textContent.includes("Bob")).click()');
             await page.waitFor('window.__live.selected() === 9102 && window.__live.lapGraph().marks === true', 'the flags in the lap graph');
             // the title of the lap times: TRANSPONDERNAME, name surname, position in the list
-            await page.waitFor('/^Lap times · Bob, Bob Bouwer · position [0-9]+$/.test(document.getElementById("liveLapTitle").textContent)', 'name and position in the title');
+            await page.waitFor('/^Lap times · Bob Bouwer, MB-10102 · position [0-9]+$/.test(document.getElementById("liveLapTitle").textContent)', 'name and position in the title');
             // the place of the rider in the list of every lap is drawn in the graph (a second line, on an axis of its own)
             await page.waitFor('window.__live.lapGraph().places >= 3', 'the places in the graph');
             const bobPlaces = JSON.parse(await page.evaluate('JSON.stringify(window.__live.marathon().placesOf(9102))'));
             assert.ok(bobPlaces.length >= 3 && bobPlaces.every(p => p.place >= 1 && p.place <= p.riders), JSON.stringify(bobPlaces));
-            assert.equal(bobPlaces[bobPlaces.length - 1].place, window_rows(await page.evaluate('JSON.stringify(window.__live.marathon().rows)')).indexOf('Bob') + 1);      // (the newest lap: his place in the list)
+            assert.equal(bobPlaces[bobPlaces.length - 1].place, window_rows(await page.evaluate('JSON.stringify(window.__live.marathon().rows)')).indexOf('Bob Bouwer') + 1);      // (the newest lap: his place in the list)
             // the selected rider is on top of the list as well, with his place, and is still in the list below
             await page.waitFor('document.querySelectorAll(".live-row[data-id=\\"9102\\"]").length === 2', 'Bob twice');
             const pinned = JSON.parse(await page.evaluate('JSON.stringify([...document.querySelector(".live-row").cells].map(c => c.textContent.trim()))'));
-            assert.equal(pinned[1], 'Bob');
+            assert.equal(pinned[1], 'Bob Bouwer');
             assert.equal(await page.evaluate('document.querySelector(".live-row").classList.contains("pinned")'), true);
-            const place = window_rows(await page.evaluate('JSON.stringify(window.__live.marathon().rows)')).indexOf('Bob') + 1;
+            const place = window_rows(await page.evaluate('JSON.stringify(window.__live.marathon().rows)')).indexOf('Bob Bouwer') + 1;
             assert.equal(Number(pinned[0]), place);                                   // his position in the list
             assert.match(await text('.live-group th'), /^Selected/);
             assert.equal(await count('.live-row.selected'), 1);                        // (the copy in the list is the selected row)
@@ -283,7 +288,7 @@ async function step(name, run) {
             await page.waitFor('window.__live.marathon().lapNr === 3', 'lap 3 of the race');
             const part = JSON.parse(await page.evaluate('JSON.stringify(window.__live.marathon())'));
             assert.equal(part.latest, false);
-            assert.deepEqual(part.rows.filter(r => r.label !== 'Fay').slice(0, 4).map(r => r.label), ['Ann', 'Bob', 'Cas', 'Dirk']);
+            assert.deepEqual(part.rows.filter(r => r.label !== 'Fay').slice(0, 4).map(r => r.label), ['Ann', 'Bob Bouwer', 'Cas', 'Dirk']);
             assert.ok(Math.abs(part.rows[0].segmentMs - (part.finishMs - chosen * 1000)) < 1);   // measured from the start time
             assert.ok(part.rows[0].segmentMs > 0 && part.rows[0].segmentMs < 60000, String(part.rows[0].segmentMs));
             assert.equal(part.finishMs - part.startMs, part.rows[0].segmentMs);              // the same real start for everybody
@@ -315,6 +320,7 @@ async function step(name, run) {
             const hidden = id => page.evaluate('document.getElementById(' + JSON.stringify(id) + ').classList.contains("hidden")');
             await page.navigate(base + '/marathon.html?rink=2040&poll=1&activity=9101');
             await page.waitFor('window.__live && !!window.__live.replay() && window.__live.replay().loading === false && !!window.__live.marathon()', 'the replay', 30000);
+            await namesIn();
             assert.equal(await hidden('replayBar'), false);
             assert.equal(await page.evaluate('[...document.querySelectorAll("#replaySpeed option")].map(o => o.value).join(",")'), '1,2,5,10,20,30');
             assert.equal(await hidden('replayLabel'), true);
@@ -350,7 +356,7 @@ async function step(name, run) {
             await set('replayTime', '28', 'input');
             await page.waitFor('window.__live.replay().at === window.__live.replay().fromMs + 28000', 'the slider moved the clock');
             await page.waitFor('window.__live.marathon().rows.length >= 4', 'the riders of that moment');
-            assert.deepEqual(window_rows(await page.evaluate('JSON.stringify(window.__live.marathon().rows)')).filter(name => name !== 'Fay').slice(0, 4), ['Ann', 'Bob', 'Cas', 'Dirk']);
+            assert.deepEqual(window_rows(await page.evaluate('JSON.stringify(window.__live.marathon().rows)')).filter(name => name !== 'Fay').slice(0, 4), ['Ann', 'Bob Bouwer', 'Cas', 'Dirk']);
             assert.ok(await page.evaluate('window.__live.states().length >= 4'));
             // play from there: the clock runs (at speed 10)
             await set('replaySpeed', '30', 'change');
@@ -371,11 +377,13 @@ async function step(name, run) {
             // the page for the next steps: the fake Thialf again
             await page.navigate(base + '/live.html?rink=2497&poll=2');
             await page.waitFor('window.__live && window.__live.states().length >= 5', 'the riders of Thialf');
+            await namesIn();
         });
 
         await step('marathon.html: the same page in marathon mode: the marathon list at once, its own title, and live.html has no marathon controls at all', async () => {
             await page.navigate(base + '/marathon.html?rink=2040&poll=1');
             await page.waitFor('window.__live && !!window.__live.marathon() && window.__live.marathon().rows.length >= 4', 'the marathon list', 30000);
+            await namesIn();
             assert.match(await page.evaluate("document.title"), /Marathon · Jaap Eden IJsbaan.* · Icesights$/);
             assert.equal(await text('.dash-head h2'), 'Marathon');
             assert.equal(await text('a.topbar-link[href="live.html"]'), 'Live');                              // the other page is in the menu
@@ -387,6 +395,7 @@ async function step(name, run) {
             assert.equal(await page.evaluate('fetch("index.html").then(r => r.text()).then(t => /href="marathon[.]html"/.test(t))'), true);   // in the menu
             await page.navigate(base + '/live.html?rink=2497&poll=2');
             await page.waitFor('window.__live && window.__live.states().length >= 5', 'the riders of Thialf');
+            await namesIn();
             assert.equal(await count('.marathon-row'), 0);
             assert.equal(await text('a.topbar-link[href="marathon.html"]'), 'Marathon');                       // the other page is in the menu
             assert.equal(await count('a.topbar-link[href="live.html"]'), 0);
@@ -428,6 +437,7 @@ async function step(name, run) {
             assert.ok(await page.evaluate('[...document.getElementById("pollSelect").options].some(o => o.value === "1" && /every second/.test(o.textContent))'));
             await page.navigate(`${base}/live.html?rink=2497&poll=1`);
             await page.waitFor('window.__live && window.__live.states().length >= 5', 'the fake rink');
+            await namesIn();
             const listRequests = () => page.evaluate('window.__liveRequests.filter(url => /\\/locations\\/2497\\?/.test(url)).length');
             const before = await listRequests();
             await page.sleep(4300);

@@ -68,7 +68,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const reference = activities.find(activity => String(activity.id) === activityId);
         if (!reference) throw new Error(`Activity ${activityId} was not found for transponder ${transponder}.`);
         const sessions = await loadOverlappingRiders(reference, text => { loading.textContent = text; });
-        const referenceRider = { name: riderDisplayName({ chipLabel: transponder, account }), chipCode: transponder, accountId: userId };
+        const referenceRider = { name: riderDisplayName({ chipLabel: transponder, account }), transponderName: riderTransponderName({ chipLabel: (account && account.name && account.name.nickName) || '', account }), chipCode: transponder, accountId: userId };
         const wanted = parseReplayRiders(params.get('riders'));
         const known = new Set(sessions.map(session => session.id));
         const selected = wanted ? wanted.filter(id => known.has(id)) : sessions.filter(session => session.togetherMs > 0).map(session => session.id);
@@ -320,7 +320,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const together = hasTimes ? `together ${formatDurationShort(rider.togetherMs)}` : null;
             const inGroup = hasTimes && rider.groupMs !== null && rider.groupMs !== undefined
                 ? `in your group ~${formatDurationShort(rider.groupMs)}` : null;
-            const meta = [rider.chipCode, session, together, inGroup, rider.fastestTime ? `best ${rider.fastestTime}` : null, rider.lapCount ? `${rider.lapCount} laps` : null]
+            const meta = [rider.transponderName !== rider.chipCode ? rider.transponderName : '', rider.chipCode, session, together, inGroup, rider.fastestTime ? `best ${rider.fastestTime}` : null, rider.lapCount ? `${rider.lapCount} laps` : null]
                 .filter(Boolean).join(' · ');
             row.innerHTML = `
                 <input type="checkbox" aria-label="Show ${escapeHtml(rider.name)}">

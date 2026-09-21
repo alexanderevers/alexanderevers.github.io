@@ -125,20 +125,15 @@ function formatEstimate(ms) {
     return text === 'N/A' ? text : `~${text}`;
 }
 
+/** The name of a rider: given name and surname of his account; without an account the transponder name. */
 function riderDisplayName(session) {
-    let displayName = session.chipLabel || 'Unknown Rider';
-    if (session.account) {
-        const givenName = session.account.givenName || (session.account.name && session.account.name.givenName);
-        const surName = session.account.name && session.account.name.surName;
-        const nickName = session.account.name && session.account.name.nickName;
-        const fullName = `${givenName || ''} ${surName || ''}`.trim();
-        if (fullName && nickName) {
-            displayName = `${fullName} - ${nickName}`;
-        } else {
-            displayName = fullName || session.chipLabel || 'Unknown Rider';
-        }
-    }
-    return displayName;
+    return accountFullName(session.account) || session.chipLabel || 'Unknown Rider';
+}
+
+/** The transponder name, for the places with room for it (small, not bold): only when the rider is shown by his own name. */
+function riderTransponderName(session) {
+    const nick = session.chipLabel || (session.account && session.account.name && session.account.name.nickName) || '';
+    return accountFullName(session.account) && nick && nick !== riderDisplayName(session) && nick !== session.chipCode ? nick : '';       // (not twice: the transponder name is sometimes the number)
 }
 
 /**
@@ -183,6 +178,7 @@ function displayOverlappingSessions(sessions, sessionMs = 0) {
                     <span class="session-card-name">
                         <a href="?transponder=${encodeURIComponent(session.chipCode)}" target="_blank" rel="noopener">${escapeHtml(displayName)}</a>
                     </span>
+                    <div class="session-card-tname" title="Transponder name and transponder number">${escapeHtml([...new Set([riderTransponderName(session), session.chipCode].filter(Boolean))].join(', '))}</div>
                     <small>${formatDateTime(session.startTime)}</small>
                 </div>
                 <div class="session-card-stats">
@@ -213,6 +209,7 @@ function buildReplayPayload(reference, referenceRider, sessions, selectedIds) {
         isReference,
         chipCode: session.chipCode,
         name: isReference ? referenceRider.name : riderDisplayName(session),
+        transponderName: isReference ? (referenceRider.transponderName || '') : riderTransponderName(session),
         accountId: isReference ? referenceRider.accountId : (session.account?.id || null),
         startTime: session.startTime,
         endTime: session.endTime || null,

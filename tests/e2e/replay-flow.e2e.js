@@ -260,6 +260,16 @@ function skip(name, reason) {
             assert.ok(!ids.includes(9), 'the old session is listed');
             assert.ok(!ids.includes(REFERENCE.id), 'you are listed as your own overlapping rider');
         });
+        await step('overlapping riders: a card shows name surname, under it the transponder name and number (not twice), under that the date', async () => {
+            const card = JSON.parse(await page.evaluate('JSON.stringify((() => { const c = [...document.querySelectorAll("#overlappingSessionsTable .session-card")].find(x => x.querySelector(".session-card-name").textContent.includes("Bram")); return { name: c.querySelector(".session-card-name").textContent.trim(), sub: c.querySelector(".session-card-tname").textContent.trim(), order: [...c.querySelector(".session-card-header").children].map(e => e.className || e.tagName), weight: getComputedStyle(c.querySelector(".session-card-tname")).fontWeight }; })())'));
+            assert.equal(card.name, 'Bram Bakker');                                  // no more " - nickname"
+            assert.match(card.sub, /^([A-Za-z]+, )?CD-11111$/);                       // (the transponder name, when there is one, and the number: once)
+            assert.ok(!/CD-11111.*CD-11111/.test(card.sub), card.sub);
+            assert.equal(card.order[0], 'session-card-name');
+            assert.equal(card.order[1], 'session-card-tname');
+            assert.equal(card.order[2], 'SMALL');
+            assert.equal(card.weight, '400');                                        // small, not bold
+        });
         await step('overlapping riders: sorted by time in your group, then by time skated together; each card shows both values', async () => {
             const cards = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll("#overlappingSessionsTable .session-card")].map(card => ({
                 id: Number(card.querySelector(".replay-select").dataset.activityId),
@@ -606,7 +616,7 @@ function skip(name, reason) {
         await step('replay link: the riders in the link decide who is shown; the address follows the list', async () => {
             await page.navigate(`${base}/replay.html?transponder=${data.referenceChip}&activity=${REFERENCE.id}&riders=2,3`);
             await page.waitFor(allLapsLoaded, 'the laps of the linked riders');
-            assert.deepEqual((await shownRiders()).sort(), ['Alex Evers - Zoom (you)', 'Bram Bakker - Bolt', 'Eva Visser']);
+            assert.deepEqual((await shownRiders()).sort(), ['Alex Evers (you)', 'Bram Bakker', 'Eva Visser']);
             assert.equal(await page.evaluate('new URLSearchParams(location.search).get("transponder")'), data.referenceChip);
             assert.deepEqual(await addressRiders(), [2, 3]);
             assert.equal(await page.evaluate('new URLSearchParams(location.search).get("activity")'), String(REFERENCE.id));

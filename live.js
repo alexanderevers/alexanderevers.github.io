@@ -119,20 +119,30 @@ document.addEventListener('DOMContentLoaded', () => {
     // Click on a rider (in the list or on the track): the first rider is selected. Another rider is compared with him or her (his
     // lap times appear paler in the same graph, like Compare on the replay page); clicking that rider again makes him or her the
     // only selection. Clicking the selected rider lets go of everything.
-    // The real name of a rider (given name and surname of his account), looked up when his name is pressed; kept for the rest of the visit.
-    const fullNames = new Map();            // activity id -> name ('' when the rider has none or keeps it private)
-    async function lookUpName(id) {
-        if (fullNames.has(id)) return;
-        const known = riders.get(id);
-        if (!known) return;
-        fullNames.set(id, '');
-        const account = known.activity.gaUId ? await fetchAccountByUserId(known.activity.gaUId) : await fetchAccountDetails(known.activity.chipCode);
-        if (account) {
-            const given = account.givenName || (account.name && account.name.givenName) || '';
-            const sur = (account.name && account.name.surName) || '';
-            fullNames.set(id, `${given} ${sur}`.trim());
-            dirty = true;
-        }
+    // The real name of a rider (given name and surname of his account) is shown instead of the transponder name; the transponder name and
+    // number are only shown for the selected rider (the title of the lap graph). Names are looked up from the account of the rider (the
+    // proxy keeps them for a day) a few at a time, and kept for the visit; a rider without a readable profile stays under his transponder name.
+    const nameOfUser = new Map();           // user id (gaUId, else the transponder) -> 'Given Surname', or '' when there is none
+    const namesAsked = new Set();
+    const userKey = activity => activity.gaUId || activity.chipCode;
+    const transponderName = activity => (activity.chipLabel || '').trim() || activity.chipCode;
+    const nameOf = activity => nameOfUser.get(userKey(activity)) || transponderName(activity);
+    let namesRunning = 0;
+    async function ensureNames() {
+        const todo = [...riders.values()].map(r => r.activity).filter(a => !namesAsked.has(userKey(a)));
+        for (const activity of todo) namesAsked.add(userKey(activity));
+        const queue = todo.filter((a, i) => todo.findIndex(b => userKey(b) === userKey(a)) === i);
+        const worker = async () => {
+            while (queue.length) {
+                const activity = queue.shift();
+                const account = activity.gaUId ? await fetchAccountByUserId(activity.gaUId) : await fetchAccountDetails(activity.chipCode);
+                nameOfUser.set(userKey(activity), accountFullName(account));
+                dirty = true;
+            }
+        };
+        if (namesRunning >= 4) return;                                      // a run is going on already: it takes the new riders too, next time
+        namesRunning++;
+        try { await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker)); } finally { namesRunning--; }
     }
     function selectRider(id) {
         const letGo = id === selectedId;                                     // (pressing the selected rider again)
@@ -148,7 +158,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Colours (live page): every rider is a small blue dot until his name is pressed; then he gets a colour and initials. Up to ten riders
         // have one: pressing an eleventh takes the colour of the one who was pressed first. Letting go of the selected rider takes his colour.
         pinnedId = letGo ? null : id;                                       // the last name pressed is on top of the list
-        if (!letGo) lookUpName(id);
         if (!marathon) {
             if (letGo) dropColour(id);
             else if (!colourSlot.has(id)) addColour(id);
@@ -219,6 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
             dirty = true;
             refreshStates();
             renderAll();                                                    // show the list before the laps have all arrived
+            ensureNames();                                                  // (the names come in a little later)
             await loadLapsQueue([...riders.values()].filter(rider => needsLaps(rider, now)));
         } catch (error) {
             pollError = error.message || 'The rink could not be loaded';
@@ -324,6 +334,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!found) return fail(`Activity ${id} was not found at any of the rinks of this page on ${new Date(from).toLocaleDateString('en-GB')}.`);
             if (found.rink !== rink) { rink = found.rink; rinkSelect.value = String(rink.id); }
             found.group.forEach(activity => riders.set(activity.id, { activity, laps: null, isPrivate: false, error: null, fetchedEnd: undefined, fetchedAt: 0 }));
+            ensureNames();                                                     // the names of the riders come in while the laps load
             let done = 0;
             const queue = [...found.group];
             const worker = async () => {
@@ -447,6 +458,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // the rink as it was at that moment: only the laps that had ended, and only the riders who had started
             states = list.filter(rider => Date.parse(rider.activity.startTime) <= now).map(rider => ({
                 ...riderLive({ ...rider.activity, endTime: Date.parse(rider.activity.endTime) <= now ? rider.activity.endTime : null }, trackLaps(lapsAt(rider.laps, now), now), now, rink.length),
+                label: nameOf(rider.activity),
                 isPrivate: rider.isPrivate,
                 error: rider.error
             }));
@@ -454,6 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         states = list.map(rider => ({
             ...riderLive(rider.activity, trackLaps(rider.laps, now), now, rink.length),
+            label: nameOf(rider.activity),
             isPrivate: rider.isPrivate,
             error: rider.error
         }));
@@ -562,7 +575,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const marathonEntries = () => [...riders.values()].filter(r => !r.isPrivate && r.laps && r.laps.length)
-        .map(r => ({ id: r.activity.id, label: (r.activity.chipLabel || '').trim() || r.activity.chipCode, laps: r.laps }));
+        .map(r => ({ id: r.activity.id, label: nameOf(r.activity), laps: r.laps }));
 
     function marathonHtml() {
         const entries = marathonEntries();
@@ -804,7 +817,7 @@ document.addEventListener('DOMContentLoaded', () => {
             compare = { label: otherState.label, laps: lapsAt(otherRider.laps, clock()), colour: otherColour };
         }
         const place = marathon && marathonResult ? (marathonResult.rows.find(r => r.id === selectedId) || {}).place : undefined;
-        lapGraph.draw({ label: state.label, fullName: fullNames.get(selectedId) || '', place, laps: lapsAt(rider.laps, clock()), isPrivate: rider.isPrivate }, {
+        lapGraph.draw({ label: state.label, code: state.chipCode, place, laps: lapsAt(rider.laps, clock()), isPrivate: rider.isPrivate }, {
             trackLengthM: rink.length,
             colour,
             skating: state.status === 'skating',
@@ -853,5 +866,5 @@ document.addEventListener('DOMContentLoaded', () => {
     requestAnimationFrame(frame);
 
     // for the browser test: a way to see the state
-    window.__live = { states: () => states, rink: () => rink, pollNow: poll, requests: () => requestsThisMinute.length, selected: () => selectedId, colours: () => Object.fromEntries(colourSlot), colourTest: () => { for (let id = 1; id <= 11; id++) { colourSlot.delete(id); addColour(id); } }, compared: () => compareId, marathon: () => marathonResult, replay: () => replay, startReplay, marathonOrder: () => marathonOrder, lapGraph: () => lapGraph.info() };
+    window.__live = { states: () => states, rink: () => rink, pollNow: poll, requests: () => requestsThisMinute.length, namesPending: () => [...riders.values()].filter(r => !nameOfUser.has(userKey(r.activity))).length, selected: () => selectedId, colours: () => Object.fromEntries(colourSlot), colourTest: () => { for (let id = 1; id <= 11; id++) { colourSlot.delete(id); addColour(id); } }, compared: () => compareId, marathon: () => marathonResult, replay: () => replay, startReplay, marathonOrder: () => marathonOrder, lapGraph: () => lapGraph.info() };
 });

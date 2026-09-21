@@ -172,6 +172,15 @@ function formatSecondsToDuration(totalSeconds) {
 }
 
 /** Milliseconds as a short label: "<1 min", "12 min", "1 h 05 min". null -> "N/A". */
+/** Given name and surname of an account profile (both structures of the API), or '' when there is none. */
+function accountFullName(account) {
+    if (!account) return '';
+    const name = account.name || {};
+    const given = account.givenName || name.givenName || '';
+    const sur = name.surName || account.surName || '';
+    return `${given} ${sur}`.trim();
+}
+
 function formatDurationShort(ms) {
     if (ms === null || ms === undefined || isNaN(ms)) return 'N/A';
     if (ms <= 0) return '0 min';

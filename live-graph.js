@@ -43,7 +43,7 @@ function createLiveLapGraph(els, hooks) {
     });
 
     /**
-     * @param {object|null} rider  { label, fullName (real name, optional), place (position in the list, optional), laps (normalized or null),
+     * @param {object|null} rider  { label (the name of the rider), code (his transponder number, optional: NAME, XX-11111), place (position in the list, optional), laps (normalized or null),
      *                             isPrivate } of the selected rider, or null
      * @param {object} options     { trackLengthM, colour, skating, nowMs, marks (optional: { startMs, finishMs }, real times of the start
      *                             lap and the finish lap of the marathon list, drawn as a start and a finish flag), zoom (false: while the
@@ -229,8 +229,8 @@ function createLiveLapGraph(els, hooks) {
         const skatingLaps = laps.filter(lap => isSkatingLapMs(lap, trackLengthM));
         const best = skatingLaps.reduce((a, b) => (!a || b.durMs < a.durMs ? b : a), null);
         const average = skatingLaps.length ? skatingLaps.reduce((sum, lap) => sum + lap.durMs, 0) / skatingLaps.length : null;
-        // TRANSPONDERNAME, name surname · position (the real name and the place in the list are there when they are known)
-        const who = `${rider.label}${rider.fullName ? `, ${rider.fullName}` : ''}${rider.place ? ` · position ${rider.place}` : ''}`;
+        // NAME, XX-11111 · position (the place in the list is there on the marathon page)
+        const who = `${rider.label}${rider.code && rider.code !== rider.label ? `, ${rider.code}` : ''}${rider.place ? ` · position ${rider.place}` : ''}`;
         els.title.textContent = otherLaps.length ? `Lap times · ${who} and ${compare.label}` : `Lap times · ${who}`;
         const readout = `${skatingLaps.length} laps · last ${lapLabel(last.durMs / 1000)}${best ? ` · best ${lapLabel(best.durMs / 1000)}` : ''}${average ? ` · average ${lapLabel(average / 1000)}` : ''}`;
         if (els.readout.textContent !== readout) els.readout.textContent = readout;
