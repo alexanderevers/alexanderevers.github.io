@@ -25,7 +25,7 @@ needs the real MYLAPS API, a Cloudflare account or a personal transponder.
 Run from the repository root (the folder that contains `package.json` and `index.html`):
 
 ```bash
-npm test               # unit tests            -> expect 194 tests, 48 suites, 0 failures  (~1.5 s)
+npm test               # unit tests            -> expect 229 tests, 52 suites, 0 failures  (~1.5 s)
 npm run test:worker    # Cloudflare Worker     -> expect the last line "ALL PASS"           (~2 s)
 npm run test:e2e       # real browser          -> expect the last line "ALL PASSED"         (~11 s)
 npm run test:all       # unit + worker (does not start a browser)
@@ -95,7 +95,7 @@ tests/                               everything in this document
   e2e/browser.js                     static server + headless browser driver (no dependencies)
   e2e/replay-flow.e2e.js             the end-to-end scenario
   e2e/live.e2e.js                    the live page (`npm run test:e2e:live`): list, laps arriving, sorting, track, lap graph, other rink, hidden tab
-  fixtures/fake-live-stub.js         fake live rink (fast, steady, resting, private, old and just-started riders)
+  fixtures/fake-live-stub.js         fake live rink (fast, steady, resting, private, old and just-started riders; a marathon group at rink 2040)
 cloudflare-worker/test/handler.test.mjs   Worker tests
 ```
 
@@ -112,7 +112,7 @@ Which source file is covered by which test:
 | `gpx-generator.js` | GPX file for Strava, which rink gets which track file | `unit/gpx-generator.test.js` |
 | `cloudflare-worker/src/index.js` | the proxy: routing, validation, CORS, caching rules | `cloudflare-worker/test/handler.test.mjs` |
 | `script.js`, `fetch_overlapping_sessions.js`, `replay.js`, `chart-factory.js`, `theme.js`, `style.css`, the HTML pages | user interface | `e2e/replay-flow.e2e.js` |
-| `live.html`, `live.js`, `live-graph.js` | live page | `e2e/live.e2e.js` |
+| `live.html`, `marathon.html`, `live.js`, `live-graph.js` | live page and marathon page | `e2e/live.e2e.js` |
 | `live-model.js` | 15 min / 2 min rules, start and duration, fetch timing, graph window | `unit/live-model.test.js` |
 | `search_user.*`, `strava.js` | name search page, unfinished Strava upload | not covered (see 13) |
 

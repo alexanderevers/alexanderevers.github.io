@@ -11,6 +11,9 @@
  *   9005  "Old Olga"      her last lap ended 40 minutes ago: not looked at at all
  *   9006  "Just Started"  started 2 s after the page loaded; the first lap arrives 12 s after that
  *
+ * A marathon at rink 2040 (the group crosses the finish line together, a lap every 10 s, started 100 s before the page loaded):
+ *   9101 "Ann" first, 9102 "Bob" 0.3 s behind, 9103 "Cas" 0.8 s behind, 9104 "Dirk" 1.5 s behind, 9105 "Fay" a lapped rider (12 s laps)
+ *
  * Switches for the test: window.__liveFail = true makes the list of the rink fail with a server error.
  * window.__liveRequests holds the addresses that were requested.
  */
@@ -28,7 +31,12 @@ function buildLiveStubScript() {
         { id: 9003, chip: 'RE-10003', label: '', start: T0 - 660000, pace: 10000, stopAt: T0 - 360000 },
         { id: 9004, chip: 'PR-10004', label: 'Private Pete', start: T0 - 120000, pace: 10000, stopAt: T0 - 20000, isPrivate: true },
         { id: 9005, chip: 'OL-10005', label: 'Old Olga', start: T0 - 4000000, pace: 12000, stopAt: T0 - 2400000 },
-        { id: 9006, chip: 'JU-10006', label: 'Just Started', start: T0 + 2000, pace: 12000 }
+        { id: 9006, chip: 'JU-10006', label: 'Just Started', start: T0 + 2000, pace: 12000 },
+        { id: 9101, chip: 'MA-10101', label: 'Ann', start: T0 - 100000, pace: 10000, rink: 2040 },
+        { id: 9102, chip: 'MB-10102', label: 'Bob', start: T0 - 100000 + 300, pace: 10000, rink: 2040 },
+        { id: 9103, chip: 'MC-10103', label: 'Cas', start: T0 - 100000 + 800, pace: 10000, rink: 2040 },
+        { id: 9104, chip: 'MD-10104', label: 'Dirk', start: T0 - 100000 + 1500, pace: 10000, rink: 2040 },
+        { id: 9105, chip: 'ME-10105', label: 'Fay', start: T0 - 100000, pace: 12000, rink: 2040 }
     ];
 
     // The laps a rider has finished by now, as the API gives them.
@@ -50,7 +58,7 @@ function buildLiveStubScript() {
         return {
             id: rider.id, name: 'Practice', chipCode: rider.chip, chipLabel: rider.label,
             startTime: new Date(rider.start).toISOString(), endTime: new Date(end).toISOString(), accountId: rider.id,
-            location: { id: 2497, name: 'Thialf Heerenveen', sport: 'IceSkating', trackLength: 0 }
+            location: { id: rider.rink || 2497, name: 'Fake rink', sport: 'IceSkating', trackLength: 0 }
         };
     }
 
@@ -67,9 +75,8 @@ function buildLiveStubScript() {
 
         if (endpoint === 'locations') {
             if (window.__liveFail) return failure(500, 'MYLAPS API error: Internal Server Error');
-            if (id !== '2497') return ok({ activities: [] });
             const offset = Number(new URL(url).searchParams.get('offset') || 0);
-            const list = RIDERS.filter(r => r.start <= now + 60000).map(r => activityOf(r, now))
+            const list = RIDERS.filter(r => String(r.rink || 2497) === id && r.start <= now + 60000).map(r => activityOf(r, now))
                 .sort((a, b) => Date.parse(b.endTime) - Date.parse(a.endTime));
             return ok({ activities: offset === 0 ? list : [] });
         }

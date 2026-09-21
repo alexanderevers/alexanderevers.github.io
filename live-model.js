@@ -185,6 +185,202 @@ function liveInitials(rider) {
     return words.slice(0, 2).map(word => word[0].toUpperCase()).join('');
 }
 
+// ---------- Marathon mode ----------
+// A group of about 50 riders crosses the finish line more or less together. Every lap gives a new list: the order in which the riders
+// crossed the line, with the time and the distance to the first rider (the one who crossed first).
+
+// Before the start of a race there is always a gap of more than 5 minutes in the crossings of a rider; laps from before that gap
+// (a warm-up) are not part of the race.
+const MARATHON_GAP_MS = 5 * 60 * 1000;
+// Nobody has crossed the line for this long: the race is over.
+const MARATHON_QUIET_MS = 90 * 1000;
+// After the last lap of the race a rider sometimes crosses the line once more (a lap to skate out). That crossing does not count. It
+// is recognised by a lap of the group that takes at least this much longer than the usual lap (the last lap of a race is a fast one).
+const MARATHON_SKATE_OUT = 1.3;
+// Laps at the end are only taken for laps to skate out when at least this many riders crossed in them, and not before this lap.
+const MARATHON_MIN_CROSSINGS = 3;
+const MARATHON_MIN_LAPS = 5;
+
+/** The finish crossings of the race of one rider: the ends of the laps after his last gap of 5 minutes or more. */
+function marathonCrossings(laps) {
+    let from = 0;
+    (laps || []).forEach((lap, i) => {
+        const gapBefore = i > 0 ? lap.startMs - (laps[i - 1].startMs + laps[i - 1].durMs) : 0;
+        if (lap.durMs > MARATHON_GAP_MS) from = i + 1;          // this "lap" is the waiting for the start: the race starts after it
+        else if (gapBefore > MARATHON_GAP_MS) from = i;
+    });
+    return (laps || []).slice(from).map(lap => ({ startMs: lap.startMs, endMs: lap.startMs + lap.durMs, durMs: lap.durMs }));
+}
+
+// A crossing that took at least this many times the usual lap time of the rider is a lap in which the timing mat missed the rider one or
+// more times: it counts as the laps the group did in that time.
+const MARATHON_MISSED = 1.7;
+// A new lap of the group starts when somebody crosses the line at least this share of the usual lap time after the first crossing of the
+// lap before (the riders of a group cross within a part of a lap of each other).
+const MARATHON_LAP_SHARE = 0.75;
+
+const medianOf = list => {
+    const sorted = [...list].sort((x, y) => x - y);
+    return sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
+};
+
+/**
+ * The laps of a rider for the picture of the track in marathon mode: a rider is shown from his first real crossing since the start: the
+ * first crossing the API really gives from 20 seconds before the start time (in the first lap nobody has been dropped yet, so it is about
+ * the same time for everybody). Before it he is not on the track, and the crossings before it (the warming up, the waiting for the start)
+ * are not looked at, so nobody is guessed to be somewhere: from that crossing he goes round at his own pace, and from there on the
+ * picture follows the real crossings as usual. His first lap is measured from the start time, not from the crossing before it.
+ * @param {Array} laps    normalized laps of the rider (as far as they are known)
+ * @param {number} startMs the start time of the race (absolute)
+ * @param {number} nowMs  the moment of the picture
+ */
+function marathonTrackLaps(laps, startMs, nowMs) {
+    if (!laps || laps.length === 0 || !Number.isFinite(startMs) || nowMs < startMs - MARATHON_BEFORE_START_MS) return laps;
+    const race = laps.filter(lap => lap.startMs + lap.durMs >= startMs - MARATHON_BEFORE_START_MS);
+    if (race.length === 0) return [];                                       // no real crossing since the start yet
+    const first = race[0];
+    const firstEnd = first.startMs + first.durMs;
+    const fromStart = firstEnd - Math.max(first.startMs, startMs);
+    return fromStart > 0 && fromStart < first.durMs ? [{ ...first, startMs: firstEnd - fromStart, durMs: fromStart }, ...race.slice(1)] : race;
+}
+
+// The riders are selected from this long before the start time: what they are doing then is their first lap.
+const MARATHON_BEFORE_START_MS = 20 * 1000;
+
+/**
+ * The list of a lap of the race. The race starts at an absolute START TIME (for example 21:00:00). From 20 seconds before it all riders
+ * are selected: the lap a rider is in then (his first crossing from that moment) is his lap 1 and every next crossing is the next lap.
+ * Everything before is not part of the race (the warming up, the minutes of waiting for the start), and everything is measured from the
+ * start time (the time of the laps, the gaps). So a rider who is lapped has one lap fewer than the group, and a rider who started late
+ * has fewer laps too. Only when the timing mat missed a rider during the race (one long lap, at least 1.7 times his usual lap time, of a
+ * rider who was skating with the group) the laps are counted from the time: the laps the group did in that time (the group's laps are
+ * numbered by the first rider of every lap, from the real time of the crossings).
+ * The finish lap is the lap of the rider with the most laps (or the lap that was chosen). Every rider who comes in during that lap counts
+ * for the result: the list of a lap is everybody who crosses the line from the moment the first rider finishes that lap until the first
+ * rider finishes the next one, so also the riders who are lapped (they come in with fewer laps). They are ordered by their number of
+ * laps, then by the time they crossed. The first rider is the one who passes the finish line first.
+ * @param {Array} entries  [{ id, label, laps }] the riders with their normalized laps
+ * @param {object} options { startMs (the start time of the race, absolute; when left out it is the start of the first lap of the group in
+ *                           which at least half of the usual number of riders crossed), lapNr (the finish lap, counted from the start: the
+ *                           lap of the list; the newest lap when left out, so the list follows the race), raceLaps (number of laps of
+ *                           the race, when known), trackLengthM, nowMs (only crossings before this moment are looked at) }
+ * @returns {object|null} { lapNr, startMs, autoStartMs, firstMs, lastMs, finishMs, leaderCount, latest, finished, first, rows, pending }
+ *   or null when nobody has crossed since the start. startMs is the start time (chosen or automatic), firstMs and lastMs are the first
+ *   and the last crossing of the group (the range in which a start time can be chosen), finishMs the crossing of the first rider in the
+ *   finish lap (start and finish are shown in the lap graph).
+ *   rows: the riders who came in during this lap, in that order: { place, id, label, laps (his own number of laps), endMs, gapMs (to the first rider),
+ *   distanceM (the gap in metres at the speed of the rider in that lap), lapMs, segmentMs (the time from the start time to his crossing of
+ *   the finish lap: the same start for every rider) }
+ *   pending: (newest lap only) the riders who are not in the list: { id, label, laps (his last lap), behind (laps), status
+ *   'coming'|'lapped', lastEndMs }
+ */
+function marathonStandings(entries, options = {}) {
+    const { raceLaps = null, trackLengthM = 400, nowMs = Date.now() } = options;
+    const riders = entries.map(e => ({
+        id: e.id, label: e.label,
+        crossings: marathonCrossings((e.laps || []).filter(lap => lap.startMs + lap.durMs <= nowMs))
+    })).filter(r => r.crossings.length > 0 && nowMs - r.crossings[r.crossings.length - 1].endMs <= LIVE_WINDOW_MS);
+    if (!riders.length) return null;
+
+    const all = riders.flatMap(r => r.crossings).sort((x, y) => x.endMs - y.endMs);
+    const usual = medianOf(all.map(c => c.durMs).filter(ms => ms <= 120000)) || medianOf(all.map(c => c.durMs));
+    const quiet = nowMs - all[all.length - 1].endMs >= MARATHON_QUIET_MS;
+
+    // The laps after the last lap of the race do not count: the crossing(s) at the end that are clearly slower than the racing pace are
+    // laps to skate out. Only when at least 3 riders have such crossings (or the race is over): a rider who is slow at the end alone is
+    // just slow.
+    let skatedOut = false;
+    if (!raceLaps) {
+        const trailing = r => { let k = r.crossings.length; while (k > 0 && r.crossings[k - 1].durMs >= MARATHON_SKATE_OUT * usual) k--; return k; };
+        const withSlowEnd = riders.filter(r => r.crossings.length >= MARATHON_MIN_LAPS && trailing(r) < r.crossings.length && trailing(r) > 0);
+        if (withSlowEnd.length >= MARATHON_MIN_CROSSINGS) {
+            skatedOut = true;
+            withSlowEnd.forEach(r => { r.crossings = r.crossings.slice(0, trailing(r)); });
+        }
+    }
+
+    // the laps of the group, numbered by the first rider of every lap; a stretch in which nobody was registered still gets numbered laps
+    const starts = [];                                    // starts[k] = time of the first crossing of lap k + 1
+    riders.flatMap(r => r.crossings).sort((x, y) => x.endMs - y.endMs).forEach(c => {
+        const previous = starts.length ? starts[starts.length - 1] : null;
+        if (previous !== null && c.endMs < previous + MARATHON_LAP_SHARE * usual) return;
+        if (previous !== null) {
+            const missing = Math.round((c.endMs - previous) / usual) - 1;
+            for (let i = 1; i <= missing; i++) starts.push(previous + ((c.endMs - previous) * i) / (missing + 1));
+        }
+        starts.push(c.endMs);
+    });
+    const groupLapAt = ms => { let k = 0; while (k + 1 < starts.length && starts[k + 1] <= ms) k++; return k + 1; };
+
+    // the automatic start time: the start of the first lap of the group in which at least half of the usual number of riders crossed
+    const crossersIn = new Map();
+    riders.forEach(r => new Set(r.crossings.map(c => groupLapAt(c.endMs))).forEach(k => crossersIn.set(k, (crossersIn.get(k) || 0) + 1)));
+    const mostCrossers = Math.max(...crossersIn.values());
+    let autoLap = 1;
+    for (let k = 1; k <= starts.length; k++) if ((crossersIn.get(k) || 0) >= Math.max(MARATHON_MIN_CROSSINGS, Math.ceil(mostCrossers / 2))) { autoLap = k; break; }
+    const autoStartMs = Math.round((autoLap > 1 ? starts[autoLap - 2] : Math.max(all[0].startMs, all[0].endMs - 2 * usual)) / 1000) * 1000;
+    const startMs = Number.isFinite(options.startMs) ? options.startMs : autoStartMs;
+    const firstMs = all[0].endMs;
+    const lastMs = all[all.length - 1].endMs;
+
+    // from 20 seconds before the start time all riders are selected: what they are in then is their first lap
+    const beginMs = startMs - MARATHON_BEFORE_START_MS;
+    const realTimes = new Set(all.map(c => c.endMs));
+    const firstBoundary = starts.findIndex(t => t >= beginMs && realTimes.has(t));       // the first crossing of the group in the race is the end of its lap 1 (a lap in which nobody was registered has no crossing)
+    if (firstBoundary < 0) return null;
+    riders.forEach(r => {
+        r.crossings = r.crossings.filter(c => c.endMs >= beginMs);
+        const own = medianOf(r.crossings.map(c => c.durMs).filter(ms => ms <= 120000)) || usual;
+        let count = 0;
+        r.crossings.forEach(c => {
+            const missed = c.durMs >= MARATHON_MISSED * own && c.durMs >= MARATHON_MISSED * usual;
+            count = missed ? Math.max(count + 1, groupLapAt(c.endMs) - firstBoundary) : count + 1;
+            c.lapNo = count;
+            const fromStart = c.endMs - Math.max(c.startMs, startMs);                  // (the lap that ends the waiting starts at the start)
+            c.lapMs = fromStart > 0 ? Math.min(c.durMs, fromStart) : c.durMs;
+        });
+        if (raceLaps) r.crossings = r.crossings.filter(c => c.lapNo <= raceLaps);
+        r.byLap = new Map(r.crossings.map(c => [c.lapNo, c]));
+        r.lastLap = r.crossings.length ? r.crossings[r.crossings.length - 1].lapNo : 0;
+    });
+    const inRace = riders.filter(r => r.byLap.size > 0);
+    if (!inRace.length) return null;
+    const leaderCount = Math.max(...inRace.map(r => r.lastLap));
+    const latest = !options.lapNr || options.lapNr >= leaderCount;
+    const lapNr = latest ? leaderCount : Math.max(1, Math.floor(options.lapNr));
+    const finished = raceLaps ? leaderCount >= raceLaps : quiet || skatedOut;
+
+    // (a lap in which nobody was registered has no rows: its time is worked out from the nearest lap with riders)
+    const firstOf = n => { const times = inRace.filter(r => r.byLap.has(n)).map(r => r.byLap.get(n).endMs); return times.length ? Math.min(...times) : null; };
+    const timeOfLap = n => {
+        for (let d = 0; d < leaderCount; d++) {
+            const before = firstOf(n - d);
+            if (before !== null) return before + d * usual;
+            const after = firstOf(n + d);
+            if (after !== null) return after - d * usual;
+        }
+        return startMs;
+    };
+    // everybody who comes in during the finish lap: from the moment the first rider finishes it until the first rider finishes the next lap
+    const firstAt = firstOf(lapNr) ?? timeOfLap(lapNr);
+    const windowEnd = latest ? Infinity : (firstOf(lapNr + 1) ?? timeOfLap(lapNr + 1));
+    const crossed = inRace.map(r => ({ rider: r, at: r.crossings.find(c => c.endMs >= firstAt && c.endMs < windowEnd) })).filter(c => c.at)
+        .sort((x, y) => y.at.lapNo - x.at.lapNo || x.at.endMs - y.at.endMs);
+    const rows = crossed.map((c, i) => ({
+        place: i + 1, id: c.rider.id, label: c.rider.label, laps: c.at.lapNo, endMs: c.at.endMs, gapMs: c.at.endMs - firstAt,
+        distanceM: ((c.at.endMs - firstAt) * trackLengthM) / Math.min(c.at.lapMs, MARATHON_MISSED * usual), lapMs: c.at.lapMs, segmentMs: c.at.endMs - startMs
+    }));
+
+    const listed = new Set(rows.map(r => r.id));
+    const pending = !latest ? [] : inRace.filter(r => !listed.has(r.id))
+        .map(r => {
+            const behind = lapNr - r.lastLap;
+            return { id: r.id, label: r.label, laps: r.lastLap, behind, status: behind === 1 && !finished ? 'coming' : 'lapped', lastEndMs: r.byLap.get(r.lastLap).endMs };
+        })
+        .sort((x, y) => y.laps - x.laps || x.lastEndMs - y.lastEndMs);
+    return { lapNr, startMs, autoStartMs, firstMs, lastMs, finishMs: firstAt, leaderCount, latest, finished, first: rows.length ? { id: rows[0].id, label: rows[0].label } : null, rows, pending };
+}
+
 if (typeof module !== 'undefined') {
-    module.exports = { liveCandidates, riderLive, sortLiveRiders, liveInitials, lapsFetchDue, liveFraction, liveShownStep, liveNiceTicks, liveShowAllMax, liveLapWindow, LIVE_WINDOW_MS, LIVE_ACTIVE_MS };
+    module.exports = { liveCandidates, riderLive, sortLiveRiders, liveInitials, lapsFetchDue, marathonTrackLaps, marathonCrossings, marathonStandings, liveFraction, liveShownStep, liveNiceTicks, liveShowAllMax, liveLapWindow, LIVE_WINDOW_MS, LIVE_ACTIVE_MS };
 }

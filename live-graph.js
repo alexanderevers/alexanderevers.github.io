@@ -15,6 +15,8 @@ function createLiveLapGraph(els, hooks) {
     let hits = [];                       // where the laps were drawn, for the tooltip
     let shown = { fast: 0, slow: 0 };
     let newestPoint = null;              // where the newest lap is drawn (for the tests)
+    let hasMarks = false;                // the flags of the start and the finish are drawn (for the tests)
+    let zoomed = false;                  // the graph is zoomed in on the flags (for the tests)
 
     const time = (ms, withSeconds) => new Date(ms).toLocaleTimeString('en-GB', withSeconds ? undefined : { hour: '2-digit', minute: '2-digit' });
     const lapLabel = seconds => formatSecondsToDuration(seconds).replace(/^0/, '').replace(/\.?0+$/, '');
@@ -28,6 +30,8 @@ function createLiveLapGraph(els, hooks) {
         hits = [];
         shown = { fast: 0, slow: 0 };
         newestPoint = null;
+        hasMarks = false;
+        zoomed = false;
     }
 
     els.slider.addEventListener('input', () => {
@@ -38,7 +42,9 @@ function createLiveLapGraph(els, hooks) {
 
     /**
      * @param {object|null} rider  { label, laps (normalized or null), isPrivate } of the selected rider, or null
-     * @param {object} options     { trackLengthM, colour, skating, nowMs }
+     * @param {object} options     { trackLengthM, colour, skating, nowMs, marks (optional: { startMs, finishMs }, real times of the start
+     *                             lap and the finish lap of the marathon list, drawn as a start and a finish flag), zoom (false: while the
+     *                             start is being moved the whole activity is shown, to see where the start line goes) }
      * @param {object} [compare]   { label, laps, colour } of a second rider, drawn paler in the same graph
      */
     function draw(rider, options, compare) {
@@ -50,8 +56,15 @@ function createLiveLapGraph(els, hooks) {
         els.body.classList.remove('hidden');
         const { trackLengthM, colour, skating, nowMs } = options;
         const colors = hooks.getColors();
-        const laps = rider.laps;
-        const otherLaps = compare && compare.laps ? compare.laps : [];
+        // With the flags of a marathon list the graph is zoomed in: the start lap at the left, the finish lap at the right; only the laps
+        // in between are drawn
+        const marks = options.marks || null;
+        hasMarks = !!marks;
+        zoomed = !!marks && options.zoom !== false;
+        const inRange = lap => !zoomed || (lap.startMs + lap.durMs >= marks.startMs - 1000 && lap.startMs + lap.durMs <= marks.finishMs + 1000);
+        const laps = rider.laps.filter(inRange);
+        const otherLaps = compare && compare.laps ? compare.laps.filter(inRange) : [];
+        if (laps.length === 0) return setMessage(`${rider.label}: no laps between the start and the finish.`);
 
         if (auto) maxSeconds = Math.min(180, Math.max(5, liveShowAllMax(laps.concat(otherLaps), trackLengthM)));
         els.slider.value = String(maxSeconds);
@@ -74,11 +87,11 @@ function createLiveLapGraph(els, hooks) {
         const view = liveLapWindow(other ? laps.concat(otherLaps) : laps, maxSeconds, trackLengthM);
         const isMine = lap => laps.includes(lap);
         shown = { fast: view.fast.filter(isMine).length, slow: view.slow.filter(isMine).length };
-        const first = Math.min(laps[0].startMs, other ? otherLaps[0].startMs : Infinity);
+        const first = zoomed ? marks.startMs : Math.min(laps[0].startMs, other ? otherLaps[0].startMs : Infinity, marks ? marks.startMs : Infinity);
         const last = laps[laps.length - 1];
         const lastEnd = last.startMs + last.durMs;
         const otherEnd = other ? otherLaps[otherLaps.length - 1].startMs + otherLaps[otherLaps.length - 1].durMs : 0;
-        const right = Math.max(skating ? nowMs : lastEnd, otherEnd, first + 60000);
+        const right = zoomed ? Math.max(marks.finishMs, first + 10000) : Math.max(skating ? nowMs : lastEnd, otherEnd, marks ? marks.finishMs : 0, first + 60000);
         const plotW = w - PAD.l - PAD.r;
         const plotH = h - PAD.t - PAD.b;
         const x = ms => PAD.l + ((ms - first) / (right - first)) * plotW;
@@ -155,6 +168,22 @@ function createLiveLapGraph(els, hooks) {
             ctx.lineWidth = 2; ctx.strokeStyle = colors.surface; ctx.stroke();
         }
 
+        // the start and the finish of the marathon list: the same real time for every rider
+        if (marks) {
+            ctx.setLineDash([]);
+            [['\u25B6', marks.startMs], ['\uD83C\uDFC1', marks.finishMs]].forEach(([symbol, ms]) => {
+                const mx = Math.round(x(ms)) + 0.5;
+                ctx.strokeStyle = colors.text;
+                ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.moveTo(mx, PAD.t + 12); ctx.lineTo(mx, PAD.t + plotH); ctx.stroke();
+                ctx.fillStyle = colors.text;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'top';
+                ctx.font = '12px system-ui, sans-serif';
+                ctx.fillText(symbol, mx, PAD.t);
+            });
+        }
+
         // "now": the edge of the graph while the rider is on the ice
         if (skating) {
             ctx.strokeStyle = colors.text;
@@ -192,6 +221,6 @@ function createLiveLapGraph(els, hooks) {
     return {
         draw,
         resetMax() { auto = true; },
-        info: () => ({ maxSeconds, auto, drawn: hits.length, inView: shown.fast, greyed: shown.slow, newest: newestPoint })
+        info: () => ({ maxSeconds, auto, drawn: hits.length, inView: shown.fast, greyed: shown.slow, newest: newestPoint, marks: hasMarks, zoomed })
     };
 }

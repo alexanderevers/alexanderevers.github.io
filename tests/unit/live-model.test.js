@@ -272,6 +272,263 @@ describe('liveFraction: where the dot is while the next lap is not in yet', () =
     });
 });
 
+describe('marathon mode: the crossings of the race and the list of a lap', () => {
+    const { marathonCrossings, marathonStandings } = app.sandbox;
+    const RACE_START = NOW - 20 * 60 * SECOND;
+    // A rider: crossings at the given seconds after the start of the race (lap times are the differences; the first lap starts at 0)
+    const rider = (id, label, ends, before = []) => ({
+        id, label,
+        laps: [...before, ...ends.map((end, i) => ({ nr: i + 1, startMs: RACE_START + (i === 0 ? 0 : ends[i - 1]) * SECOND, durMs: (end - (i === 0 ? 0 : ends[i - 1])) * SECOND }))]
+    });
+    const cross = (start, count, lap) => Array.from({ length: count }, (_, i) => start + (i + 1) * lap);
+    const times = list => hostCopy(list.map(c => c.endMs));
+
+    it('laps from before a gap of more than 5 minutes are not part of the race', () => {
+        const warmUp = [{ nr: 1, startMs: RACE_START - 900 * SECOND, durMs: 40 * SECOND }, { nr: 2, startMs: RACE_START - 860 * SECOND, durMs: 40 * SECOND }];
+        // the warm-up ends 820 s before the start; the next crossing is the first of the race
+        const laps = [...warmUp, { nr: 3, startMs: RACE_START - 300 * SECOND + 1, durMs: 320 * SECOND }, { nr: 4, startMs: RACE_START + 21 * SECOND, durMs: 30 * SECOND }];
+        assert.deepEqual(times(marathonCrossings(laps)), [RACE_START + 51 * SECOND]);
+    });
+    it('a gap between two laps counts as well, and without a gap all laps are race laps', () => {
+        const gap = [{ nr: 1, startMs: 0, durMs: 30000 }, { nr: 2, startMs: 30000 + 400000, durMs: 30000 }];
+        assert.equal(marathonCrossings(gap).length, 1);
+        assert.equal(marathonCrossings(hostCopy(laps(5, 30, 0))).length, 5);
+        assert.equal(marathonCrossings([]).length, 0);
+    });
+
+    it('the first rider of a lap is the one who crosses first; the others get place, time gap and distance', () => {
+        const entries = [rider(1, 'Anna', cross(0, 6, 30)), rider(2, 'Ben', cross(0, 6, 30).map(t => t + 1.5)), rider(3, 'Cor', cross(0, 6, 30).map(t => t + 0.6))];
+        const result = marathonStandings(entries, { lapNr: 3, nowMs: RACE_START + 100 * SECOND, trackLengthM: 400 });
+        assert.equal(result.lapNr, 3);
+        assert.deepEqual(hostCopy(result.rows.map(r => r.label)), ['Anna', 'Cor', 'Ben']);
+        assert.deepEqual(hostCopy(result.rows.map(r => r.place)), [1, 2, 3]);
+        assert.deepEqual(hostCopy(result.rows.map(r => Math.round(r.gapMs))), [0, 600, 1500]);
+        assert.ok(Math.abs(result.rows[2].distanceM - 1.5 * 400 / 30) < 1e-6, String(result.rows[2].distanceM));      // 1.5 s at 13.3 m/s = 20 m
+        assert.equal(result.first.label, 'Anna');
+    });
+    it('the first rider can change every lap: he is whoever crosses the line first in that lap', () => {
+        const a = rider(1, 'Anna', [30, 61, 90.5]);
+        const b = rider(2, 'Ben', [31, 60, 90]);
+        assert.equal(marathonStandings([a, b], { lapNr: 1, nowMs: RACE_START + 215 * SECOND }).first.label, 'Anna');
+        assert.equal(marathonStandings([a, b], { lapNr: 2, nowMs: RACE_START + 215 * SECOND }).first.label, 'Ben');
+        assert.equal(marathonStandings([a, b], { lapNr: 3, nowMs: RACE_START + 215 * SECOND }).first.label, 'Ben');
+    });
+    it('by default the list is that of the newest lap: the lap the rider with the most laps has finished; riders who did not cross yet wait below', () => {
+        const entries = [rider(1, 'Anna', cross(0, 5, 30)), rider(2, 'Ben', cross(0, 4, 30).map(t => t + 1)), rider(3, 'Cor', cross(0, 3, 30)), rider(4, 'Dan', cross(0, 5, 30).map(t => t + 2))];
+        const result = marathonStandings(entries, { nowMs: RACE_START + 152 * SECOND });
+        assert.equal(result.lapNr, 5);
+        assert.equal(result.latest, true);
+        assert.deepEqual(hostCopy(result.rows.map(r => r.label)), ['Anna', 'Dan']);
+        assert.deepEqual(hostCopy(result.pending.map(p => [p.label, p.status, p.behind])), [['Ben', 'coming', 1], ['Cor', 'lapped', 2]]);
+    });
+    it('an older lap lists only the riders who had crossed by then, and no waiting riders', () => {
+        const entries = [rider(1, 'Anna', cross(0, 5, 30)), rider(2, 'Ben', cross(0, 4, 30).map(t => t + 1))];
+        const result = marathonStandings(entries, { lapNr: 3, nowMs: RACE_START + 152 * SECOND });
+        assert.equal(result.latest, false);
+        assert.deepEqual(hostCopy(result.rows.map(r => r.label)), ['Anna', 'Ben']);
+        assert.equal(result.pending.length, 0);
+    });
+    it('everybody who comes in during the finish lap counts, with his own number of laps: lapped riders after the riders with the most laps', () => {
+        const entries = [rider(1, 'Anna', cross(0, 6, 30)), rider(2, 'Ben', cross(0, 6, 30).map(t => t + 1)), rider(3, 'Lapped', cross(0, 5, 40))];
+        const result = marathonStandings(entries, { nowMs: RACE_START + 205 * SECOND });     // the finish lap is lap 6 (the first rider crosses at 180 s)
+        assert.equal(result.leaderCount, 6);
+        assert.deepEqual(hostCopy(result.rows.map(r => [r.label, r.laps])), [['Anna', 6], ['Ben', 6], ['Lapped', 5]]);       // the lapped rider comes in at 200 s
+        assert.equal(result.first.label, 'Anna');
+        assert.equal(result.pending.length, 0);
+        // in an older lap: everybody who crossed between the first rider of that lap and the first rider of the next one
+        const lap4 = marathonStandings(entries, { lapNr: 4, nowMs: RACE_START + 205 * SECOND });
+        assert.deepEqual(hostCopy(lap4.rows.map(r => [r.label, r.laps])), [['Anna', 4], ['Ben', 4], ['Lapped', 3]]);         // (lap 4: from 120 s, when Anna crosses, to 150 s; Lapped crosses at 120 s)
+    });
+    it('the rider with the most laps from the start is the first rider: laps before the start do not help', () => {
+        const before = Array.from({ length: 10 }, (_, i) => ({ nr: i + 1, startMs: RACE_START - 1500 * SECOND + i * 40 * SECOND, durMs: 40 * SECOND }));
+        const early = rider(1, 'Early', cross(0, 4, 30), before);        // 10 laps of warm-up, then a gap of about 18 minutes
+        const plain = rider(2, 'Plain', cross(0, 5, 30));
+        const result = marathonStandings([early, plain], { nowMs: RACE_START + 152 * SECOND });
+        assert.equal(result.lapNr, 5);
+        assert.equal(result.first.label, 'Plain');
+        assert.equal(result.pending[0].label, 'Early');
+    });
+    it('raceLaps: crossings after the last lap of the race are ignored, and the race is finished when the first rider has done them all', () => {
+        const entries = [rider(1, 'Anna', cross(0, 6, 30)), rider(2, 'Ben', cross(0, 5, 30).map(t => t + 1))];
+        const result = marathonStandings(entries, { raceLaps: 5, nowMs: RACE_START + 200 * SECOND });
+        assert.equal(result.leaderCount, 5);
+        assert.equal(result.finished, true);
+        assert.deepEqual(hostCopy(result.rows.map(r => r.label)), ['Anna', 'Ben']);
+        assert.equal(marathonStandings(entries, { raceLaps: 8, nowMs: RACE_START + 200 * SECOND }).finished, false);
+    });
+    it('without a number of laps, the lap to skate out after the last (fast) lap does not count', () => {
+        // four riders: eight racing laps of 30 s, then a slow lap of 70 s to skate out
+        const group = extra => ['Anna', 'Ben', 'Cor', 'Dan'].map((name, i) => rider(i + 1, name, [...cross(0, 8, 30).map(t => t + i * 0.5), ...extra.map(t => t + i * 0.5)]));
+        const busy = marathonStandings(group([]), { nowMs: RACE_START + 250 * SECOND });
+        assert.equal(busy.leaderCount, 8);
+        assert.equal(busy.finished, false);                   // the race is still going
+        const over = marathonStandings(group([310]), { nowMs: RACE_START + 320 * SECOND });
+        assert.equal(over.leaderCount, 8);                    // the slow lap after the fast one is not a lap of the race
+        assert.equal(over.finished, true);
+        assert.equal(over.rows.length, 4);
+        assert.equal(over.first.label, 'Anna');
+    });
+    it('a missed crossing does not shift the laps of a rider, and what a rider did before the gap before the start does not count', () => {
+        const before = Array.from({ length: 10 }, (_, i) => ({ nr: i + 1, startMs: RACE_START - 1500 * SECOND + i * 40 * SECOND, durMs: 40 * SECOND }));
+        const early = rider(1, 'Early', cross(0, 8, 30), before);                    // a warm-up of 10 laps before the start
+        const plain = rider(2, 'Plain', cross(0, 8, 30).map(t => t + 1));
+        const missed = rider(3, 'Missed', cross(0, 8, 30).filter((t, i) => i !== 3).map(t => t + 2));      // the crossing of lap 4 was not registered
+        const list = lap => marathonStandings([early, plain, missed], { lapNr: lap, nowMs: RACE_START + 250 * SECOND });
+        assert.deepEqual(hostCopy(list(5).rows.map(r => r.label)), ['Early', 'Plain', 'Missed']);
+        assert.deepEqual(hostCopy(list(8).rows.map(r => [r.label, r.laps])), [['Early', 8], ['Plain', 8], ['Missed', 8]]);      // Missed still has 8 laps
+        assert.equal(list(8).leaderCount, 8);
+    });
+    it('the start time is an absolute time: everything is measured from it, and the first crossing from 20 seconds before it is lap 1', () => {
+        const entries = [rider(1, 'Anna', cross(0, 8, 30)), rider(2, 'Ben', cross(0, 8, 30).map(t => t + 3))];
+        // start at 55 s: riders are selected from 35 s, so the crossing at 60 s is the end of lap 1 (Anna: 60, 90, 120, 150 ...)
+        const part = marathonStandings(entries, { startMs: RACE_START + 55 * SECOND, lapNr: 4, nowMs: RACE_START + 250 * SECOND });
+        assert.equal(part.startMs, RACE_START + 55 * SECOND);
+        assert.equal(part.finishMs, RACE_START + 150 * SECOND);           // Anna crosses her 4th lap of the race first
+        assert.equal(part.leaderCount, 7);                                 // the crossings from 60 s to 240 s
+        assert.deepEqual(hostCopy(part.rows.map(r => Math.round(r.segmentMs))), [95000, 98000]);
+        // the first lap is measured from the start: 5 s from the start (55 s) to the crossing at 60 s
+        assert.equal(marathonStandings(entries, { startMs: RACE_START + 55 * SECOND, lapNr: 1, nowMs: RACE_START + 250 * SECOND }).rows[0].lapMs, 5000);
+        // the crossings from 20 seconds before the start are selected: start at 45 s: the crossing at 30 s is not, the one at 60 s is lap 1
+        assert.equal(marathonStandings(entries, { startMs: RACE_START + 57 * SECOND, nowMs: RACE_START + 250 * SECOND }).leaderCount, 7);   // from 37 s: the crossings at 30 s and 33 s are before it
+        assert.equal(marathonStandings(entries, { startMs: RACE_START + 49 * SECOND, nowMs: RACE_START + 250 * SECOND }).leaderCount, 8);   // from 29 s: the crossing at 30 s counts as lap 1
+        const whole = marathonStandings(entries, { lapNr: 6, nowMs: RACE_START + 250 * SECOND });
+        assert.equal(whole.startMs, whole.autoStartMs);                     // no start time chosen: the program picks one (the start of the first lap)
+        assert.equal(whole.startMs, RACE_START);
+        assert.equal(whole.finishMs, RACE_START + 180 * SECOND);
+        assert.equal(whole.firstMs, RACE_START + 30 * SECOND);
+        assert.equal(whole.lastMs, RACE_START + 243 * SECOND);
+    });
+    it('a lap in which nobody was registered still exists (no rows); the laps behind it are numbered on', () => {
+        const entries = [rider(1, 'Anna', [30, 60, 150, 180, 210, 240]), rider(2, 'Ben', [31, 61, 151, 181, 211, 241])];      // nothing between 60 s and 150 s
+        const result = marathonStandings(entries, { lapNr: 3, nowMs: RACE_START + 250 * SECOND });
+        assert.equal(result.rows.length, 0);
+        assert.equal(result.first, null);
+        assert.equal(marathonStandings(entries, { nowMs: RACE_START + 250 * SECOND }).leaderCount, 8);      // 2 laps missed: 30 s laps
+    });
+    it('with a start time the laps and the time of every rider run from there, and what came before is not counted', () => {
+        const entries = [rider(1, 'Anna', cross(0, 8, 30)), rider(2, 'Ben', cross(0, 8, 31))];
+        const whole = marathonStandings(entries, { lapNr: 4, nowMs: RACE_START + 250 * SECOND });
+        assert.deepEqual(hostCopy(whole.rows.map(r => r.segmentMs)), [120000, 124000]);        // 4 laps from the start
+        const part = marathonStandings(entries, { startMs: RACE_START + 55 * SECOND, lapNr: 3, nowMs: RACE_START + 250 * SECOND });
+        assert.deepEqual(hostCopy(part.rows.map(r => r.label)), ['Anna', 'Ben']);
+        assert.deepEqual(hostCopy(part.rows.map(r => r.segmentMs)), [65000, 69000]);           // Anna: 120 s - 55 s; Ben: 124 s - 55 s (their 3rd crossings from 35 s)
+    });
+    it('nothing is listed when nobody has crossed since the start time; the finish lap follows the race while it is left out', () => {
+        const entries = [rider(1, 'Anna', cross(0, 6, 30))];
+        assert.equal(marathonStandings(entries, { startMs: RACE_START + 400 * SECOND, nowMs: RACE_START + 215 * SECOND }), null);   // the start is still to come
+        assert.equal(marathonStandings(entries, { startMs: RACE_START + 150 * SECOND, nowMs: RACE_START + 215 * SECOND }).leaderCount, 2);    // crossings 150 and 180
+        const later = [rider(1, 'Anna', cross(0, 7, 30))];
+        assert.equal(marathonStandings(entries, { startMs: RACE_START + 55 * SECOND, nowMs: RACE_START + 215 * SECOND }).lapNr, 5);
+        assert.equal(marathonStandings(later, { startMs: RACE_START + 55 * SECOND, nowMs: RACE_START + 250 * SECOND }).lapNr, 6);
+    });
+    it('the minutes of waiting for the start are not laps: with the start time where the group starts, the first crossing is lap 1 of the race', () => {
+        // Ann and Ben cross once (40 s), then wait for the start: the next crossing (at 290 s, a lap of 250 s) is the end of the first lap
+        // of the race. Cas and Dirk only join at the start. The mat registers nothing in between.
+        const ends = [290, 330, 370, 410, 450, 490];
+        const waiting = (id, name, extra) => ({ id, label: name, laps: [...extra, ...ends.map((end, i) => ({ nr: i + 1, startMs: RACE_START + (i === 0 ? extra.length ? 40 : 0 : ends[i - 1]) * SECOND, durMs: (end - (i === 0 ? (extra.length ? 40 : 0) : ends[i - 1])) * SECOND }))] });
+        const early = [{ nr: 0, startMs: RACE_START, durMs: 40 * SECOND }];
+        const entries = [waiting(1, 'Ann', early), waiting(2, 'Ben', early), waiting(3, 'Cas', []), waiting(4, 'Dirk', [])];
+        const result = marathonStandings(entries, { nowMs: RACE_START + 500 * SECOND });
+        assert.ok(Math.abs(result.autoStartMs - (RACE_START + 250 * SECOND)) < 5000, String(result.autoStartMs - RACE_START));    // the group starts about a lap before its first crossing
+        assert.equal(result.leaderCount, 6);                    // the waiting is not counted
+        assert.equal(result.rows.length, 4);
+        // the first lap of the race is not 250 s: it runs from the start
+        assert.ok(Math.abs(marathonStandings(entries, { lapNr: 1, nowMs: RACE_START + 500 * SECOND }).rows[0].lapMs - 40000) < 5000);
+        // a start time of 21:00 (here: at the beginning) counts everything: the first crossing is lap 1 and the crossing after the waiting
+        // counts as the laps of the group in that time
+        assert.equal(marathonStandings(entries, { startMs: RACE_START, nowMs: RACE_START + 500 * SECOND }).leaderCount, 12);
+        // an absolute time chosen by hand, at the moment the group starts
+        assert.equal(marathonStandings(entries, { startMs: RACE_START + 250 * SECOND, nowMs: RACE_START + 500 * SECOND }).leaderCount, 6);
+    });
+    it('the laps are counted from the start: a rider who is lapped has one lap fewer than the group, and comes in later', () => {
+        // the group: laps of 30 s; the other one: laps of 45 s, so after 240 s he has done 5 laps and the group 8
+        const group = [rider(1, 'Anna', cross(0, 8, 30)), rider(2, 'Ben', cross(0, 8, 30).map(t => t + 1)), rider(3, 'Cor', cross(0, 8, 30).map(t => t + 2))];
+        const slow = rider(4, 'Slow', cross(0, 5, 45));
+        const result = marathonStandings([...group, slow], { nowMs: RACE_START + 250 * SECOND });
+        assert.equal(result.leaderCount, 8);
+        assert.deepEqual(hostCopy(result.rows.map(r => r.label)), ['Anna', 'Ben', 'Cor']);
+        const behind = result.pending.find(p => p.label === 'Slow');
+        assert.equal(behind.laps, 5);                          // his own count from the start
+        assert.equal(behind.behind, 3);
+        // in the lap he comes in during, he is listed after the group with his own number of laps
+        const lap4 = marathonStandings([...group, slow], { lapNr: 4, nowMs: RACE_START + 250 * SECOND });
+        assert.deepEqual(hostCopy(lap4.rows.map(r => [r.label, r.laps])), [['Anna', 4], ['Ben', 4], ['Cor', 4], ['Slow', 3]]);
+    });
+    it('a rider who is one lap behind is in the list, later than the group, with the gap of a lap', () => {
+        const group = [rider(1, 'Anna', cross(0, 8, 30)), rider(2, 'Ben', cross(0, 8, 30).map(t => t + 1))];
+        const lapped = rider(3, 'Lapped', cross(0, 7, 30).map(t => t + 20));     // the same speed, but a lap behind: he has 7 laps when the group has 8
+        const result = marathonStandings([...group, lapped], { lapNr: 7, nowMs: RACE_START + 250 * SECOND });
+        assert.deepEqual(hostCopy(result.rows.map(r => r.label)), ['Anna', 'Ben', 'Lapped']);
+        assert.equal(Math.round(result.rows[2].gapMs), 20000);
+        assert.equal(marathonStandings([...group, lapped], { nowMs: RACE_START + 250 * SECOND }).pending.length, 1);
+    });
+    it('a rider who started late counts his laps from his own start', () => {
+        const pack = [rider(1, 'Anna', cross(0, 8, 30)), rider(2, 'Ben', cross(0, 8, 30).map(t => t + 1)), rider(3, 'Cor', cross(0, 8, 30).map(t => t + 2))];
+        // Late starts after 90 s: his first lap starts after a gap of 20 minutes; his laps are 1, 2, 3 ...
+        const late = { id: 4, label: 'Late', laps: [{ nr: 1, startMs: RACE_START + 90 * SECOND, durMs: 30 * SECOND }, { nr: 2, startMs: RACE_START + 120 * SECOND, durMs: 30 * SECOND }, { nr: 3, startMs: RACE_START + 150 * SECOND, durMs: 30 * SECOND }] };
+        const early = { id: 5, label: 'Earlier', laps: [{ nr: 1, startMs: RACE_START - 1500 * SECOND, durMs: 30 * SECOND }, ...late.laps.map(l => ({ ...l, nr: l.nr + 1 }))] };
+        const result = marathonStandings([...pack, early], { nowMs: RACE_START + 250 * SECOND });
+        const p = result.pending.find(x => x.label === 'Earlier');
+        assert.equal(p.laps, 3);                                // three laps from his start, the warm-up before the gap does not count
+        assert.equal(p.behind, 5);
+    });
+    it('a lap in which the mat missed a rider who skated with the group counts as the laps of the group in that time', () => {
+        const a = rider(1, 'Anna', cross(0, 8, 30));
+        const b = rider(2, 'Ben', cross(0, 8, 30).map(t => t + 1));
+        const c = rider(3, 'Cor', cross(0, 8, 30).filter((t, i) => ![2, 3, 4].includes(i)).map(t => t + 2));      // no crossing of laps 3, 4 and 5
+        const result = marathonStandings([a, b, c], { nowMs: RACE_START + 250 * SECOND });
+        assert.equal(result.leaderCount, 8);
+        assert.equal(result.pending.length, 0);
+        assert.deepEqual(hostCopy(result.rows.map(r => r.label)), ['Anna', 'Ben', 'Cor']);      // he has 8 laps, not 5
+    });
+    it('nobody in the race yet: nothing to list', () => {
+        assert.equal(marathonStandings([], {}), null);
+        assert.equal(marathonStandings([{ id: 1, label: 'A', laps: [] }], {}), null);
+    });
+});
+
+describe('marathonTrackLaps: riders are shown from their first real crossing since the start', () => {
+    const { marathonTrackLaps } = app.sandbox;
+    it('a rider is not on the track until the API gives a crossing from 20 seconds before the start time', () => {
+        const start = NOW;
+        const list = laps(8, 30, 60);                                   // his last crossing was 60 s before the start: warming up
+        assert.equal(marathonTrackLaps(list, start, start).length, 0);
+        assert.equal(riderLive(activity(1, 900, 60), marathonTrackLaps(list, start, start), start).frac, null);      // no dot
+        // 45 s after the start his first crossing arrives: from there he goes round from the finish line
+        const arrived = [...list, { nr: 9, startMs: start + 5 * SECOND, durMs: 40 * SECOND }];
+        const rider = riderLive(activity(1, 900, 60), marathonTrackLaps(arrived, start, start + 50 * SECOND), start + 50 * SECOND);
+        assert.equal(rider.lapCount, 1);
+        assert.equal(rider.sinceMs, 5000);
+        assert.equal(rider.status, 'skating');
+    });
+    it('the crossings before the start (the warming up) are not looked at any more, nor is the pace taken from them', () => {
+        const start = NOW;
+        const list = [...laps(6, 20, 120), { nr: 7, startMs: start - 30 * SECOND, durMs: 60 * SECOND }];      // 20 s laps before, the first race crossing after 30 s
+        const race = marathonTrackLaps(list, start, start + 80 * SECOND);
+        assert.equal(race.length, 1);
+        assert.equal(riderLive(activity(1, 900, 60), race, start + 80 * SECOND).paceMs, 30000);          // his one lap of the race, from the start (30 s)
+    });
+    it('the first lap is measured from the start time, not from the crossing before it (a long lap of waiting is a lap from the start)', () => {
+        const start = NOW;
+        // the lap that ends the waiting: 199 s, of which the last 45 s are after the start
+        const long = [{ nr: 1, startMs: start - 154 * SECOND, durMs: 199 * SECOND }];
+        const race = marathonTrackLaps(long, start, start + 50 * SECOND);
+        assert.equal(race.length, 1);
+        assert.equal(race[0].durMs, 45000);
+        assert.equal(race[0].startMs, start);
+        assert.equal(riderLive(activity(1, 900, 5), race, start + 50 * SECOND).status, 'skating');       // (199 s would have been a break)
+    });
+    it('the crossings from 20 seconds before the start count as the first crossing; before that time nothing is changed', () => {
+        const start = NOW;
+        const near = [{ nr: 1, startMs: start - 45 * SECOND, durMs: 30 * SECOND }];                   // crossed 15 s before the start
+        assert.equal(marathonTrackLaps(near, start, start + 10 * SECOND).length, 1);
+        const list = laps(4, 30, 10);
+        assert.equal(marathonTrackLaps(list, start + 60 * SECOND, start), list);                        // the start is still far ahead
+        assert.equal(marathonTrackLaps([], start, start).length, 0);
+        assert.equal(marathonTrackLaps(null, start, start), null);
+    });
+});
+
 describe('liveShownStep: the shown dot never stops and never jumps', () => {
     const { liveShownStep } = app.sandbox;
     const run = (pos, targetAt, seconds, paceMs = 30000) => {          // 10 steps a second; targetAt(t) is the estimate at second t

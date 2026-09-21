@@ -33,6 +33,8 @@ async function step(name, run) {
     const text = async selector => page.evaluate(`(document.querySelector(${JSON.stringify(selector)}) || {}).textContent`);
     const count = async selector => page.evaluate(`document.querySelectorAll(${JSON.stringify(selector)}).length`);
     const states = async () => JSON.parse(await page.evaluate('JSON.stringify(window.__live.states())'));
+    const listTitle = () => page.evaluate('[...document.querySelectorAll(".live-group th")].map(t => t.textContent).find(t => t.startsWith("Lap")) || ""');
+    const window_rows = json => JSON.parse(json).map(r => r.label);
     const rowNames = selector => page.evaluate(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(selector)})].map(r => r.cells[0].textContent.trim()))`).then(JSON.parse);
 
     try {
@@ -109,13 +111,58 @@ async function step(name, run) {
             assert.equal(await page.evaluate('localStorage.getItem("mylaps.liveSort")'), '"recent"');
         });
 
+        await step('live: nobody has a colour until his name is pressed; up to ten colours, then the first pressed loses his', async () => {
+            const slots = () => page.evaluate('JSON.stringify(window.__live.colours())').then(JSON.parse);
+            assert.deepEqual(await slots(), {});                                    // all small blue dots at first
+            assert.equal(await count('.live-row .live-dot'), 0);
+            const press = name => page.evaluate('[...document.querySelectorAll(".live-row")].find(r => r.cells[0].textContent.includes(' + JSON.stringify(name) + ')).click()');
+            await press('Fast Fanny');
+            await page.waitFor('Object.keys(window.__live.colours()).length === 1 && document.querySelectorAll(".live-row .live-dot").length === 1', 'the first colour');
+            assert.equal((await slots())[9001], 0);
+            // the rider pressed last stays on top of the list, in a group of his own
+            const firstRow = () => page.evaluate('document.querySelector(".live-row").cells[0].textContent.trim()');
+            await page.waitFor('document.querySelector(".live-row").cells[0].textContent.trim() === "Fast Fanny"', 'the first row is Fast Fanny');
+            assert.match(await text('.live-group th'), /^Selected/);
+            await press('Steady Sam');                                              // (compared: also gets a colour, and is on top now)
+            await page.waitFor('Object.keys(window.__live.colours()).length === 2', 'the second colour');
+            assert.deepEqual(await slots(), { 9001: 0, 9002: 1 });
+            await page.waitFor('document.querySelector(".live-row").cells[0].textContent.trim() === "Steady Sam"', 'the first row is Steady Sam');
+            assert.equal(await count('.live-row.skating, .live-row.waiting'), (await states()).filter(s => s.status === 'skating' || s.status === 'waiting').filter(s => !s.isPrivate).length);      // nobody twice
+            // newer crossings and faster laps stay under him: sorting by the latest crossing does not move him
+            await page.evaluate('(() => { const s = document.getElementById("sortSelect"); s.value = "best"; s.dispatchEvent(new Event("change")); })()');
+            await page.sleep(500);
+            await page.waitFor('document.querySelector(".live-row").cells[0].textContent.trim() === "Steady Sam"', 'the first row is Steady Sam');                            // (Fast Fanny has the fastest laps)
+            // letting go of the selected rider takes his colour and his place on top
+            await press('Fast Fanny');
+            await page.waitFor('!(9001 in window.__live.colours()) && document.querySelectorAll(".live-group th").length >= 1 && !/^Selected/.test(document.querySelector(".live-group th").textContent)', 'let go');
+            assert.deepEqual(await slots(), { 9002: 1 });
+            assert.equal((await rowNames('.live-row.skating'))[0], 'Fast Fanny');    // sorted by the fastest lap again
+            // a compared rider who is pressed again becomes the selection and keeps his colour
+            await press('Fast Fanny');                                              // selected (colour 1)
+            await press('Steady Sam');                                              // compared
+            await page.waitFor('window.__live.compared() === 9002', 'Sam is compared');
+            await press('Steady Sam');                                              // ... and now the only selection
+            await page.waitFor('window.__live.selected() === 9002 && window.__live.compared() === null', 'Sam is the selection');
+            assert.deepEqual(await slots(), { 9001: 0, 9002: 1 });                   // (both keep their colour: no small blue dot)
+            await page.waitFor('document.querySelectorAll(".live-row .live-dot").length === 2 && document.querySelector(".live-row").cells[0].textContent.includes("Steady Sam")', 'both coloured, the last pressed on top');
+            await page.evaluate('window.__live.colourTest()');                     // presses eleven names: the first loses its colour
+            const eleven = await slots();
+            assert.equal(Object.keys(eleven).length, 10);
+            assert.ok(!(1 in eleven), 'the first pressed still has a colour');
+            assert.ok(10 in eleven && Object.values(eleven).length === new Set(Object.values(eleven)).size, 'colours are not distinct');
+            assert.equal(Object.values(eleven).sort().join(','), '0,1,2,3,4,5,6,7,8,9');
+            // reset for the next steps: pressing the coloured ones again takes their colours (and selections) away
+            await page.navigate(base + '/live.html?rink=2497&poll=2');
+            await page.waitFor('window.__live && window.__live.states().length >= 5 && window.__live.states().filter(s => s.status === "skating").length >= 2', 'the riders again');
+        });
+
         await step('live: the track shows the riders as moving dots; clicking a row selects the rider', async () => {
             const canvasImage = () => page.evaluate('document.getElementById("liveTrack").toDataURL()');
             const first = await canvasImage();
             await page.sleep(1200);
             assert.notEqual(await canvasImage(), first, 'the dots did not move');
             const dots = await page.evaluate(`(() => { const c = document.getElementById("liveTrack"); const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i + 3] === 255 && (Math.abs(d[i] - d[i + 1]) > 60 || Math.abs(d[i + 1] - d[i + 2]) > 60)) n++; return n; })()`);
-            assert.ok(dots > 100, `only ${dots} coloured pixels on the track`);
+            assert.ok(dots > 20, `only ${dots} coloured pixels on the track`);
             await page.evaluate('[...document.querySelectorAll(".live-row.skating")].find(r => r.cells[0].textContent.includes("Steady Sam")).click()');
             await page.sleep(400);
             assert.equal(await count('.live-row.selected'), 1);
@@ -176,6 +223,167 @@ async function step(name, run) {
             assert.match(await text('#liveLapEmpty'), /keeps the results private/);
             await pick('Private Pete');       // let go
             await page.waitFor('/Select a rider/.test(document.getElementById("liveLapEmpty").textContent)', 'placeholder');
+        });
+
+        await step('live: marathon mode: a list per lap with place, gap and distance to the first rider, from the real times; start and finish sliders; the number of laps caps the race', async () => {
+            const set = (id, value, event) => page.evaluate('(() => { const e = document.getElementById(' + JSON.stringify(id) + '); ' + (typeof value === 'boolean' ? 'e.checked = ' + value : 'e.value = ' + JSON.stringify(value)) + '; e.dispatchEvent(new Event(' + JSON.stringify(event) + ')); })()');
+            const hidden = id => page.evaluate('document.getElementById(' + JSON.stringify(id) + ').classList.contains("hidden")');
+            await page.navigate(base + '/marathon.html?rink=2040&poll=1');
+            await page.waitFor('window.__live && !!window.__live.marathon() && window.__live.marathon().rows.length >= 4', 'the marathon list', 30000);
+            assert.equal(await hidden('marathonLapsLabel'), false);
+            assert.equal(await hidden('marathonLapLabel'), false);
+            assert.equal(await hidden('sortLabel'), true);
+            assert.match(await listTitle(), /^Lap [0-9]+ · first rider: Ann/);
+            // the newest lap: Ann first, then the others in the order of crossing, with the gap in seconds and the distance in metres
+            const newest = JSON.parse(await page.evaluate('JSON.stringify(window.__live.marathon())'));
+            assert.equal(newest.latest, true);
+            const group = rows => rows.filter(r => r.label !== 'Fay');           // Fay (12 s laps) is a lapped rider who crosses somewhere in between
+            assert.deepEqual(group(newest.rows).slice(0, 4).map(r => r.label), ['Ann', 'Bob', 'Cas', 'Dirk']);
+            assert.deepEqual(group(newest.rows).slice(0, 4).map(r => r.gapMs), [0, 300, 800, 1500]);
+            const cells = JSON.parse(await page.evaluate('JSON.stringify([...document.querySelectorAll(".marathon-row")].filter(r => !r.cells[1].textContent.includes("Fay")).slice(0, 4).map(r => [...r.cells].map(c => c.textContent.trim())))'));
+            assert.equal(cells[0][4], 'first');
+            assert.equal(cells[3][4], '+1.50 s');
+            assert.equal(cells[3][5], '60 m');                  // 1.5 s at 10 s per lap of 400 m
+            assert.equal(cells[3][6], '10.000');
+            assert.match(cells[0][7], /^[0-9]+:[0-9.]+$/);      // the time of the laps from the start
+            assert.equal(Number(cells[0][2]), newest.lapNr);   // the number of laps
+            // the sliders show real times, and the start and the finish are flags in the lap graph
+            assert.match(await text('#marathonFinishValue'), /follows\) · [0-9]{2}:[0-9]{2}:[0-9]{2}$/);
+            assert.match(await text('#marathonStartValue'), /^[0-9]{2}:[0-9]{2}:[0-9]{2} [(]auto[)]$/);         // the program chose the start time
+            assert.match(await page.evaluate('document.getElementById("marathonStartTime").value'), /^[0-9]{2}:[0-9]{2}:[0-9]{2}$/);
+            await page.evaluate('[...document.querySelectorAll(".marathon-row")].find(r => r.cells[1].textContent.includes("Bob")).click()');
+            await page.waitFor('window.__live.selected() === 9102 && window.__live.lapGraph().marks === true', 'the flags in the lap graph');
+            // the selected rider is on top of the list as well, with his place, and is still in the list below
+            await page.waitFor('document.querySelectorAll(".live-row[data-id=\\"9102\\"]").length === 2', 'Bob twice');
+            const pinned = JSON.parse(await page.evaluate('JSON.stringify([...document.querySelector(".live-row").cells].map(c => c.textContent.trim()))'));
+            assert.equal(pinned[1], 'Bob');
+            assert.equal(await page.evaluate('document.querySelector(".live-row").classList.contains("pinned")'), true);
+            const place = window_rows(await page.evaluate('JSON.stringify(window.__live.marathon().rows)')).indexOf('Bob') + 1;
+            assert.equal(Number(pinned[0]), place);                                   // his position in the list
+            assert.match(await text('.live-group th'), /^Selected/);
+            assert.equal(await count('.live-row.selected'), 1);                        // (the copy in the list is the selected row)
+            // a start time (absolute): from 20 seconds before it all riders are selected, their first lap is lap 1, everything is measured from it
+            const before0 = JSON.parse(await page.evaluate('JSON.stringify(window.__live.marathon())'));
+            const chosen = Math.round((before0.firstMs + 45000) / 1000);          // 45 s after the first crossing: the fourth lap of the group starts near
+            await set('marathonStart', String(chosen), 'input');
+            await page.waitFor('window.__live.marathon().startMs === ' + chosen * 1000, 'the race starts at the chosen time');
+            assert.ok(await page.evaluate('window.__live.marathon().leaderCount') <= before0.leaderCount - 2, 'the laps before the start time still count');
+            assert.match(await text('#marathonStartValue'), /^[0-9]{2}:[0-9]{2}:[0-9]{2}$/);         // (no longer "auto")
+            assert.equal(await page.evaluate('document.getElementById("marathonStartTime").value'), await text('#marathonStartValue'));
+            // a lap of the race, counted from that start
+            await set('marathonFinish', '3', 'input');
+            await page.waitFor('window.__live.marathon().lapNr === 3', 'lap 3 of the race');
+            const part = JSON.parse(await page.evaluate('JSON.stringify(window.__live.marathon())'));
+            assert.equal(part.latest, false);
+            assert.deepEqual(part.rows.filter(r => r.label !== 'Fay').slice(0, 4).map(r => r.label), ['Ann', 'Bob', 'Cas', 'Dirk']);
+            assert.ok(Math.abs(part.rows[0].segmentMs - (part.finishMs - chosen * 1000)) < 1);   // measured from the start time
+            assert.ok(part.rows[0].segmentMs > 0 && part.rows[0].segmentMs < 60000, String(part.rows[0].segmentMs));
+            assert.equal(part.finishMs - part.startMs, part.rows[0].segmentMs);              // the same real start for everybody
+            assert.match(await listTitle(), /^Lap 3 · first rider: Ann/);
+            // while the start slider is held the graph shows the whole activity (to see where the start line goes); when let go it zooms in
+            assert.equal(await page.evaluate('window.__live.lapGraph().zoomed'), true);
+            await page.evaluate('document.getElementById("marathonStart").dispatchEvent(new Event("pointerdown"))');
+            await page.waitFor('window.__live.lapGraph().zoomed === false && window.__live.lapGraph().marks === true', 'the whole activity while sliding');
+            await page.evaluate('document.getElementById("marathonStart").dispatchEvent(new Event("pointerup"))');
+            await page.waitFor('window.__live.lapGraph().zoomed === true', 'zoomed in again');
+            // on the last position the finish slider follows the race: the list moves on to every new lap
+            await page.evaluate('(() => { const e = document.getElementById("marathonFinish"); e.value = e.max; e.dispatchEvent(new Event("input")); })()');
+            await page.waitFor('window.__live.marathon().latest === true', 'the last position');
+            const lapNow = await page.evaluate('window.__live.marathon().lapNr');
+            await page.waitFor('window.__live.marathon().lapNr > ' + lapNow, 'the list moved on to a new lap', 25000);
+            // the riders are dots on the track, moving as usual, in the colour of their row
+            const dots = await page.evaluate('(() => { const c = document.getElementById("liveTrack"); const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i + 3] === 255 && (Math.abs(d[i] - d[i + 1]) > 60 || Math.abs(d[i + 1] - d[i + 2]) > 60)) n++; return n; })()');
+            assert.ok(dots > 100, 'only ' + dots + ' coloured pixels on the track');
+            assert.ok(await count('.marathon-row .live-dot') >= 4, 'the rows have no coloured dots');
+            // the number of laps of the race: what comes after it does not count
+            await set('marathonLaps', '6', 'change');
+            await page.waitFor('window.__live.marathon().leaderCount === 6 && window.__live.marathon().finished === true', 'a race of 6 laps');
+            assert.match(await listTitle(), /^Lap 6 of 6 · first rider: Ann.* · finished/);
+            await set('marathonLaps', '', 'change');
+        });
+
+        await step('live: replay of a marathon by activity number: the rink as it was, with play, speed, and a slider for the time; no requests for live data', async () => {
+            const set = (id, value, event) => page.evaluate('(() => { const e = document.getElementById(' + JSON.stringify(id) + '); e.value = ' + JSON.stringify(value) + '; e.dispatchEvent(new Event(' + JSON.stringify(event) + ')); })()');
+            const hidden = id => page.evaluate('document.getElementById(' + JSON.stringify(id) + ').classList.contains("hidden")');
+            await page.navigate(base + '/marathon.html?rink=2040&poll=1&activity=9101');
+            await page.waitFor('window.__live && !!window.__live.replay() && window.__live.replay().loading === false && !!window.__live.marathon()', 'the replay', 30000);
+            assert.equal(await hidden('replayBar'), false);
+            assert.equal(await page.evaluate('[...document.querySelectorAll("#replaySpeed option")].map(o => o.value).join(",")'), '1,2,5,10,20,30');
+            assert.equal(await hidden('replayLabel'), true);
+            assert.match(await text('#liveStatus'), /^Replay · Fake rink|^Replay · /);
+            assert.ok(window_rows(await page.evaluate('JSON.stringify(window.__live.marathon().rows)')).length >= 1);
+            assert.equal(await page.evaluate('window.__live.replay().at === window.__live.replay().endMs'), true);          // it opens on the final result
+            // no live requests while a marathon of the past is shown
+            const before = await page.evaluate('window.__liveRequests.length');
+            await page.sleep(2500);
+            assert.equal(await page.evaluate('window.__liveRequests.length'), before, 'the page went on asking for live data');
+            // a chosen start time: the replay starts at that time, not when the first rider started his activity
+            const wholeFrom = await page.evaluate('window.__live.replay().fromMs');
+            const chosenStart = Math.round((wholeFrom + 45000) / 1000);
+            await set('marathonStart', String(chosenStart), 'input');
+            await page.waitFor('window.__live.replay().at === window.__live.replay().fromMs && window.__live.replay().fromMs === ' + chosenStart * 1000, 'the clock went to the start time');
+            assert.equal(await page.evaluate('document.getElementById("marathonStart").value'), String(chosenStart));           // not pulled back by the moment of the clock
+            assert.equal(await page.evaluate('document.getElementById("replayTime").value'), '0');
+            // the dots are shown from the first real crossing since the start (from 20 s before the start time): nothing before it is looked at
+            await page.waitFor('window.__live.states().filter(s => s.status === "skating").length >= 3 && window.__live.states().filter(s => s.status === "skating").every(s => s.lapCount <= 3)', 'riders shown from their first crossing since the start');
+            const atStart = JSON.parse(await page.evaluate('JSON.stringify({ from: window.__live.replay().fromMs, riders: window.__live.states().filter(s => s.status === "skating").map(s => [s.label, s.lapCount, s.lastLap.endMs]) })'));
+            atStart.riders.forEach(([label, laps, lastEnd]) => {
+                assert.ok(laps <= 3, label + ' has ' + laps + ' laps before the first crossings of the race');
+                assert.ok(lastEnd >= atStart.from - 20000, label + ' is shown from a crossing before the start');
+            });
+            // the start time can also be typed as a time of day
+            const typed = await page.evaluate('document.getElementById("marathonStartTime").value');
+            assert.match(typed, /^[0-9]{2}:[0-9]{2}:[0-9]{2}$/);
+            await set('marathonStartTime', typed, 'change');
+            await page.waitFor('window.__live.replay().fromMs === ' + chosenStart * 1000, 'the typed time is the same start');
+            assert.ok(await page.evaluate('window.__live.replay().fromMs - window.__live.replay().startMs >= 60000'));
+            await page.waitFor('!!window.__live.marathon()', 'the list at the start');
+            // moving the slider: the rink as it was, from the start
+            await set('replayTime', '28', 'input');
+            await page.waitFor('window.__live.replay().at === window.__live.replay().fromMs + 28000', 'the slider moved the clock');
+            await page.waitFor('window.__live.marathon().rows.length >= 4', 'the riders of that moment');
+            assert.deepEqual(window_rows(await page.evaluate('JSON.stringify(window.__live.marathon().rows)')).filter(name => name !== 'Fay').slice(0, 4), ['Ann', 'Bob', 'Cas', 'Dirk']);
+            assert.ok(await page.evaluate('window.__live.states().length >= 4'));
+            // play from there: the clock runs (at speed 10)
+            await set('replaySpeed', '30', 'change');
+            await page.evaluate('document.getElementById("replayPlay").click()');
+            const t1 = await page.evaluate('window.__live.replay().at');
+            await page.waitFor('window.__live.replay().at > ' + (t1 + 5000), 'the clock of the replay runs', 15000);
+            assert.match(await text('#replayPlay'), /Pause/);
+            await page.evaluate('document.getElementById("replayPlay").click()');
+            // at the end, Play starts again from the chosen start
+            await page.evaluate('(() => { const e = document.getElementById("replayTime"); e.value = e.max; e.dispatchEvent(new Event("input")); })()');
+            await page.evaluate('document.getElementById("replayPlay").click()');
+            assert.ok(await page.evaluate('window.__live.replay().at - window.__live.replay().fromMs < 30000'), 'play did not start again from the chosen start');
+            await page.evaluate('document.getElementById("replayPlay").click()');
+            // back to live
+            await page.evaluate('document.getElementById("replayLive").click()');
+            await page.waitFor('window.__live.replay() === null && window.__live.states().length >= 4 && window.__liveRequests.length > ' + before, 'live again');
+            assert.equal(await hidden('replayBar'), true);
+            // the page for the next steps: the fake Thialf again
+            await page.navigate(base + '/live.html?rink=2497&poll=2');
+            await page.waitFor('window.__live && window.__live.states().length >= 5', 'the riders of Thialf');
+        });
+
+        await step('marathon.html: the same page in marathon mode: the marathon list at once, its own title, and live.html has no marathon controls at all', async () => {
+            await page.navigate(base + '/marathon.html?rink=2040&poll=1');
+            await page.waitFor('window.__live && !!window.__live.marathon() && window.__live.marathon().rows.length >= 4', 'the marathon list', 30000);
+            assert.match(await page.evaluate("document.title"), /Marathon · Jaap Eden IJsbaan.* · Icesights$/);
+            assert.equal(await text('.dash-head h2'), 'Marathon');
+            assert.equal(await text('a.topbar-link[href="live.html"]'), 'Live');                              // the other page is in the menu
+            assert.equal(await count('a.topbar-link[href="marathon.html"]'), 0);
+            assert.equal(await page.evaluate('!!document.getElementById("marathonToggle")'), false);                 // (no switch: this is the marathon page)
+            assert.equal(await page.evaluate('document.getElementById("marathonLapLabel").classList.contains("hidden")'), false);
+            assert.equal(await page.evaluate('document.getElementById("replayLabel").classList.contains("hidden")'), false);
+            assert.ok(await count('.marathon-row') >= 4);
+            assert.equal(await page.evaluate('fetch("index.html").then(r => r.text()).then(t => /href="marathon[.]html"/.test(t))'), true);   // in the menu
+            await page.navigate(base + '/live.html?rink=2497&poll=2');
+            await page.waitFor('window.__live && window.__live.states().length >= 5', 'the riders of Thialf');
+            assert.equal(await count('.marathon-row'), 0);
+            assert.equal(await text('a.topbar-link[href="marathon.html"]'), 'Marathon');                       // the other page is in the menu
+            assert.equal(await count('a.topbar-link[href="live.html"]'), 0);
+            assert.equal(await page.evaluate('!!document.getElementById("marathonStart") || !!document.getElementById("replayBar") || !!document.getElementById("marathonLaps")'), false);      // no marathon controls on live.html
+            assert.equal(await page.evaluate('document.getElementById("sortLabel").classList.contains("hidden")'), false);
         });
 
         await step('live: another rink is loaded, shows a clear message when nobody is on the ice, and is remembered', async () => {

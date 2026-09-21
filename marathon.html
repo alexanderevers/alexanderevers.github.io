@@ -5,21 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#12121a" media="(prefers-color-scheme: dark)">
     <meta name="theme-color" content="#ececef" media="(prefers-color-scheme: light)">
-    <meta name="description" content="Icesights live: who is on the ice right now.">
+    <meta name="description" content="Icesights marathon: the order of crossing, the gaps and the distances of a race of a group, lap by lap, live or as a replay.">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-    <title>Live · Icesights</title>
+    <title>Marathon · Icesights</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="dashboards.css">
     <script src="theme.js"></script>
     <script src="pwa.js"></script>
 </head>
-<body class="dashboards-page">
+<body class="dashboards-page" data-page="marathon">
     <header class="topbar">
         <a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true"></span>Icesights <em>MYLAPS insights</em></a>
         <div class="topbar-actions">
-            <a class="topbar-link" href="marathon.html" title="A race of a group: the order of crossing lap by lap, live or as a replay">Marathon</a>
+            <a class="topbar-link" href="live.html" title="Who is on the ice right now">Live</a>
             <div class="theme-switch">
                 <span>Light</span>
                 <label class="switch">
@@ -33,10 +33,10 @@
 
     <nav id="dashNav" class="dash-nav hidden" aria-label="Dashboards"></nav>
 
-    <section class="dash" id="dashLive" data-title="Live">
+    <section class="dash" id="dashLive" data-title="Marathon">
         <div class="dash-inner">
             <header class="dash-head">
-                <h2>Live</h2>
+                <h2>Marathon</h2>
                 <span class="live-badge" id="liveBadge"><i aria-hidden="true"></i>Live</span>
                 <p class="dash-sub" id="liveStatus">Loading…</p>
             </header>
@@ -55,6 +55,40 @@
                     <option value="best">fastest lap first</option>
                     <option value="recent">latest crossing first</option>
                 </select></label>
+                <label id="marathonLapsLabel" class="hidden" title="The number of laps of the race. Leave empty when it is not known: a crossing after the last fast lap is then left out once the race is over">Race laps
+                    <input type="number" id="marathonLaps" min="1" max="500" step="1" placeholder="auto" aria-label="Number of laps of the race">
+                </label>
+                <div id="replayLabel" class="marathon-range hidden">
+                    <label title="The activity number of a rider of a marathon that was skated earlier (on the rink chosen here). The page then replays that marathon with everybody who skated at the same time">Replay activity
+                        <input type="text" id="replayActivity" inputmode="numeric" pattern="[0-9]*" placeholder="activity number" aria-label="Activity number to replay">
+                    </label>
+                    <button type="button" id="replayLoad" class="secondary-btn">Replay</button>
+                </div>
+                <div id="replayBar" class="marathon-range hidden">
+                    <button type="button" id="replayPlay" class="secondary-btn" aria-label="Play or pause">&#9654; Play</button>
+                    <label>Speed <select id="replaySpeed" aria-label="Replay speed">
+                        <option value="1">1&times;</option>
+                        <option value="2">2&times;</option>
+                        <option value="5">5&times;</option>
+                        <option value="10" selected>10&times;</option>
+                        <option value="20">20&times;</option>
+                        <option value="30">30&times;</option>
+                    </select></label>
+                    <input type="range" id="replayTime" min="0" max="1" step="1" value="0" aria-label="Time of the replay">
+                    <output id="replayClock"></output>
+                    <button type="button" id="replayLive" class="secondary-btn">Back to live</button>
+                </div>
+                <div id="marathonLapLabel" class="marathon-range hidden">
+                    <label title="The start time of the race (an absolute time). From 20 seconds before it all riders are selected: the lap they are in is their first lap, and everything is measured from the start time">&#9654; Start time
+                        <input type="time" step="1" id="marathonStartTime" aria-label="Start time of the race">
+                        <input type="range" id="marathonStart" min="0" max="1" step="1" value="0" aria-label="Start time of the race (slider)">
+                        <output id="marathonStartValue"></output>
+                    </label>
+                    <label title="The lap of the list, counted from the start: the lap of the rider with the most laps. Everybody who comes in during that lap counts for the result. As long as this slider is at its last position, the list moves on to every new lap">&#127937; Finish lap
+                        <input type="range" id="marathonFinish" min="1" max="1" step="1" value="1" aria-label="Finish lap">
+                        <output id="marathonFinishValue">1</output>
+                    </label>
+                </div>
             </div>
             <p id="liveError" class="error-message hidden"></p>
 

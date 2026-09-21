@@ -625,6 +625,36 @@ body.dashboards-page {
     text-transform: uppercase;
     color: var(--text-secondary);
 }
+.live-controls input[type="number"] {
+    width: 5.5em;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface-2);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.9rem;
+}
+.marathon-switch .switch { flex-shrink: 0; }
+.marathon-range { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.marathon-range input[type="range"] { width: clamp(90px, 14vw, 170px); accent-color: var(--accent); }
+#replayTime { width: clamp(120px, 22vw, 300px); }
+.marathon-range .secondary-btn { padding: 8px 12px; font-size: 0.85rem; }
+.marathon-range input[type="text"] {
+    width: 11em;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface-2);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.9rem;
+    text-transform: none;
+}
+.marathon-range output { min-width: 5.5em; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); text-transform: none; letter-spacing: 0; }
+.live-row.marathon-row td:first-child { font-weight: 700; width: 2.6em; text-align: right; }
+.live-row.marathon-row.first td { color: var(--accent); font-weight: 700; }
+.live-table td.gap { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .live-controls select {
     padding: 8px 10px;
     border: 1px solid var(--border);
@@ -639,11 +669,13 @@ body.dashboards-page {
     max-width: 260px;
 }
 
+/* The live and the marathon page use more of the screen: the table has many columns and should fit without scrolling sideways */
+#dashLive .dash-inner { max-width: min(1760px, 100%); padding-left: 20px; }
 .live-grid {
     flex: 1 1 0;
     min-height: 0;
     display: grid;
-    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
     gap: 20px;
 }
 
@@ -672,6 +704,7 @@ body.dashboards-page {
 .live-table td.laps { font-weight: 700; }
 .live-row { cursor: pointer; }
 .live-row.selected td { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.live-row.pinned td { font-weight: 600; background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .live-row.compared td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
 .live-row.resting td { color: var(--text-secondary); }
 .live-row.private td, .live-row.waiting td { color: var(--text-muted); }

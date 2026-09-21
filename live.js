@@ -28,16 +28,22 @@ document.addEventListener('DOMContentLoaded', () => {
         { id: 3930, name: 'Leiden IJshal de Vliet', length: 250 }
     ];
     const LAP_FETCH_CONCURRENCY = 5;
-    const LABELLED_RIDERS = 10;             // the fastest riders get a colour and initials on the track, the others a small dot
+    const LABELLED_RIDERS = 10;             // up to ten riders have a colour and initials on the track (the ones that were pressed), the others a small dot
     const LANE_STEP = 0.0075;
     const LANES = 5;
     const BAND_WIDTH = 0.045;
     const MARGIN = 0.05;
 
     const $ = id => document.getElementById(id);
+    const $m = id => document.getElementById(id) || document.createElement('div');       // (marathon controls: not on live.html)
     const rinkSelect = $('rinkSelect');
     const pollSelect = $('pollSelect');
     const sortSelect = $('sortSelect');
+    const marathonLapsInput = $m('marathonLaps');
+    const marathonStartInput = $m('marathonStart');
+    const marathonStartTime = $m('marathonStartTime');
+    const replayInput = $m('replayActivity');
+    const marathonFinishInput = $m('marathonFinish');
     const statusEl = $('liveStatus');
     const errorEl = $('liveError');
     const listEl = $('liveList');
@@ -60,6 +66,23 @@ document.addEventListener('DOMContentLoaded', () => {
     let pollSeconds = pollParam >= 1 && pollParam <= 60 ? pollParam : Number(loadSetting('livePoll', 10));
     if (![1, 2, 5, 10, 20, 30].includes(pollSeconds) && !(pollParam >= 1)) pollSeconds = 10;
     let sortMode = loadSetting('liveSort', 'best') === 'recent' ? 'recent' : 'best';
+    // Marathon mode (marathon.html only): a list per lap for a race of a group. ?laps=25 in the address wins over what was set last time.
+    // marathon.html is this page in marathon mode; live.html has no marathon controls at all (they are looked up with $m: a missing one is an
+    // element that is not in the page)
+    const MARATHON_PAGE = document.body.dataset.page === 'marathon';
+    const marathon = MARATHON_PAGE;
+    const lapsParam = Number(params.get('laps'));
+    let raceLaps = lapsParam >= 1 ? Math.floor(lapsParam) : (Number(loadSetting('liveRaceLaps', 0)) || null);
+    let marathonStart = null;                 // the start time of the race (absolute, ms); null = the program chooses it
+    let marathonDay = Date.now();             // a moment of the day of the race (for the time field)
+    let marathonFinish = null;                // the finish lap of the list; null = the slider is at its last position: the newest lap
+    let marathonResult = null;
+    // Replay of a marathon of an earlier day (by an activity number): the page then shows the rink as it was at replay.at instead of now.
+    let replay = null;                        // { activityId, startMs, endMs, at, playing, speed, tick, loading, message }
+    const clock = () => (replay && !replay.loading ? replay.at : Date.now());
+    // the laps of a rider as far as they are known at the moment of the clock
+    const lapsAt = (laps, at) => (laps ? laps.filter(lap => lap.startMs + lap.durMs <= at) : laps);
+    let marathonOrder = [];                   // the riders in the order of the newest lap (for the colours on the track)
 
     rinkSelect.innerHTML = RINKS.map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('');
     rinkSelect.value = String(rink.id);
@@ -68,6 +91,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     pollSelect.value = String(pollSeconds);
     sortSelect.value = sortMode;
+    marathonLapsInput.value = raceLaps ? String(raceLaps) : '';
+    function showMarathonControls() {
+        $m('marathonLapsLabel').classList.toggle('hidden', !marathon);
+        $m('replayLabel').classList.toggle('hidden', !marathon || !!replay);
+        $m('replayBar').classList.toggle('hidden', !replay);
+        $m('marathonLapLabel').classList.toggle('hidden', !marathon);
+        $('sortLabel').classList.toggle('hidden', marathon);
+    }
+    showMarathonControls();
 
     // ---------- State ----------
     /** activity id -> { activity, laps (normalized or null), isPrivate, error, fetchedEnd, fetchedAt } */
@@ -88,6 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // lap times appear paler in the same graph, like Compare on the replay page); clicking that rider again makes him or her the
     // only selection. Clicking the selected rider lets go of everything.
     function selectRider(id) {
+        const letGo = id === selectedId;                                     // (pressing the selected rider again)
         if (id === selectedId || selectedId === null) {
             selectedId = id === selectedId ? null : id;
             compareId = null;
@@ -97,8 +130,25 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             compareId = id;
         }
+        // Colours (live page): every rider is a small blue dot until his name is pressed; then he gets a colour and initials. Up to ten riders
+        // have one: pressing an eleventh takes the colour of the one who was pressed first. Letting go of the selected rider takes his colour.
+        pinnedId = letGo ? null : id;                                       // the last name pressed is on top of the list
+        if (!marathon) {
+            if (letGo) dropColour(id);
+            else if (!colourSlot.has(id)) addColour(id);
+        }
         lapGraph.resetMax();
         dirty = true;
+    }
+    let pinnedId = null;                    // the rider on top of the list (live page)
+    const colourSlot = new Map();           // rider id -> the number of his colour (0 to 9), in the order in which the names were pressed
+    function dropColour(id) { colourSlot.delete(id); }
+    function addColour(id) {
+        if (colourSlot.size >= LABELLED_RIDERS) colourSlot.delete(colourSlot.keys().next().value);      // the first pressed loses his colour
+        const used = new Set(colourSlot.values());
+        let slot = 0;
+        while (used.has(slot)) slot++;
+        colourSlot.set(id, slot);
     }
 
     // ---------- Fetching ----------
@@ -127,11 +177,11 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadLapsQueue(list) {
         const queue = [...list];
         const worker = async () => { while (queue.length) await loadLapsOf(queue.shift()); };
-        await Promise.all(Array.from({ length: Math.min(LAP_FETCH_CONCURRENCY, queue.length) }, worker));
+        await Promise.all(Array.from({ length: Math.min(marathon ? LAP_FETCH_CONCURRENCY * 2 : LAP_FETCH_CONCURRENCY, queue.length) }, worker));
     }
 
     async function poll() {
-        if (polling) return;
+        if (polling || replay) return;
         polling = true;
         clearTimeout(pollTimer);
         const rinkAtStart = rink;
@@ -166,11 +216,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function schedulePoll() {
         clearTimeout(pollTimer);
-        if (document.hidden) return;                                        // nobody is looking: do not ask
+        if (document.hidden || replay) return;                              // nobody is looking, or a marathon of the past is shown: do not ask
         pollTimer = setTimeout(poll, pollSeconds * 1000);
     }
 
     function changeRink(next) {
+        replayRun++;
+        replay = null;
+        showMarathonControls();
         rink = next;
         saveSetting('liveRink', rink.id);
         riders = new Map();
@@ -178,6 +231,8 @@ document.addEventListener('DOMContentLoaded', () => {
         shown.clear();
         selectedId = null;
         compareId = null;
+        colourSlot.clear();
+        pinnedId = null;
         lastPollAt = null;
         pollError = null;
         dirty = true;
@@ -196,16 +251,193 @@ document.addEventListener('DOMContentLoaded', () => {
         saveSetting('liveSort', sortMode);
         dirty = true;
     });
+    // ---------- Replay of a marathon by activity number ----------
+    // The replay starts at the real time of the chosen start lap (lap 1: the start of the race), not at the moment the first rider started
+    // his activity. It is worked out from the whole race, so it does not depend on the moment of the clock.
+    function replayFrom() {
+        if (!replay || replay.loading) return 0;
+        const whole = marathonStandings(marathonEntries(), { nowMs: replay.endMs, raceLaps, trackLengthM: rink.length, startMs: marathonStart ?? undefined });
+        return whole ? whole.startMs : replay.startMs;
+    }
+    function syncReplayBar() {
+        if (!replay || replay.loading) return;
+        $m('replayPlay').innerHTML = replay.playing ? '&#10074;&#10074; Pause' : '&#9654; Play';
+        $m('replayTime').max = String(Math.max(1, Math.round((replay.endMs - replay.fromMs) / 1000)));
+        $m('replayTime').value = String(Math.max(0, Math.round((replay.at - replay.fromMs) / 1000)));
+        $m('replayClock').textContent = timeOfDay(replay.at);
+    }
+
+    let replayRun = 0;                        // every start or stop of a replay gets a number: an older one that is still loading gives up
+    async function startReplay(activityId) {
+        const id = String(activityId).replace(/[^0-9]/g, '');
+        if (!id) return;
+        const run = ++replayRun;
+        const current = () => run === replayRun;
+        replay = { activityId: id, loading: true, message: 'Loading the marathon…', playing: false, speed: Number($m('replaySpeed').value), startMs: 0, endMs: 0, at: 0, tick: 0 };
+        clearTimeout(pollTimer);
+        riders = new Map();
+        states = [];
+        marathonStart = null;
+        marathonFinish = null;
+        selectedId = null;
+        compareId = null;
+        pinnedId = null;
+        showMarathonControls();
+        dirty = true;
+        const fail = message => { replay = { ...replay, loading: true, error: message, message: 'Could not load the marathon' }; dirty = true; };
+        try {
+            // the laps of the activity give the day and the time of the marathon
+            const own = normalizeLaps(await fetchLaps(id));
+            if (!current()) return;
+            if (!own.length) return fail(`Activity ${id} has no laps.`);
+            const from = own[0].startMs;
+            const to = own[own.length - 1].startMs + own[own.length - 1].durMs;
+            // The rink of an activity is not in its laps: the chosen rink first, then the other rinks, until the activity is in the list
+            // of a rink on that day. Everybody who skated at the same time as the activity is the group of the marathon.
+            const candidates = [rink, ...RINKS.filter(r => r.id !== rink.id)];
+            let found = null;
+            for (let i = 0; i < candidates.length && !found; i++) {
+                replay.message = i === 0 ? `Loading the riders of ${candidates[i].name} of that day…` : `Looking for activity ${id} at ${candidates[i].name} (${i + 1} of ${candidates.length})…`;
+                dirty = true;
+                let all = [];
+                try { all = await fetchAllActivitiesFromLocation(candidates[i].id, new Date(from).getFullYear(), 'IceSkating', new Date(from).toISOString()); } catch (error) { all = []; }
+                if (!current()) return;
+                const group = all.filter(activity => Date.parse(activity.startTime) < to && Date.parse(activity.endTime) > from);
+                if (group.some(activity => String(activity.id) === id)) found = { rink: candidates[i], group };
+            }
+            if (!found) return fail(`Activity ${id} was not found at any of the rinks of this page on ${new Date(from).toLocaleDateString('en-GB')}.`);
+            if (found.rink !== rink) { rink = found.rink; rinkSelect.value = String(rink.id); }
+            found.group.forEach(activity => riders.set(activity.id, { activity, laps: null, isPrivate: false, error: null, fetchedEnd: undefined, fetchedAt: 0 }));
+            let done = 0;
+            const queue = [...found.group];
+            const worker = async () => {
+                while (queue.length && current()) {
+                    const activity = queue.shift();
+                    const rider = riders.get(activity.id);
+                    try { rider.laps = normalizeLaps(await fetchLaps(activity.id, activity.endTime, activity.startTime)); } catch (error) { rider.error = error.message; rider.isPrivate = /401|403|private/i.test(error.message); }
+                    replay.message = `Loading the ${found.group.length} riders of that day… ${++done} of ${found.group.length}`;
+                    dirty = true;
+                }
+            };
+            await Promise.all(Array.from({ length: 10 }, worker));
+            if (!current()) return;
+            // the marathon is the time of the activity: what happened before or after it (other races of the same evening) is not part of it
+            replay = { activityId: id, loading: false, playing: false, speed: Number($m('replaySpeed').value), startMs: from - 60000, endMs: to + 2 * 60 * 1000, at: 0, tick: performance.now() };
+            replay.at = replay.endMs;                  // it opens on the final result
+            // the start lap of the whole race is kept during the replay, so the moment of the clock does not change it
+            marathonStart = (marathonStandings(marathonEntries(), { nowMs: replay.endMs, raceLaps, trackLengthM: rink.length }) || {}).startMs || null;
+            replay.fromMs = replayFrom();
+            replayInput.value = id;
+            syncReplayBar();
+            showMarathonControls();
+            renderList.last = null;
+            dirty = true;
+        } catch (error) {
+            if (current()) fail(error.message || 'The marathon could not be loaded');
+        }
+    }
+
+    function stopReplay() {
+        replayRun++;
+        replay = null;
+        riders = new Map();
+        states = [];
+        shown.clear();
+        lastPollAt = null;
+        renderList.last = null;
+        showMarathonControls();
+        dirty = true;
+        poll();
+    }
+
+    $m('replayLoad').addEventListener('click', () => startReplay(replayInput.value));
+    replayInput.addEventListener('keydown', event => { if (event.key === 'Enter') startReplay(replayInput.value); });
+    $m('replayLive').addEventListener('click', stopReplay);
+    $m('replayPlay').addEventListener('click', () => {
+        if (!replay || replay.loading) return;
+        if (!replay.playing && replay.at >= replay.endMs - 1000) replay.at = replay.fromMs;       // at the end: play again from the chosen start
+        replay.playing = !replay.playing;
+        replay.tick = performance.now();
+        syncReplayBar();
+        dirty = true;
+    });
+    $m('replaySpeed').addEventListener('change', () => { if (replay) replay.speed = Number($m('replaySpeed').value); });
+    $m('replayTime').addEventListener('input', () => {
+        if (!replay || replay.loading) return;
+        replay.at = replay.fromMs + Number($m('replayTime').value) * 1000;
+        syncReplayBar();
+        dirty = true;
+    });
+
+    marathonLapsInput.addEventListener('change', () => {
+        const value = Math.floor(Number(marathonLapsInput.value));
+        raceLaps = value >= 1 ? value : null;
+        marathonLapsInput.value = raceLaps ? String(raceLaps) : '';
+        saveSetting('liveRaceLaps', raceLaps || 0);
+        dirty = true;
+    });
+    // While the start slider is being moved the graph shows the whole activity, so it is easy to see where the start line goes; when it is
+    // let go the graph zooms in on the start and the finish again.
+    let movingStart = false;
+    const moving = on => () => { movingStart = on; dirty = true; };
+    for (const name of ['pointerdown', 'touchstart']) marathonStartInput.addEventListener(name, moving(true), { passive: true });
+    for (const name of ['pointerup', 'pointercancel', 'touchend', 'touchcancel', 'change', 'blur']) marathonStartInput.addEventListener(name, moving(false));
+    marathonStartInput.addEventListener('keydown', moving(true));
+    marathonStartInput.addEventListener('keyup', moving(false));
+    // the start time typed as a time of day (on the day of the race)
+    marathonStartTime.addEventListener('change', () => {
+        const [h, m, sec] = marathonStartTime.value.split(':').map(Number);
+        if (!Number.isFinite(h) || !Number.isFinite(m)) return;
+        const day = new Date(marathonDay);
+        day.setHours(h, m, Number.isFinite(sec) ? sec : 0, 0);
+        marathonStart = day.getTime();
+        shown.clear();
+        if (replay && !replay.loading) {
+            replay.fromMs = replayFrom();
+            replay.at = replay.fromMs;
+            syncReplayBar();
+        }
+        dirty = true;
+    });
+    marathonStartInput.addEventListener('input', () => {
+        marathonStart = Number(marathonStartInput.value) * 1000;          // chosen: from now on it stays where it is put
+        shown.clear();                                                    // the dots begin again at the finish line
+        marathonStartTime.value = clockText(marathonStart);
+        if (replay && !replay.loading) {
+            // a replay always starts at the chosen start: the clock goes there, and the slider of the time runs from there
+            replay.fromMs = replayFrom();
+            replay.at = replay.fromMs;
+            syncReplayBar();
+        }
+        dirty = true;
+    });
+    marathonFinishInput.addEventListener('input', () => {
+        const value = Number(marathonFinishInput.value);
+        marathonFinish = value >= Number(marathonFinishInput.max) ? null : value;    // on the last position: follows the race
+        dirty = true;
+    });
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) clearTimeout(pollTimer);
-        else if (!polling) poll();                                          // back on the page: catch up at once
+        else if (!polling && !replay) poll();                               // back on the page: catch up at once
     });
 
     // ---------- The live picture ----------
+    // In marathon mode everybody begins at the start time: the position of a rider on the track is reset to the finish line at that time
+    const trackLaps = (laps, now) => (marathon && marathonResult ? marathonTrackLaps(laps, marathonResult.startMs, now) : laps);
     function refreshStates() {
-        const now = Date.now();
-        states = [...riders.values()].map(rider => ({
-            ...riderLive(rider.activity, rider.laps, now, rink.length),
+        const now = clock();
+        const list = [...riders.values()];
+        if (replay) {
+            // the rink as it was at that moment: only the laps that had ended, and only the riders who had started
+            states = list.filter(rider => Date.parse(rider.activity.startTime) <= now).map(rider => ({
+                ...riderLive({ ...rider.activity, endTime: Date.parse(rider.activity.endTime) <= now ? rider.activity.endTime : null }, trackLaps(lapsAt(rider.laps, now), now), now, rink.length),
+                isPrivate: rider.isPrivate,
+                error: rider.error
+            }));
+            return;
+        }
+        states = list.map(rider => ({
+            ...riderLive(rider.activity, trackLaps(rider.laps, now), now, rink.length),
             isPrivate: rider.isPrivate,
             error: rider.error
         }));
@@ -243,9 +475,20 @@ document.addEventListener('DOMContentLoaded', () => {
     function onIceStates() {
         return sortLiveRiders(states.filter(s => (s.status === 'skating' || s.status === 'waiting') && !s.isPrivate), sortMode);   // a private rider has his own group
     }
+    // A dot in the colour the rider has on the track (marathon list)
+    function dotOf(id) {
+        const slot = colourSlots().get(id);
+        return slot === undefined ? '' : `<i class="live-dot" style="background:${colors.series[slot] || colors.series[0]}"></i>`;
+    }
     function colourSlots() {
         const slots = new Map();
-        sortLiveRiders(states.filter(s => s.status === 'skating'), 'best').slice(0, LABELLED_RIDERS).forEach((s, i) => slots.set(s.id, i));
+        if (marathon && marathonOrder.length) {
+            // in marathon mode the first riders of the newest list get the colours and the initials: the leading group on the track
+            const skatingIds = new Set(states.filter(s => s.status === 'skating').map(s => s.id));
+            marathonOrder.filter(id => skatingIds.has(id)).slice(0, LABELLED_RIDERS).forEach((id, i) => slots.set(id, i));
+            return slots;
+        }
+        colourSlot.forEach((slot, id) => slots.set(id, slot));
         return slots;
     }
 
@@ -266,16 +509,109 @@ document.addEventListener('DOMContentLoaded', () => {
             <td class="best">${seconds(state.bestMs)}</td><td>${sinceText(state.sinceMs)}</td></tr>`;
     }
 
+    // ---------- Marathon mode: the list of a lap (see marathonStandings in live-model.js) ----------
+    const gapText = ms => (ms <= 0 ? 'first' : `+${(ms / 1000).toFixed(ms < 10000 ? 2 : 1)} s`);
+    const distanceText = (ms, metres) => (ms <= 0 ? '' : metres < 1 ? '< 1 m' : `${Math.round(metres)} m`);
+    const timeOfDay = ms => new Date(ms).toLocaleTimeString('en-GB');
+
+    // The sliders of the start lap and the finish lap. As long as the finish slider is at its last position it follows the race: the list moves
+    // on to every new lap.
+    // The start time is an absolute time: from 20 seconds before it all riders are selected and the lap they are in is their first lap
+    // (the waiting for the start and the warming up before it are not part of the race). The finish slider counts the laps of the race from
+    // there.
+    const clockText = ms => new Date(ms).toLocaleTimeString('en-GB');
+    function syncMarathonSliders(result) {
+        // in a replay the sliders are those of the whole race, not of the moment of the clock
+        const whole = replay && !replay.loading ? marathonStandings(marathonEntries(), { nowMs: replay.endMs, raceLaps, trackLengthM: rink.length, startMs: marathonStart ?? undefined }) : result;
+        const laps = Math.max(1, whole ? whole.leaderCount : 1);
+        const finish = marathonFinish === null ? laps : Math.min(marathonFinish, laps);
+        if (marathonFinish !== null && finish >= laps) marathonFinish = null;
+        marathonFinishInput.max = String(laps);
+        marathonFinishInput.value = String(finish);
+        if (whole && !movingStart) {
+            // the start time can be chosen from a minute before the first crossing to the last crossing (never in the middle of a move)
+            marathonDay = whole.firstMs;
+            marathonStartInput.min = String(Math.floor((whole.firstMs - 60000) / 1000));
+            marathonStartInput.max = String(Math.ceil(whole.lastMs / 1000));
+            marathonStartInput.value = String(Math.round(whole.startMs / 1000));
+            if (document.activeElement !== marathonStartTime) marathonStartTime.value = clockText(whole.startMs);
+        }
+    }
+    const raceTimeText = ms => {
+        const s = ms / 1000;
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const rest = (s % 60).toFixed(1).padStart(4, '0');
+        return h ? `${h}:${String(m).padStart(2, '0')}:${rest}` : `${m}:${rest}`;
+    };
+
+    const marathonEntries = () => [...riders.values()].filter(r => !r.isPrivate && r.laps && r.laps.length)
+        .map(r => ({ id: r.activity.id, label: (r.activity.chipLabel || '').trim() || r.activity.chipCode, laps: r.laps }));
+
+    function marathonHtml() {
+        const entries = marathonEntries();
+        const now = clock();
+        const newest = marathonStandings(entries, { startMs: marathonStart ?? undefined, raceLaps, trackLengthM: rink.length, nowMs: now });
+        marathonOrder = newest ? [...newest.rows, ...newest.pending].map(r => r.id) : [];
+        syncMarathonSliders(newest);
+        const result = marathonStandings(entries, { lapNr: marathonFinish, startMs: marathonStart ?? undefined, raceLaps, trackLengthM: rink.length, nowMs: now });
+        marathonResult = result;
+        if (result) {
+            $m('marathonStartValue').textContent = `${timeOfDay(result.startMs)}${marathonStart === null ? ' (auto)' : ''}`;
+            $m('marathonFinishValue').textContent = `${result.lapNr}${marathonFinish === null ? ' (follows)' : ''} · ${timeOfDay(result.finishMs)}`;
+        }
+        const head = '<thead><tr><th>Place</th><th>Rider</th><th>Laps</th><th>Crossed</th><th>Gap</th><th>Distance</th><th>Lap time</th><th>Time</th></tr></thead>';
+        if (!result) {
+            const text = lastPollAt ? 'Nobody has crossed the finish line yet in this race. This list refreshes by itself.' : 'Loading…';
+            return `<table class="laps-table live-table">${head}<tbody><tr class="live-empty"><td colspan="8">${text}</td></tr></tbody></table>`;
+        }
+        const mark = id => (id === selectedId ? ' selected' : id === compareId ? ' compared' : '');
+        if (!result.first) {
+            return `<table class="laps-table live-table">${head}<tbody><tr class="live-group"><th colspan="8">Lap ${result.lapNr}</th></tr><tr class="live-empty"><td colspan="8">Nobody was registered at the finish line in this lap (the timing mat missed the riders).</td></tr></tbody></table>`;
+        }
+        const title = `Lap ${result.lapNr}${raceLaps ? ` of ${raceLaps}` : ''} · first rider: ${escapeHtml(result.first.label)}${result.finished && result.latest ? ' · finished' : ''}`;
+        const rowOf = (row, cls) => `<tr class="live-row marathon-row${cls}" data-id="${row.id}">
+            <td>${row.place}</td><td>${dotOf(row.id)}${escapeHtml(row.label)}</td><td class="laps">${row.laps}</td><td>${timeOfDay(row.endMs)}</td>
+            <td class="gap">${gapText(row.gapMs)}</td><td class="gap">${distanceText(row.gapMs, row.distanceM)}</td><td>${seconds(row.lapMs)}</td><td class="gap">${raceTimeText(row.segmentMs)}</td></tr>`;
+        const pendingOf = (p, cls) => `<tr class="live-row marathon-row waiting${cls}" data-id="${p.id}"><td>–</td><td>${dotOf(p.id)}${escapeHtml(p.label)}</td><td class="laps">${p.laps}</td>
+                <td colspan="5" class="muted-note">${p.status === 'coming' ? 'on the way' : `${p.behind} lap${p.behind === 1 ? '' : 's'} behind`}</td></tr>`;
+        let body = '';
+        // the rider whose name was pressed last is also on top of the list, with his place (he is still in the list below as well)
+        if (pinnedId !== null) {
+            const inRows = result.rows.find(r => r.id === pinnedId);
+            const inPending = result.pending.find(p => p.id === pinnedId);
+            const known = entries.find(e => e.id === pinnedId);
+            if (inRows) body += `<tr class="live-group"><th colspan="8">Selected</th></tr>` + rowOf(inRows, ' pinned');
+            else if (inPending) body += `<tr class="live-group"><th colspan="8">Selected</th></tr>` + pendingOf(inPending, ' pinned');
+            else if (known) body += `<tr class="live-group"><th colspan="8">Selected</th></tr><tr class="live-row marathon-row waiting pinned" data-id="${known.id}"><td>–</td><td>${dotOf(known.id)}${escapeHtml(known.label)}</td><td colspan="6" class="muted-note">not in the list of this lap</td></tr>`;
+        }
+        body += `<tr class="live-group"><th colspan="8">${title} <small>(${result.rows.length})</small></th></tr>`;
+        body += result.rows.map(row => rowOf(row, `${row.place === 1 ? ' first' : ''}${mark(row.id)}`)).join('');
+        if (result.pending.length) {
+            body += `<tr class="live-group"><th colspan="8">Still to cross the line <small>(${result.pending.length})</small></th></tr>`;
+            body += result.pending.map(p => pendingOf(p, mark(p.id))).join('');
+        }
+        return `<table class="laps-table live-table">${head}<tbody>${body}</tbody></table>`;
+    }
+
     function renderList() {
+        if (marathon) {
+            const html = marathonHtml();
+            if (html !== renderList.last) { listEl.innerHTML = html; renderList.last = html; }
+            return;
+        }
         const slots = colourSlots();
-        const onIce = onIceStates();
-        const resting = sortLiveRiders(states.filter(s => s.status === 'resting' && !s.isPrivate), 'recent');
-        const isPrivate = states.filter(s => s.isPrivate);
+        // the rider whose name was pressed last stays on top of the list, whatever he does; the others are sorted below him
+        const pinned = pinnedId === null ? null : states.find(s => s.id === pinnedId) || null;
+        const onIce = onIceStates().filter(s => s !== pinned);
+        const resting = sortLiveRiders(states.filter(s => s.status === 'resting' && !s.isPrivate), 'recent').filter(s => s !== pinned);
+        const isPrivate = states.filter(s => s.isPrivate).filter(s => s !== pinned);
         const head = '<thead><tr><th>Rider</th><th>Started</th><th>Duration</th><th>Laps</th><th>Last lap</th><th>Best lap</th><th>Since</th></tr></thead>';
         const group = (title, count, rows) => `<tr class="live-group"><th colspan="7">${title} <small>(${count})</small></th></tr>${rows}`;
         let body = '';
+        if (pinned) body += group('Selected', 1, rowHtml(pinned, slots));
         if (onIce.length) body += group('On the ice', onIce.length, onIce.map(s => rowHtml(s, slots)).join(''));
-        else body += `<tr class="live-empty"><td colspan="7">${lastPollAt ? 'Nobody has crossed the finish line in the last few minutes. This list refreshes by itself.' : 'Loading…'}</td></tr>`;
+        else if (!pinned) body += `<tr class="live-empty"><td colspan="7">${lastPollAt ? 'Nobody has crossed the finish line in the last few minutes. This list refreshes by itself.' : 'Loading…'}</td></tr>`;
         if (resting.length) body += group('Recently on the ice', resting.length, resting.map(s => rowHtml(s, slots)).join(''));
         if (isPrivate.length) body += group('Results are private', isPrivate.length, isPrivate.map(s => rowHtml(s, slots)).join(''));
         const html = `<table class="laps-table live-table">${head}<tbody>${body}</tbody></table>`;
@@ -295,14 +631,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const onIce = states.filter(s => s.status === 'skating').length;
         const waiting = states.filter(s => s.status === 'waiting' && !s.isPrivate).length;
         let text;
-        if (!lastPollAt) text = pollError ? 'Could not load this rink yet' : 'Loading…';
+        if (replay) text = replay.loading ? replay.message : `Replay · ${rink.name} · ${timeOfDay(replay.at)} · ${onIce} on the ice`;
+        else if (!lastPollAt) text = pollError ? 'Could not load this rink yet' : 'Loading…';
         else {
             const age = Math.round((now - lastPollAt) / 1000);
             text = `${rink.name} · ${onIce} on the ice${waiting ? ` (+${waiting} just started)` : ''} · updated ${age} s ago`;
         }
         if (statusEl.textContent !== text) statusEl.textContent = text;
         $('liveBadge').classList.toggle('idle', !onIce);
-        if (pollError) { errorEl.textContent = `${pollError}. Trying again in ${pollSeconds} s.`; show(errorEl); } else hide(errorEl);
+        if (replay && replay.error) { errorEl.textContent = replay.error; show(errorEl); }
+        else if (pollError && !replay) { errorEl.textContent = `${pollError}. Trying again in ${pollSeconds} s.`; show(errorEl); } else hide(errorEl);
     }
 
     // ---------- The track ----------
@@ -377,12 +715,16 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.fillText(k === 0 ? 'Finish' : `${Math.round((k / 4) * rink.length)} m`, label.x, label.y);
         }
         ctx.fillStyle = colors.muted; ctx.font = '600 20px system-ui, sans-serif';
-        ctx.fillText(new Date().toLocaleTimeString('en-GB'), view.w / 2, view.h / 2);
+        ctx.fillText(new Date(clock()).toLocaleTimeString('en-GB'), view.w / 2, view.h / 2);
 
         hitTargets = [];
         const nowAt = performance.now();
-        const dtS = Math.min((nowAt - shownAt) / 1000, 1);
+        let dtS = Math.min((nowAt - shownAt) / 1000, 1);
         shownAt = nowAt;
+        if (replay) {
+            if (replay.playing) dtS *= replay.speed;                 // the dots follow the clock of the replay
+            else shown.clear();                                       // paused or moved by hand: the dots are where they are
+        }
         const slots = colourSlots();
         const skating = states.filter(s => s.status === 'skating' && s.progress !== null)
             .sort((a, b) => Number(slots.has(a.id)) - Number(slots.has(b.id)));          // the coloured dots on top
@@ -443,13 +785,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const otherSlot = slots.get(compareId);
             let otherColour = colors.series[otherSlot === undefined ? 0 : otherSlot] || colors.series[0];
             if (otherColour === colour) otherColour = colors.series[((slot === undefined ? 0 : slot) + 1) % colors.series.length] || colors.series[1];
-            compare = { label: otherState.label, laps: otherRider.laps, colour: otherColour };
+            compare = { label: otherState.label, laps: lapsAt(otherRider.laps, clock()), colour: otherColour };
         }
-        lapGraph.draw({ label: state.label, laps: rider.laps, isPrivate: rider.isPrivate }, {
+        lapGraph.draw({ label: state.label, laps: lapsAt(rider.laps, clock()), isPrivate: rider.isPrivate }, {
             trackLengthM: rink.length,
             colour,
             skating: state.status === 'skating',
-            nowMs: Date.now()
+            nowMs: clock(),
+            marks: marathon && marathonResult ? { startMs: marathonResult.startMs, finishMs: marathonResult.finishMs } : null,
+            zoom: !movingStart                       // while the start is being moved the whole activity is shown
         }, compare);
     }
 
@@ -462,14 +806,20 @@ document.addEventListener('DOMContentLoaded', () => {
         drawLapPanel();
         // the number of riders on the ice in the title of the tab
         const onIce = states.filter(s => s.status === 'skating').length;
-        const title = `${onIce ? `(${onIce}) ` : ''}Live · ${rink.name} · Icesights`;
+        const title = `${onIce ? `(${onIce}) ` : ''}${MARATHON_PAGE ? 'Marathon' : 'Live'} · ${rink.name} · Icesights`;
         if (document.title !== title) document.title = title;
     }
 
     let lastSecond = 0;
     let lastFrame = 0;
     function frame(now) {
-        const second = Math.floor(Date.now() / 1000);
+        if (replay && !replay.loading && replay.playing) {
+            replay.at = Math.min(replay.endMs, replay.at + (now - replay.tick) * replay.speed);
+            if (replay.at >= replay.endMs) { replay.playing = false; syncReplayBar(); }
+            $m('replayTime').value = String(Math.round((replay.at - replay.fromMs) / 1000));
+        }
+        if (replay) replay.tick = now;
+        const second = Math.floor(clock() / (replay ? 250 : 1000));         // a replay redraws four times per second
         if (dirty || second !== lastSecond) { lastSecond = second; dirty = false; renderAll(); }
         else if (now - lastFrame > 100) { lastFrame = now; refreshStates(); drawTrack(); drawLapPanel(); }   // the dots keep moving between the seconds
         requestAnimationFrame(frame);
@@ -477,9 +827,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ---------- Start ----------
     renderAll();
-    poll();
+    // ?activity=7522190945 opens the replay of that marathon at once (marathon.html, on the rink of the address)
+    if (MARATHON_PAGE && /^[0-9]+$/.test(params.get('activity') || '')) {
+        showMarathonControls();
+        startReplay(params.get('activity'));
+    } else poll();
     requestAnimationFrame(frame);
 
     // for the browser test: a way to see the state
-    window.__live = { states: () => states, rink: () => rink, pollNow: poll, requests: () => requestsThisMinute.length, selected: () => selectedId, compared: () => compareId, lapGraph: () => lapGraph.info() };
+    window.__live = { states: () => states, rink: () => rink, pollNow: poll, requests: () => requestsThisMinute.length, selected: () => selectedId, colours: () => Object.fromEntries(colourSlot), colourTest: () => { for (let id = 1; id <= 11; id++) { colourSlot.delete(id); addColour(id); } }, compared: () => compareId, marathon: () => marathonResult, replay: () => replay, startReplay, marathonOrder: () => marathonOrder, lapGraph: () => lapGraph.info() };
 });
