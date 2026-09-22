@@ -29,6 +29,8 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
     const LAP_FETCH_CONCURRENCY = 5;
     const LABELLED_RIDERS = 10;             // up to ten riders have a colour and initials on the track (the ones that were pressed), the others a small dot
+    const MARATHON_SELECTED_RIDERS = 5;     // marathon mode: the same idea, but capped at five (the "Selected" group in the list)
+    const MAX_SELECTED_SHOWN = 5;           // the "Selected" group of the list (both pages) shows at most this many rows, even with more coloured
     const LANE_STEP = 0.0075;
     const LANES = 5;
     const BAND_WIDTH = 0.045;
@@ -82,7 +84,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const clock = () => (replay && !replay.loading ? replay.at : Date.now());
     // the laps of a rider as far as they are known at the moment of the clock
     const lapsAt = (laps, at) => (laps ? laps.filter(lap => lap.startMs + lap.durMs <= at) : laps);
-    let marathonOrder = [];                   // the riders in the order of the newest lap (for the colours on the track)
 
     rinkSelect.innerHTML = RINKS.map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('');
     rinkSelect.value = String(rink.id);
@@ -155,21 +156,21 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             compareId = id;
         }
-        // Colours (live page): every rider is a small blue dot until his name is pressed; then he gets a colour and initials. Up to ten riders
-        // have one: pressing an eleventh takes the colour of the one who was pressed first. Letting go of the selected rider takes his colour.
+        // Colours: every rider is a small dot until his name is pressed; then he gets a colour and initials. Up to LABELLED_RIDERS have one on the
+        // live page (MARATHON_SELECTED_RIDERS in marathon mode, its "Selected" group): pressing one more than that takes the colour of the rider
+        // who was pressed first. Letting go of the selected rider takes his colour. This is the same mechanism in both modes; only the cap differs.
         pinnedId = letGo ? null : id;                                       // the last name pressed is on top of the list
-        if (!marathon) {
-            if (letGo) dropColour(id);
-            else if (!colourSlot.has(id)) addColour(id);
-        }
+        if (letGo) dropColour(id);
+        else if (!colourSlot.has(id)) addColour(id);
         lapGraph.resetMax();
         dirty = true;
     }
     let pinnedId = null;                    // the rider on top of the list (live page)
-    const colourSlot = new Map();           // rider id -> the number of his colour (0 to 9), in the order in which the names were pressed
+    const colourSlot = new Map();           // rider id -> the number of his colour, in the order in which the names were pressed
     function dropColour(id) { colourSlot.delete(id); }
     function addColour(id) {
-        if (colourSlot.size >= LABELLED_RIDERS) colourSlot.delete(colourSlot.keys().next().value);      // the first pressed loses his colour
+        const cap = marathon ? MARATHON_SELECTED_RIDERS : LABELLED_RIDERS;
+        if (colourSlot.size >= cap) colourSlot.delete(colourSlot.keys().next().value);      // the first pressed loses his colour
         const used = new Set(colourSlot.values());
         let slot = 0;
         while (used.has(slot)) slot++;
@@ -576,16 +577,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const slot = colourSlots().get(id);
         return slot === undefined ? '' : `<i class="live-dot" style="background:${colors.series[slot] || colors.series[0]}"></i>`;
     }
+    // The same rider selection drives the colours in both modes (not the riders' position, which used to give the leading group in a marathon a
+    // colour automatically, whether they were pressed or not).
     function colourSlots() {
         const slots = new Map();
-        if (marathon && marathonOrder.length) {
-            // in marathon mode the first riders of the newest list get the colours and the initials: the leading group on the track
-            const skatingIds = new Set(states.filter(s => s.status === 'skating').map(s => s.id));
-            marathonOrder.filter(id => skatingIds.has(id)).slice(0, LABELLED_RIDERS).forEach((id, i) => slots.set(id, i));
-            return slots;
-        }
         colourSlot.forEach((slot, id) => slots.set(id, slot));
         return slots;
+    }
+    // The ids to show under "Selected" (both pages): every currently coloured rider, most recently pressed first, capped at MAX_SELECTED_SHOWN.
+    function selectedIdsShown() {
+        const ids = [...colourSlot.keys()].reverse();
+        if (pinnedId !== null && colourSlot.has(pinnedId)) ids.unshift(...ids.splice(ids.indexOf(pinnedId), 1));
+        return ids.slice(0, MAX_SELECTED_SHOWN);
     }
 
     // ---------- The list ----------
@@ -648,7 +651,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const entries = marathonEntries();
         const now = clock();
         const newest = marathonStandings(entries, { startMs: marathonStart ?? undefined, raceLaps, trackLengthM: rink.length, nowMs: now });
-        marathonOrder = newest ? [...newest.rows, ...newest.pending].map(r => r.id) : [];
         syncMarathonSliders(newest);
         const result = marathonStandings(entries, { lapNr: marathonFinish, startMs: marathonStart ?? undefined, raceLaps, trackLengthM: rink.length, nowMs: now });
         marathonResult = result;
@@ -672,20 +674,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const pendingOf = (p, cls) => `<tr class="live-row marathon-row waiting${cls}" data-id="${p.id}"><td>–</td><td>${dotOf(p.id)}${escapeHtml(p.label)}</td><td class="laps">${p.laps}</td>
                 <td colspan="5" class="muted-note">${p.status === 'coming' ? 'on the way' : `${p.behind} lap${p.behind === 1 ? '' : 's'} behind`}</td></tr>`;
         let body = '';
-        // the rider whose name was pressed last is also on top of the list, with his place (he is still in the list below as well)
-        if (pinnedId !== null) {
-            const inRows = result.rows.find(r => r.id === pinnedId);
-            const inPending = result.pending.find(p => p.id === pinnedId);
-            const known = entries.find(e => e.id === pinnedId);
-            if (inRows) body += `<tr class="live-group"><th colspan="8">Selected</th></tr>` + rowOf(inRows, ' pinned');
-            else if (inPending) body += `<tr class="live-group"><th colspan="8">Selected</th></tr>` + pendingOf(inPending, ' pinned');
-            else if (known) body += `<tr class="live-group"><th colspan="8">Selected</th></tr><tr class="live-row marathon-row waiting pinned" data-id="${known.id}"><td>–</td><td>${dotOf(known.id)}${escapeHtml(known.label)}</td><td colspan="6" class="muted-note">not in the list of this lap</td></tr>`;
+        // Every selected rider (colourSlot, up to MARATHON_SELECTED_RIDERS) is on top of the list, with his place - the most recently pressed
+        // one first (pinnedId), then the rest in the order they were added - and left out of the lists below, so he is not shown twice.
+        const selectedIds = selectedIdsShown();
+        const selectedSet = new Set(selectedIds);
+        if (selectedIds.length) {
+            body += `<tr class="live-group"><th colspan="8">Selected</th></tr>`;
+            body += selectedIds.map(id => {
+                const inRows = result.rows.find(r => r.id === id);
+                const inPending = result.pending.find(p => p.id === id);
+                const known = entries.find(e => e.id === id);
+                if (inRows) return rowOf(inRows, ` pinned${mark(id)}`);
+                if (inPending) return pendingOf(inPending, ` pinned${mark(id)}`);
+                if (known) return `<tr class="live-row marathon-row waiting pinned${mark(id)}" data-id="${known.id}"><td>–</td><td>${dotOf(known.id)}${escapeHtml(known.label)}</td><td colspan="6" class="muted-note">not in the list of this lap</td></tr>`;
+                return '';
+            }).join('');
         }
-        body += `<tr class="live-group"><th colspan="8">${title} <small>(${result.rows.length})</small></th></tr>`;
-        body += result.rows.map(row => rowOf(row, `${row.place === 1 ? ' first' : ''}${mark(row.id)}`)).join('');
-        if (result.pending.length) {
-            body += `<tr class="live-group"><th colspan="8">Still to cross the line <small>(${result.pending.length})</small></th></tr>`;
-            body += result.pending.map(p => pendingOf(p, mark(p.id))).join('');
+        const visibleRows = result.rows.filter(row => !selectedSet.has(row.id));
+        const visiblePending = result.pending.filter(p => !selectedSet.has(p.id));
+        body += `<tr class="live-group"><th colspan="8">${title} <small>(${visibleRows.length})</small></th></tr>`;
+        body += visibleRows.map(row => rowOf(row, `${row.place === 1 ? ' first' : ''}${mark(row.id)}`)).join('');
+        if (visiblePending.length) {
+            body += `<tr class="live-group"><th colspan="8">Still to cross the line <small>(${visiblePending.length})</small></th></tr>`;
+            body += visiblePending.map(p => pendingOf(p, mark(p.id))).join('');
         }
         return `<table class="laps-table live-table">${head}<tbody>${body}</tbody></table>`;
     }
@@ -697,17 +708,19 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const slots = colourSlots();
-        // the rider whose name was pressed last stays on top of the list, whatever he does; the others are sorted below him
-        const pinned = pinnedId === null ? null : states.find(s => s.id === pinnedId) || null;
-        const onIce = onIceStates().filter(s => s !== pinned);
-        const resting = sortLiveRiders(states.filter(s => s.status === 'resting' && !s.isPrivate), 'recent').filter(s => s !== pinned);
-        const isPrivate = states.filter(s => s.isPrivate).filter(s => s !== pinned);
+        // Every currently coloured rider stays on top of the list, in its own group (up to MAX_SELECTED_SHOWN, most recently pressed first); the
+        // others are sorted below as usual.
+        const selected = selectedIdsShown().map(id => states.find(s => s.id === id)).filter(Boolean);
+        const selectedSet = new Set(selected.map(s => s.id));
+        const onIce = onIceStates().filter(s => !selectedSet.has(s.id));
+        const resting = sortLiveRiders(states.filter(s => s.status === 'resting' && !s.isPrivate), 'recent').filter(s => !selectedSet.has(s.id));
+        const isPrivate = states.filter(s => s.isPrivate).filter(s => !selectedSet.has(s.id));
         const head = '<thead><tr><th>Rider</th><th>Started</th><th>Duration</th><th>Laps</th><th>Last lap</th><th>Best lap</th><th>Since</th></tr></thead>';
         const group = (title, count, rows) => `<tr class="live-group"><th colspan="7">${title} <small>(${count})</small></th></tr>${rows}`;
         let body = '';
-        if (pinned) body += group('Selected', 1, rowHtml(pinned, slots));
+        if (selected.length) body += group('Selected', selected.length, selected.map(s => rowHtml(s, slots)).join(''));
         if (onIce.length) body += group('On the ice', onIce.length, onIce.map(s => rowHtml(s, slots)).join(''));
-        else if (!pinned) body += `<tr class="live-empty"><td colspan="7">${lastPollAt ? 'Nobody has crossed the finish line in the last few minutes. This list refreshes by itself.' : 'Loading…'}</td></tr>`;
+        else if (!selected.length) body += `<tr class="live-empty"><td colspan="7">${lastPollAt ? 'Nobody has crossed the finish line in the last few minutes. This list refreshes by itself.' : 'Loading…'}</td></tr>`;
         if (resting.length) body += group('Recently on the ice', resting.length, resting.map(s => rowHtml(s, slots)).join(''));
         if (isPrivate.length) body += group('Results are private', isPrivate.length, isPrivate.map(s => rowHtml(s, slots)).join(''));
         const html = `<table class="laps-table live-table">${head}<tbody>${body}</tbody></table>`;
@@ -933,5 +946,5 @@ document.addEventListener('DOMContentLoaded', () => {
     requestAnimationFrame(frame);
 
     // for the browser test: a way to see the state
-    window.__live = { states: () => states, rink: () => rink, pollNow: poll, requests: () => requestsThisMinute.length, namesPending: () => [...riders.values()].filter(r => !nameOfUser.has(userKey(r.activity))).length, selected: () => selectedId, colours: () => Object.fromEntries(colourSlot), colourTest: () => { for (let id = 1; id <= 11; id++) { colourSlot.delete(id); addColour(id); } }, compared: () => compareId, marathon: () => marathonResult, replay: () => replay, startReplay, marathonOrder: () => marathonOrder, lapGraph: () => lapGraph.info(), recording: () => !!recorder, lastExportSize: () => (lastExportBlob ? lastExportBlob.size : null), lastExportType: () => (lastExportBlob ? lastExportBlob.type : null) };
+    window.__live = { states: () => states, rink: () => rink, pollNow: poll, requests: () => requestsThisMinute.length, namesPending: () => [...riders.values()].filter(r => !nameOfUser.has(userKey(r.activity))).length, selected: () => selectedId, colours: () => Object.fromEntries(colourSlot), colourTest: () => { for (let id = 1; id <= 11; id++) { colourSlot.delete(id); addColour(id); } }, compared: () => compareId, marathon: () => marathonResult, replay: () => replay, startReplay, lapGraph: () => lapGraph.info(), recording: () => !!recorder, lastExportSize: () => (lastExportBlob ? lastExportBlob.size : null), lastExportType: () => (lastExportBlob ? lastExportBlob.type : null) };
 });

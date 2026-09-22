@@ -37,6 +37,14 @@ async function step(name, run) {
     const namesIn = () => page.waitFor('window.__live.namesPending() === 0', 'the names of the riders');
     const window_rows = json => JSON.parse(json).map(r => r.label);
     const rowNames = selector => page.evaluate(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(selector)})].map(r => r.cells[0].textContent.trim()))`).then(JSON.parse);
+    // The names of one "live-group" section by its title (e.g. "On the ice", not "Selected"): a selected rider keeps his live status class
+    // (.skating, ...) even while shown under "Selected", so a plain class selector like .live-row.skating also matches him there.
+    const groupRowNames = title => page.evaluate(`(() => {
+        const start = [...document.querySelectorAll('.live-group')].find(h => h.textContent.trim().startsWith(${JSON.stringify(title)}));
+        const names = [];
+        for (let el = start && start.nextElementSibling; el && !el.classList.contains('live-group'); el = el.nextElementSibling) names.push(el.cells[0].textContent.trim());
+        return JSON.stringify(names);
+    })()`).then(JSON.parse);
 
     try {
         await page.navigate(`${base}/live.html?rink=2497&poll=2`);
@@ -130,16 +138,19 @@ async function step(name, run) {
             await page.waitFor('Object.keys(window.__live.colours()).length === 2', 'the second colour');
             assert.deepEqual(await slots(), { 9001: 0, 9002: 1 });
             await page.waitFor('document.querySelector(".live-row").cells[0].textContent.trim() === "Sam Steady"', 'the first row is Sam Steady');
+            // both coloured riders show under "Selected" together (up to MAX_SELECTED_SHOWN, five)
+            assert.match(await text('.live-group th'), /^Selected \(2\)/);
             assert.equal(await count('.live-row.skating, .live-row.waiting'), (await states()).filter(s => s.status === 'skating' || s.status === 'waiting').filter(s => !s.isPrivate).length);      // nobody twice
             // newer crossings and faster laps stay under him: sorting by the latest crossing does not move him
             await page.evaluate('(() => { const s = document.getElementById("sortSelect"); s.value = "best"; s.dispatchEvent(new Event("change")); })()');
             await page.sleep(500);
             await page.waitFor('document.querySelector(".live-row").cells[0].textContent.trim() === "Sam Steady"', 'the first row is Sam Steady');                            // (Fast Fanny has the fastest laps)
-            // letting go of the selected rider takes his colour and his place on top
+            // letting go of the selected rider takes his colour; Sam Steady (still coloured) keeps showing under "Selected". The DOM re-renders
+            // on the next animation frame, a tick after the state itself changes: wait for both, or the group header below can still be stale.
             await press('Fast Fanny');
-            await page.waitFor('!(9001 in window.__live.colours()) && document.querySelectorAll(".live-group th").length >= 1 && !/^Selected/.test(document.querySelector(".live-group th").textContent)', 'let go');
+            await page.waitFor('!(9001 in window.__live.colours()) && /^Selected \\(1\\)/.test((document.querySelector(".live-group th") || {}).textContent || "")', 'let go');
             assert.deepEqual(await slots(), { 9002: 1 });
-            assert.equal((await rowNames('.live-row.skating'))[0], 'Fast Fanny');    // sorted by the fastest lap again
+            assert.equal((await groupRowNames('On the ice'))[0], 'Fast Fanny');    // sorted by the fastest lap again
             // a compared rider who is pressed again becomes the selection and keeps his colour
             await press('Fast Fanny');                                              // selected (colour 1)
             await press('Sam Steady');                                              // compared
@@ -276,15 +287,15 @@ async function step(name, run) {
             const bobPlaces = JSON.parse(await page.evaluate('JSON.stringify(window.__live.marathon().placesOf(9102))'));
             assert.ok(bobPlaces.length >= 3 && bobPlaces.every(p => p.place >= 1 && p.place <= p.riders), JSON.stringify(bobPlaces));
             assert.equal(bobPlaces[bobPlaces.length - 1].place, window_rows(await page.evaluate('JSON.stringify(window.__live.marathon().rows)')).indexOf('Bob Bouwer') + 1);      // (the newest lap: his place in the list)
-            // the selected rider is on top of the list as well, with his place, and is still in the list below
-            await page.waitFor('document.querySelectorAll(".live-row[data-id=\\"9102\\"]").length === 2', 'Bob twice');
+            // the selected rider is on top of the list, with his place, and not shown again further down
+            await page.waitFor('document.querySelectorAll(".live-row[data-id=\\"9102\\"]").length === 1', 'Bob once, pinned on top');
             const pinned = JSON.parse(await page.evaluate('JSON.stringify([...document.querySelector(".live-row").cells].map(c => c.textContent.trim()))'));
             assert.equal(pinned[1], 'Bob Bouwer');
             assert.equal(await page.evaluate('document.querySelector(".live-row").classList.contains("pinned")'), true);
             const place = window_rows(await page.evaluate('JSON.stringify(window.__live.marathon().rows)')).indexOf('Bob Bouwer') + 1;
             assert.equal(Number(pinned[0]), place);                                   // his position in the list
             assert.match(await text('.live-group th'), /^Selected/);
-            assert.equal(await count('.live-row.selected'), 1);                        // (the copy in the list is the selected row)
+            assert.equal(await count('.live-row.selected'), 1);                        // (his one remaining row carries it)
             // a start time (absolute): from 20 seconds before it all riders are selected, their first lap is lap 1, everything is measured from it
             const before0 = JSON.parse(await page.evaluate('JSON.stringify(window.__live.marathon())'));
             const chosen = Math.round((before0.firstMs + 45000) / 1000);          // 45 s after the first crossing: the fourth lap of the group starts near
@@ -317,7 +328,7 @@ async function step(name, run) {
             // the riders are dots on the track, moving as usual, in the colour of their row
             const dots = await page.evaluate('(() => { const c = document.getElementById("liveTrack"); const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i + 3] === 255 && (Math.abs(d[i] - d[i + 1]) > 60 || Math.abs(d[i + 1] - d[i + 2]) > 60)) n++; return n; })()');
             assert.ok(dots > 100, 'only ' + dots + ' coloured pixels on the track');
-            assert.ok(await count('.marathon-row .live-dot') >= 4, 'the rows have no coloured dots');
+            assert.ok(await count('.marathon-row .live-dot') >= 2, 'the rows have no coloured dots');   // Bob and Dirk, pressed earlier, still have theirs
             // the number of laps of the race: what comes after it does not count
             await set('marathonLaps', '6', 'change');
             await page.waitFor('window.__live.marathon().leaderCount === 6 && window.__live.marathon().finished === true', 'a race of 6 laps');
