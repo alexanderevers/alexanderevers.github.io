@@ -674,29 +674,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const pendingOf = (p, cls) => `<tr class="live-row marathon-row waiting${cls}" data-id="${p.id}"><td>–</td><td>${dotOf(p.id)}${escapeHtml(p.label)}</td><td class="laps">${p.laps}</td>
                 <td colspan="5" class="muted-note">${p.status === 'coming' ? 'on the way' : `${p.behind} lap${p.behind === 1 ? '' : 's'} behind`}</td></tr>`;
         let body = '';
-        // Every selected rider (colourSlot, up to MARATHON_SELECTED_RIDERS) is on top of the list, with his place - the most recently pressed
-        // one first (pinnedId), then the rest in the order they were added - and left out of the lists below, so he is not shown twice.
+        // Every selected rider (colourSlot, up to MARATHON_SELECTED_RIDERS) is also on top of the list, with his place (he is still in the list
+        // below as well) - the most recently pressed one first (pinnedId), then the rest in the order they were added.
         const selectedIds = selectedIdsShown();
-        const selectedSet = new Set(selectedIds);
         if (selectedIds.length) {
             body += `<tr class="live-group"><th colspan="8">Selected</th></tr>`;
             body += selectedIds.map(id => {
                 const inRows = result.rows.find(r => r.id === id);
                 const inPending = result.pending.find(p => p.id === id);
                 const known = entries.find(e => e.id === id);
-                if (inRows) return rowOf(inRows, ` pinned${mark(id)}`);
-                if (inPending) return pendingOf(inPending, ` pinned${mark(id)}`);
-                if (known) return `<tr class="live-row marathon-row waiting pinned${mark(id)}" data-id="${known.id}"><td>–</td><td>${dotOf(known.id)}${escapeHtml(known.label)}</td><td colspan="6" class="muted-note">not in the list of this lap</td></tr>`;
+                if (inRows) return rowOf(inRows, ' pinned');
+                if (inPending) return pendingOf(inPending, ' pinned');
+                if (known) return `<tr class="live-row marathon-row waiting pinned" data-id="${known.id}"><td>–</td><td>${dotOf(known.id)}${escapeHtml(known.label)}</td><td colspan="6" class="muted-note">not in the list of this lap</td></tr>`;
                 return '';
             }).join('');
         }
-        const visibleRows = result.rows.filter(row => !selectedSet.has(row.id));
-        const visiblePending = result.pending.filter(p => !selectedSet.has(p.id));
-        body += `<tr class="live-group"><th colspan="8">${title} <small>(${visibleRows.length})</small></th></tr>`;
-        body += visibleRows.map(row => rowOf(row, `${row.place === 1 ? ' first' : ''}${mark(row.id)}`)).join('');
-        if (visiblePending.length) {
-            body += `<tr class="live-group"><th colspan="8">Still to cross the line <small>(${visiblePending.length})</small></th></tr>`;
-            body += visiblePending.map(p => pendingOf(p, mark(p.id))).join('');
+        body += `<tr class="live-group"><th colspan="8">${title} <small>(${result.rows.length})</small></th></tr>`;
+        body += result.rows.map(row => rowOf(row, `${row.place === 1 ? ' first' : ''}${mark(row.id)}`)).join('');
+        if (result.pending.length) {
+            body += `<tr class="live-group"><th colspan="8">Still to cross the line <small>(${result.pending.length})</small></th></tr>`;
+            body += result.pending.map(p => pendingOf(p, mark(p.id))).join('');
         }
         return `<table class="laps-table live-table">${head}<tbody>${body}</tbody></table>`;
     }
@@ -708,13 +705,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const slots = colourSlots();
-        // Every currently coloured rider stays on top of the list, in its own group (up to MAX_SELECTED_SHOWN, most recently pressed first); the
-        // others are sorted below as usual.
+        // Every currently coloured rider stays on top of the list too, in its own group (up to MAX_SELECTED_SHOWN, most recently pressed
+        // first); he is still listed in his normal place below as well, the same as one pinned rider always was.
         const selected = selectedIdsShown().map(id => states.find(s => s.id === id)).filter(Boolean);
-        const selectedSet = new Set(selected.map(s => s.id));
-        const onIce = onIceStates().filter(s => !selectedSet.has(s.id));
-        const resting = sortLiveRiders(states.filter(s => s.status === 'resting' && !s.isPrivate), 'recent').filter(s => !selectedSet.has(s.id));
-        const isPrivate = states.filter(s => s.isPrivate).filter(s => !selectedSet.has(s.id));
+        const onIce = onIceStates();
+        const resting = sortLiveRiders(states.filter(s => s.status === 'resting' && !s.isPrivate), 'recent');
+        const isPrivate = states.filter(s => s.isPrivate);
         const head = '<thead><tr><th>Rider</th><th>Started</th><th>Duration</th><th>Laps</th><th>Last lap</th><th>Best lap</th><th>Since</th></tr></thead>';
         const group = (title, count, rows) => `<tr class="live-group"><th colspan="7">${title} <small>(${count})</small></th></tr>${rows}`;
         let body = '';

@@ -287,15 +287,15 @@ async function step(name, run) {
             const bobPlaces = JSON.parse(await page.evaluate('JSON.stringify(window.__live.marathon().placesOf(9102))'));
             assert.ok(bobPlaces.length >= 3 && bobPlaces.every(p => p.place >= 1 && p.place <= p.riders), JSON.stringify(bobPlaces));
             assert.equal(bobPlaces[bobPlaces.length - 1].place, window_rows(await page.evaluate('JSON.stringify(window.__live.marathon().rows)')).indexOf('Bob Bouwer') + 1);      // (the newest lap: his place in the list)
-            // the selected rider is on top of the list, with his place, and not shown again further down
-            await page.waitFor('document.querySelectorAll(".live-row[data-id=\\"9102\\"]").length === 1', 'Bob once, pinned on top');
+            // the selected rider is on top of the list as well, with his place, and is still in the list below
+            await page.waitFor('document.querySelectorAll(".live-row[data-id=\\"9102\\"]").length === 2', 'Bob twice');
             const pinned = JSON.parse(await page.evaluate('JSON.stringify([...document.querySelector(".live-row").cells].map(c => c.textContent.trim()))'));
             assert.equal(pinned[1], 'Bob Bouwer');
             assert.equal(await page.evaluate('document.querySelector(".live-row").classList.contains("pinned")'), true);
             const place = window_rows(await page.evaluate('JSON.stringify(window.__live.marathon().rows)')).indexOf('Bob Bouwer') + 1;
             assert.equal(Number(pinned[0]), place);                                   // his position in the list
             assert.match(await text('.live-group th'), /^Selected/);
-            assert.equal(await count('.live-row.selected'), 1);                        // (his one remaining row carries it)
+            assert.equal(await count('.live-row.selected'), 1);                        // (the copy in the list is the selected row)
             // a start time (absolute): from 20 seconds before it all riders are selected, their first lap is lap 1, everything is measured from it
             const before0 = JSON.parse(await page.evaluate('JSON.stringify(window.__live.marathon())'));
             const chosen = Math.round((before0.firstMs + 45000) / 1000);          // 45 s after the first crossing: the fourth lap of the group starts near
@@ -328,7 +328,7 @@ async function step(name, run) {
             // the riders are dots on the track, moving as usual, in the colour of their row
             const dots = await page.evaluate('(() => { const c = document.getElementById("liveTrack"); const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i + 3] === 255 && (Math.abs(d[i] - d[i + 1]) > 60 || Math.abs(d[i + 1] - d[i + 2]) > 60)) n++; return n; })()');
             assert.ok(dots > 100, 'only ' + dots + ' coloured pixels on the track');
-            assert.ok(await count('.marathon-row .live-dot') >= 2, 'the rows have no coloured dots');   // Bob and Dirk, pressed earlier, still have theirs
+            assert.ok(await count('.marathon-row .live-dot') >= 4, 'the rows have no coloured dots');    // Bob and Dirk, pressed earlier, each twice
             // the number of laps of the race: what comes after it does not count
             await set('marathonLaps', '6', 'change');
             await page.waitFor('window.__live.marathon().leaderCount === 6 && window.__live.marathon().finished === true', 'a race of 6 laps');
