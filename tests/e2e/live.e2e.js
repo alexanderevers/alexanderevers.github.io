@@ -145,8 +145,15 @@ async function step(name, run) {
             await page.evaluate('(() => { const s = document.getElementById("sortSelect"); s.value = "best"; s.dispatchEvent(new Event("change")); })()');
             await page.sleep(500);
             await page.waitFor('document.querySelector(".live-row").cells[0].textContent.trim() === "Sam Steady"', 'the first row is Sam Steady');                            // (Fast Fanny has the fastest laps)
-            // letting go of the selected rider takes his colour; Sam Steady (still coloured) keeps showing under "Selected". The DOM re-renders
-            // on the next animation frame, a tick after the state itself changes: wait for both, or the group header below can still be stale.
+            // pressing the selected rider (Fast Fanny) while Sam Steady is compared only drops the comparison, not the whole graph: both keep
+            // their colour, and Fast Fanny (still selected) goes back on top
+            await press('Fast Fanny');
+            await page.waitFor('window.__live.compared() === null && window.__live.selected() === 9001', 'the comparison dropped, Fast Fanny still selected');
+            assert.deepEqual(await slots(), { 9001: 0, 9002: 1 });
+            await page.waitFor('document.querySelector(".live-row").cells[0].textContent.trim() === "Fast Fanny"', 'Fast Fanny back on top');
+            // pressing him again, now that nobody is compared, closes the graph and takes his colour; Sam Steady (still coloured) keeps showing.
+            // The DOM re-renders on the next animation frame, a tick after the state itself changes: wait for both, or the group header below
+            // can still be stale.
             await press('Fast Fanny');
             await page.waitFor('!(9001 in window.__live.colours()) && /^Selected \\(1\\)/.test((document.querySelector(".live-group th") || {}).textContent || "")', 'let go');
             assert.deepEqual(await slots(), { 9002: 1 });
