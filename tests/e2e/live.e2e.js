@@ -287,8 +287,10 @@ async function step(name, run) {
             const bobPlaces = JSON.parse(await page.evaluate('JSON.stringify(window.__live.marathon().placesOf(9102))'));
             assert.ok(bobPlaces.length >= 3 && bobPlaces.every(p => p.place >= 1 && p.place <= p.riders), JSON.stringify(bobPlaces));
             assert.equal(bobPlaces[bobPlaces.length - 1].place, window_rows(await page.evaluate('JSON.stringify(window.__live.marathon().rows)')).indexOf('Bob Bouwer') + 1);      // (the newest lap: his place in the list)
-            // the selected rider is on top of the list as well, with his place, and is still in the list below
-            await page.waitFor('document.querySelectorAll(".live-row[data-id=\\"9102\\"]").length === 2', 'Bob twice');
+            // the selected rider is on top of the list as well, with his place, and is still in the list below. The DOM re-renders on the next
+            // animation frame, a tick after the state itself changes: wait for the first row to really be his pinned copy, or this can still
+            // see the previous render (Dirk's) for a moment.
+            await page.waitFor('document.querySelectorAll(".live-row[data-id=\\"9102\\"]").length === 2 && document.querySelector(".live-row").dataset.id === "9102"', 'Bob twice, pinned on top');
             const pinned = JSON.parse(await page.evaluate('JSON.stringify([...document.querySelector(".live-row").cells].map(c => c.textContent.trim()))'));
             assert.equal(pinned[1], 'Bob Bouwer');
             assert.equal(await page.evaluate('document.querySelector(".live-row").classList.contains("pinned")'), true);

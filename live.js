@@ -146,22 +146,29 @@ document.addEventListener('DOMContentLoaded', () => {
         try { await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker)); } finally { namesRunning--; }
     }
     function selectRider(id) {
-        const letGo = id === selectedId;                                     // (pressing the selected rider again)
-        if (id === selectedId || selectedId === null) {
-            selectedId = id === selectedId ? null : id;
+        // Pressing the selected rider again: if a second rider is being compared, this only drops that comparison (back to one rider shown), not
+        // the whole graph - the compared rider keeps his own colour, he is just no longer the pale second line. The graph only closes entirely
+        // when just one rider was shown and he is pressed again.
+        if (id === selectedId) {
+            if (compareId !== null) { compareId = null; pinnedId = id; }
+            else { selectedId = null; pinnedId = null; dropColour(id); }
+        } else if (selectedId === null) {
+            selectedId = id;
             compareId = null;
+            pinnedId = id;
+            if (!colourSlot.has(id)) addColour(id);
         } else if (id === compareId) {
             selectedId = id;
             compareId = null;
+            pinnedId = id;
         } else {
             compareId = id;
+            pinnedId = id;
+            // Colours: every rider is a small dot until his name is pressed; then he gets a colour and initials. Up to LABELLED_RIDERS have one on
+            // the live page (MARATHON_SELECTED_RIDERS in marathon mode, its "Selected" group): pressing one more than that takes the colour of the
+            // rider who was pressed first. This is the same mechanism in both modes; only the cap differs.
+            if (!colourSlot.has(id)) addColour(id);
         }
-        // Colours: every rider is a small dot until his name is pressed; then he gets a colour and initials. Up to LABELLED_RIDERS have one on the
-        // live page (MARATHON_SELECTED_RIDERS in marathon mode, its "Selected" group): pressing one more than that takes the colour of the rider
-        // who was pressed first. Letting go of the selected rider takes his colour. This is the same mechanism in both modes; only the cap differs.
-        pinnedId = letGo ? null : id;                                       // the last name pressed is on top of the list
-        if (letGo) dropColour(id);
-        else if (!colourSlot.has(id)) addColour(id);
         lapGraph.resetMax();
         dirty = true;
     }
@@ -355,6 +362,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // the start lap of the whole race is kept during the replay, so the moment of the clock does not change it
             marathonStart = (marathonStandings(marathonEntries(), { nowMs: replay.endMs, raceLaps, trackLengthM: rink.length }) || {}).startMs || null;
             replay.fromMs = replayFrom();
+            // the rider whose own activity this replay was opened from ("you") starts selected and coloured, the same as opening a replay of
+            // one session on the other replay page
+            const referenceId = Number(id);
+            if (riders.has(referenceId)) selectRider(referenceId);
             replayInput.value = id;
             syncReplayBar();
             showMarathonControls();
