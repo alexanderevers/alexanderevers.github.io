@@ -7,6 +7,7 @@ speed-lap statistics, who else was on the ice with you, a race replay on an ice-
 export for Strava. It runs as plain HTML/CSS/JavaScript on GitHub Pages (`https://alexanderevers.github.io`) and
 talks to MYLAPS through a small proxy on Cloudflare Workers.
 
+- **Geen programmeerachtergrond, en wil je in gewoon Nederlands weten hoe je tests draait en waar instelbare waarden staan?** Lees [UITLEG.md](UITLEG.md).
 - **New here (person or AI)?** Read this file, then [DOCUMENTATION.md](DOCUMENTATION.md) (behaviour in detail),
   then [tests/README.md](tests/README.md) (how to run and verify everything).
 - **Just want to check it works?** `npm test && npm run test:worker && npm run test:e2e` (Node 22+, no install needed).
