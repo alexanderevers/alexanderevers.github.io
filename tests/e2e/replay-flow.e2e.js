@@ -97,9 +97,10 @@ function skip(name, reason) {
 
         await page.evaluate(`(() => { const s = document.getElementById("activitySelect"); s.value = "${REFERENCE.id}"; s.dispatchEvent(new Event("change")); })()`);
 
-        await step('dashboards: before any results only the Start dashboard is there and there is no navigation', async () => {
-            assert.deepEqual(await page.evaluate('Dashboards.available()'), ['dashStart']);
-            assert.equal(await visible('#dashNav'), false);
+        await step('dashboards: before Fetch Laps only Start and Records are there, with two dots of navigation', async () => {
+            assert.deepEqual(await page.evaluate('Dashboards.available()'), ['dashStart', 'dashRecords']);   // Records shows up once the transponder's activities are known
+            assert.equal(await visible('#dashNav'), true);
+            assert.equal(await page.evaluate('document.querySelectorAll("#dashNav .dash-dot").length'), 2);
             assert.equal(await page.evaluate('getComputedStyle(document.documentElement).scrollSnapType'), 'y mandatory');
         });
 
@@ -214,11 +215,11 @@ function skip(name, reason) {
             });
             const atTop = id => `Math.abs(document.getElementById("${id}").getBoundingClientRect().top) < 3`;
             await step('dashboards: Fetch Laps adds the session dashboards, lists them in the navigation and scrolls to Session', async () => {
-                assert.deepEqual(await page.evaluate('Dashboards.available()'), ['dashStart', 'dashSession', 'speedAnalysis']);
+                assert.deepEqual(await page.evaluate('Dashboards.available()'), ['dashStart', 'dashSession', 'speedAnalysis', 'dashRecords']);
                 await page.waitFor(atTop('dashSession'), 'the page to scroll to the Session dashboard');
-                await page.waitFor('document.querySelectorAll("#dashNav .dash-dot").length === 3', 'the navigation');
+                await page.waitFor('document.querySelectorAll("#dashNav .dash-dot").length === 4', 'the navigation');
                 const labels = JSON.parse(await page.evaluate('JSON.stringify([...document.querySelectorAll("#dashNav .dash-dot")].map(d => d.getAttribute("aria-label")))'));
-                assert.deepEqual(labels, ['Start', 'Session', 'Speed laps']);
+                assert.deepEqual(labels, ['Start', 'Session', 'Speed laps', 'Records']);
                 assert.equal(await page.evaluate('document.querySelector("#dashNav .dash-dot.active").dataset.target'), 'dashSession');
                 // every dashboard fills exactly one screen
                 assert.ok(await page.evaluate('[...document.querySelectorAll(".dash")].filter(d => d.getClientRects().length).every(d => Math.round(d.getBoundingClientRect().height) === innerHeight)'));
@@ -226,6 +227,121 @@ function skip(name, reason) {
                 assert.ok(Number(await page.evaluate('parseFloat(getComputedStyle(document.querySelector("#sessionSummary .stat-card:nth-child(2) .value")).fontSize)')) >= 48, 'the best lap is not a hero figure (48 px or more)');
                 assert.match(await text('#sessionSummary .stat-card:nth-child(2) .label'), /Best Lap/);
             });
+            await step('records: the fetched session is remembered locally, and can be excluded, have a lap excluded, or be deleted', async () => {
+                const recordsHidden = () => page.evaluate('document.getElementById("recordsBody").classList.contains("hidden")');
+                const emptyHidden = () => page.evaluate('document.getElementById("recordsEmpty").classList.contains("hidden")');
+                await page.waitFor('!document.getElementById("recordsBody").classList.contains("hidden")', 'the Records dashboard to show the fetched session');
+                assert.equal(await emptyHidden(), true);
+                assert.equal(await count('.records-session-row'), 1);
+
+                // the stored sessions are hidden under a closed dropdown by default, with the count in its summary
+                assert.equal(await page.evaluate('document.getElementById("recordsSessionsDetails").open'), false);
+                assert.match(await text('#recordsSessionsCount'), /^\(1\)$/);
+                await click('#recordsSessionsDetails summary');
+                assert.equal(await page.evaluate('document.getElementById("recordsSessionsDetails").open'), true);
+
+                // the personal best matches the "Best Lap" of the session that was just fetched
+                const sessionBest = (await text('#sessionSummary .stat-card:nth-child(2) .value')).trim().split('\n')[0].trim();
+                assert.equal((await text('#recordsSummary .stat-card:nth-child(1) .value')).trim(), sessionBest);
+                assert.equal((await text('#recordsSummary .stat-card:nth-child(2) .value')).trim(), '1');   // one session remembered
+
+                // excluding the session removes it from the personal records, but it stays in the list (dimmed)
+                await click('.records-exclude-toggle');
+                await page.waitFor('document.querySelectorAll("#recordsSummary .stat-card")[1].querySelector(".value").textContent.trim() === "0"', 'the excluded session to drop out of the totals');
+                assert.equal((await text('#recordsSummary .stat-card:nth-child(1) .value')).trim(), '–');
+                assert.equal(await page.evaluate('document.querySelector(".records-session-row").classList.contains("excluded")'), true);
+                assert.equal(await count('.records-session-row'), 1);           // still listed, just excluded
+                await click('.records-exclude-toggle');
+                await page.waitFor('document.querySelectorAll("#recordsSummary .stat-card")[1].querySelector(".value").textContent.trim() === "1"', 'back in the totals');
+
+                // excluding one lap lowers the count of skating laps by one, without removing the session
+                await click('.records-edit-laps');
+                await page.waitFor('!!document.querySelector(".records-lap")', 'the lap grid');
+                const skatingCount = text => Number(text.split('/')[0].trim());
+                const before = skatingCount(await text('.records-session-row td:nth-child(4)'));
+                await click('.records-lap');
+                await page.waitFor('document.querySelector(".records-lap").classList.contains("excluded")', 'the lap marked excluded');
+                assert.equal(skatingCount(await text('.records-session-row td:nth-child(4)')), before - 1);
+                await click('.records-lap');                                     // bring it back
+                await page.waitFor('!document.querySelector(".records-lap").classList.contains("excluded")', 'the lap brought back');
+
+                // deleting the session forgets it entirely: the dashboard goes back to its empty state
+                await page.evaluate('window.confirm = () => true');
+                await click('.records-delete');
+                await page.waitFor('!document.getElementById("recordsEmpty").classList.contains("hidden")', 'the empty state after deleting the only session');
+                assert.equal(await count('.records-session-row'), 0);
+
+                // fetching the laps again brings it back (records.remember), and history survives a full reload of the page
+                await click('#fetchLapsBtn');
+                await page.waitFor('!document.getElementById("recordsBody").classList.contains("hidden")', 'the session remembered again');
+                await page.navigate(`${base}/index.html?transponder=${data.referenceChip}`);
+                await page.waitFor('document.getElementById("activitySelect").options.length > 1', 'the page to reload');
+                await page.waitFor('!document.getElementById("recordsBody").classList.contains("hidden")', 'history to survive a page reload (localStorage)');
+                assert.equal(await count('.records-session-row'), 1);
+
+                // fetch a second, older session (one of the history activities, id 101), so there is something to click on
+                await page.evaluate('(() => { const f = document.getElementById("yearFilter"); f.value = "all"; f.dispatchEvent(new Event("change")); })()');
+                await page.evaluate('(() => { const s = document.getElementById("activitySelect"); s.value = "101"; s.dispatchEvent(new Event("change")); })()');
+                await click('#fetchLapsBtn');
+                await page.waitFor('document.querySelectorAll(".records-session-row").length === 2', 'the older session remembered too');
+
+                // clicking a row of "Best lap per season" opens the stored sessions (even when closed) and scrolls to, and briefly
+                // highlights, that session
+                await page.evaluate('document.getElementById("recordsSessionsDetails").open = false');
+                await click('[id="recordsPerSeason"] .records-goto[data-session="101"]');
+                await page.waitFor('document.getElementById("recordsSessionsDetails").open', 'the stored sessions to open');
+                await page.waitFor('document.querySelector(\'.records-session-row[data-session="101"]\').classList.contains("flash")', 'the session briefly highlighted');
+
+                // clicking a dot of "Best lap over time" does the same
+                await page.evaluate('document.getElementById("recordsSessionsDetails").open = false');
+                await page.evaluate('document.getElementById("recordsChart").scrollIntoView({ block: "center" })');
+                await page.sleep(200);
+                const dot = await page.evaluate(`(() => {
+                    const c = document.getElementById('recordsChart');
+                    const points = Chart.getChart(c).getDatasetMeta(0).data;
+                    const el = points[points.length - 1];
+                    const rect = c.getBoundingClientRect();
+                    return JSON.stringify({ x: rect.left + el.x, y: rect.top + el.y });
+                })()`).then(JSON.parse);
+                await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: dot.x, y: dot.y });
+                await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: dot.x, y: dot.y, button: 'left', clickCount: 1 });
+                await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: dot.x, y: dot.y, button: 'left', clickCount: 1 });
+                await page.waitFor('document.getElementById("recordsSessionsDetails").open', 'clicking the chart dot to open the stored sessions too');
+
+                // "Fetch laps" on a stored session opens it on the Session dashboard, even when a different one is currently selected
+                await page.evaluate('(() => { const s = document.getElementById("activitySelect"); s.value = "1"; s.dispatchEvent(new Event("change")); })()');
+                await click('.records-open[data-session="101"]');
+                await page.waitFor('document.getElementById("activitySelect").value === "101"', 'the older session selected');
+                await page.waitFor(atTop('dashSession'), 'and opened on the Session dashboard');
+
+                // this device remembers one transponder's history at a time: looking up a different one does not show
+                // or touch it, and offers "Change my transponder" instead
+                const other = OVERLAPPING[0];
+                await page.evaluate(`(() => { document.getElementById("transponderInput").value = "${other.chip}"; })()`);
+                await click('#fetchActivitiesBtn');
+                await page.waitFor('document.getElementById("activitySelect").options.length > 1', 'the other transponder to load');
+                await page.waitFor('!document.getElementById("recordsMismatch").classList.contains("hidden")', 'the mismatch message');
+                assert.equal(await page.evaluate('document.getElementById("recordsBody").classList.contains("hidden")'), true);
+                assert.equal(await page.evaluate('document.getElementById("recordsEmpty").classList.contains("hidden")'), true);
+                assert.equal(await page.evaluate('document.querySelector(".records-toolbar").classList.contains("hidden")'), true);
+                assert.equal((await text('#recordsMismatchChip')).trim(), data.referenceChip);
+
+                // changing to it forgets the other transponder's history, after a warning
+                await page.evaluate('window.confirm = () => true');
+                await click('#recordsChangeOwnerBtn');
+                await page.waitFor('document.getElementById("recordsMismatch").classList.contains("hidden")', 'the mismatch to clear');
+                await page.waitFor('!document.getElementById("recordsEmpty").classList.contains("hidden")', 'nothing remembered yet for the new transponder');
+
+                // back to the reference transponder, and back where the rest of the flow left off
+                await page.evaluate(`(() => { document.getElementById("transponderInput").value = "${data.referenceChip}"; })()`);
+                await click('#fetchActivitiesBtn');
+                await page.waitFor('document.getElementById("activitySelect").options.length > 1', 'the reference transponder to load');
+                await page.evaluate(`(() => { const s = document.getElementById("activitySelect"); s.value = "${REFERENCE.id}"; s.dispatchEvent(new Event("change")); })()`);
+                await click('#fetchLapsBtn');
+                await page.waitFor('!document.getElementById("lapsData").classList.contains("hidden")', 'the laps section, back after switching transponders');
+                await page.waitFor(atTop('dashSession'), 'back on the Session dashboard');
+            });
+
             await step('dashboards: the navigation goes to the dashboard you click', async () => {
                 await page.evaluate('document.querySelector("#dashNav .dash-dot[data-target=speedAnalysis]").click()');
                 await page.waitFor(atTop('speedAnalysis'), 'the page to scroll to Speed laps');

@@ -6,12 +6,24 @@
  *
  *   Dashboards.goTo('dashSession')   scroll to a dashboard (smooth, unless the user prefers reduced motion)
  *   Dashboards.available()           the ids of the dashboards that are on screen, in page order
+ *
+ * The active dashboard's label (e.g. "04 Records") only shows while the page is actually scrolling or snapping
+ * between dashboards, so it does not sit on top of the content while reading; once scrolling settles it slides
+ * back out and only the coloured mark next to it stays.
  */
 const Dashboards = (() => {
     let nav = null;
     let observer = null;
     let shownKey = '';
     let scheduled = false;
+    let scrollIdleTimer = null;
+
+    function markScrolling() {
+        if (!nav) return;
+        nav.classList.add('is-scrolling');
+        clearTimeout(scrollIdleTimer);
+        scrollIdleTimer = setTimeout(() => nav.classList.remove('is-scrolling'), 700);
+    }
 
     const isShown = element => element.getClientRects().length > 0;
     const sections = () => [...document.querySelectorAll('.dash')].filter(isShown);
@@ -69,6 +81,7 @@ const Dashboards = (() => {
         build();
         new MutationObserver(schedule).observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
         window.addEventListener('resize', schedule);
+        window.addEventListener('scroll', markScrolling, { passive: true });
     });
 
     return { goTo, available: () => sections().map(section => section.id), refresh: build };

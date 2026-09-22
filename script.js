@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const profileNickname = document.getElementById('profile-nickname');
     const fetchOverlappingBtn = document.getElementById('fetchOverlappingBtn');
     const overlappingSessions = document.getElementById('overlappingSessions');
+    const dashRecords = document.getElementById('dashRecords');
     const overlappingSessionsTable = document.getElementById('overlappingSessionsTable');
     const speedStatsContainer = document.getElementById('speedStats');
     const speedBlocksContainer = document.getElementById('speedBlocks');
@@ -86,6 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
         hide(loadingDiv); hide(errorDiv); hide(activitiesListDiv); hide(lapsDataDiv);
         hide(maxFastLapControls); hide(sessionSummaryContainer);
         hide(activityInfoPanel); resetGpxState(downloadGpxBtn); hide(overlappingSessions); hide(fetchOverlappingBtn);
+        hide(dashRecords);
         profileInfoDiv.style.display = 'none'; // Force hide with inline style
         errorDiv.textContent = '';
         hide(yearFilterWrap);
@@ -252,6 +254,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 fillActivitySelect();
                 show(activitiesListDiv);
                 fetchLapsBtn.disabled = !activitySelect.value;
+                records.refresh(userActivities);
                 if (pendingActivityId) {
                     const wanted = [...activitySelect.options].find(option => option.value === pendingActivityId);
                     if (wanted) {
@@ -369,6 +372,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 generateAndPrepareGpxDownload(currentLapData, downloadGpxBtn, selectedActivity?.location);
+                if (selectedActivity) records.remember(selectedActivity, normalizeLaps(fullSessionData));
                 goToDashboard('dashSession');
             } else {
                 hide(lapsDataDiv);
@@ -511,4 +515,5 @@ document.addEventListener('DOMContentLoaded', () => {
         accountId: currentUserId
     });
     setupOverlappingSessionsEventListeners(() => userActivities, getReferenceRider);
+    const records = setupRecordsEventListeners(() => transponderInput.value.trim().toUpperCase());
 });

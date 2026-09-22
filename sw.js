@@ -11,7 +11,7 @@
  *
  * Change VERSION when the list of files below changes: the caches of older versions are removed.
  */
-const VERSION = 'v2';
+const VERSION = 'v3';
 const SHELL_CACHE = `icesights-shell-${VERSION}`;
 const CDN_CACHE = `icesights-cdn-${VERSION}`;
 
@@ -21,6 +21,7 @@ const SHELL = [
     'style.css', 'dashboards.css',
     'theme.js', 'pwa.js', 'dashboards.js', 'utils.js', 'api.js', 'gpx-generator.js', 'chart-factory.js', 'stats.js',
     'replay-track.js', 'replay-model.js', 'live-model.js', 'live-graph.js', 'fetch_overlapping_sessions.js', 'script.js', 'replay.js', 'search_user.js', 'live.js',
+    'history-store.js', 'records.js', 'records-ui.js',
     'manifest.webmanifest',
     'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png'
 ];

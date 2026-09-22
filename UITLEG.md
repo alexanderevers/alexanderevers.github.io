@@ -13,9 +13,10 @@ Voor uitleg van wat de site doet en hoe alles samenhangt: zie [README.md](README
 5. [Instelbare waarden: live- en marathonpagina, weergave (`live.js`)](#5-instelbare-waarden-live--en-marathonpagina-weergave-livejs)
 6. [Instelbare waarden: replay-pagina (`replay-model.js`)](#6-instelbare-waarden-replay-pagina-replay-modeljs)
 7. [Instelbare waarden: ophalen van data (`api.js`)](#7-instelbare-waarden-ophalen-van-data-apijs)
-8. [Instelbare waarden: het tussenstation bij Cloudflare (`cloudflare-worker/src/index.js`)](#8-instelbare-waarden-het-tussenstation-bij-cloudflare-cloudflare-workersrcindexjs)
-9. [Instelbare waarden: installeerbare app (`sw.js`)](#9-instelbare-waarden-installeerbare-app-swjs)
-10. [Iets aanpassen: het hele stappenplan](#10-iets-aanpassen-het-hele-stappenplan)
+8. [Instelbare waarden: persoonlijke records (`records.js`, `history-store.js`)](#8-instelbare-waarden-persoonlijke-records-recordsjs-history-storejs)
+9. [Instelbare waarden: het tussenstation bij Cloudflare (`cloudflare-worker/src/index.js`)](#9-instelbare-waarden-het-tussenstation-bij-cloudflare-cloudflare-workersrcindexjs)
+10. [Instelbare waarden: installeerbare app (`sw.js`)](#10-instelbare-waarden-installeerbare-app-swjs)
+11. [Iets aanpassen: het hele stappenplan](#11-iets-aanpassen-het-hele-stappenplan)
 
 ---
 
@@ -193,7 +194,19 @@ Dit bestand tekent de lijst en de baan. De belangrijkste instelbare dingen staan
 | **`FETCH_RETRIES`** / **`FETCH_RETRY_DELAY_MS`** | 11-12 | 2 pogingen / 500 ms | Hoe vaak een mislukt verzoek opnieuw geprobeerd wordt, en hoe lang er tussen pogingen gewacht wordt. |
 | **`FINISHED_AFTER_MS`** | 87 | 15 minuten | Een activiteit die minstens dit lang geleden is afgelopen, wordt als "definitief klaar" beschouwd — dat maakt dat het tussenstation de rondetijden lang mag onthouden (zie ook hoofdstuk 8). |
 
-## 8. Instelbare waarden: het tussenstation bij Cloudflare (`cloudflare-worker/src/index.js`)
+## 8. Instelbare waarden: persoonlijke records (`records.js`, `history-store.js`)
+
+Deze bestanden horen bij het "Records"-onderdeel op de hoofdpagina (persoonlijke records, lokaal in de browser onthouden). Er is er hier maar één instelling in, maar wel een belangrijk gedrag om te kennen.
+
+| Naam | Bestand | Rond regel | Huidige waarde | Wat hij doet |
+|---|---|---|---|---|
+| **`RECORDS_FAST_LAP_SHARE`** | `records.js` | 14 | 0,2 (20%) | Bepaalt welk deel van de rondes van een seizoen als "snel" telt voor de grafiek "Fast laps per season": steeds de snelste 20% van dát seizoen (met een minimum van 1 ronde), dus een rustig seizoen wordt niet vergeleken met je beste seizoen ooit. |
+
+**Wat is een "seizoen"?** Ook geen instelbaar getal, maar wel het belangrijkste concept van dit hoofdstuk: een schaatsseizoen loopt van september tot en met april en overspant de jaarwisseling, dus het heeft een naam met twee jaartallen — een ronde in maart 2026 én een ronde in november 2025 horen allebei bij seizoen "25/26" (`seasonOf` in `records.js`). Mei tot en met augustus valt buiten elk seizoen: die rondes tellen nog gewoon mee voor "snelste ronde ooit" en de totalen, maar krijgen geen eigen rij in "Best lap per season" of "Fast laps per season".
+
+**Eén transponder tegelijk per apparaat.** Dit is geen instelbaar getal, maar wel iets om te weten: dit apparaat onthoudt de geschiedenis van maar één transponder tegelijk (`historyOwner` in `history-store.js`). Zoek je op een andere transponder dan degene waarvan al gegevens zijn onthouden, dan verschijnt de knop "Change my transponder" in plaats van de records — die knop wist na een waarschuwing alle opgeslagen gegevens van de vorige transponder. Er is expres geen aparte "wis geschiedenis"-knop meer: wisselen van transponder is de enige manier om opnieuw te beginnen.
+
+## 9. Instelbare waarden: het tussenstation bij Cloudflare (`cloudflare-worker/src/index.js`)
 
 Dit bestand is **niet** onderdeel van de website zelf; het is het losse tussenstation-programma. Een wijziging hier moet je apart online zetten met `npx wrangler deploy` (zie [cloudflare-worker/README.md](cloudflare-worker/README.md) en [README.md](README.md#deploy)) — die knop draai ik normaal niet zonder het eerst aan jou te vragen, omdat dit voor alle bezoekers meteen verandert.
 
@@ -205,14 +218,14 @@ Dit bestand is **niet** onderdeel van de website zelf; het is het losse tussenst
 | Bij `activities:` / `chips:` | rond 74-97 | 2 minuten | De activiteitenlijst van een renner wordt kort onthouden, zodat een nieuwe sessie snel zichtbaar wordt. |
 | **`DEFAULT_ALLOWED_ORIGINS`** | 29 | de echte site + `localhost`/`127.0.0.1` op poort 8080 en 5500 | Van welke websites/computers het tussenstation verzoeken accepteert. Test je lokaal op een ander poortnummer, dan moet dat hier (of in `wrangler.toml`) bij, anders krijg je een `403`-foutmelding. |
 
-## 9. Instelbare waarden: installeerbare app (`sw.js`)
+## 10. Instelbare waarden: installeerbare app (`sw.js`)
 
 | Naam | Wat hij doet |
 |---|---|
 | **`VERSION`** | Verhoog dit getal (bijvoorbeeld van `v2` naar `v3`) als je de lijst hieronder (`SHELL`) wijzigt, zodat bezoekers die de app al geïnstalleerd hebben de nieuwe versie krijgen in plaats van een verouderde uit hun eigen opslag. |
 | **`SHELL`** | De volledige lijst van bestanden die de installeerbare app nodig heeft om zonder internetverbinding te kunnen openen. Voeg je een nieuwe pagina of een nieuw script toe aan de site, dan moet die hier ook bij, anders werkt de app-versie niet meer goed offline. (Er is een test die dit controleert: `tests/unit/pwa.test.js`.) |
 
-## 10. Iets aanpassen: het hele stappenplan
+## 11. Iets aanpassen: het hele stappenplan
 
 1. Zoek de naam van de instelling op in dit document, en vind hem terug in het genoemde bestand (Ctrl+F op de naam).
 2. Verander het getal.

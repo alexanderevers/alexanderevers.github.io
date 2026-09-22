@@ -365,6 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function stopReplay() {
+        if (recorder) stopExport();
         replayRun++;
         replay = null;
         riders = new Map();
@@ -376,6 +377,63 @@ document.addEventListener('DOMContentLoaded', () => {
         dirty = true;
         poll();
     }
+
+    // ---------- Export the replay as a video ----------
+    // Records the track (the canvas the riders move on) while the replay plays, from the chosen start to the end, and downloads
+    // it as a .webm file. Uses canvas.captureStream + MediaRecorder, both built into the browser: nothing is uploaded anywhere.
+    let recorder = null;                      // the MediaRecorder while a recording is running, else null
+    let lastExportBlob = null;                // the most recent recording (for the test: a real download cannot be observed headless)
+    const recordingSupported = () => typeof canvas.captureStream === 'function' && typeof window.MediaRecorder === 'function';
+    function chooseVideoMimeType() {
+        const candidates = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+        return candidates.find(type => window.MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(type)) || 'video/webm';
+    }
+    function stopExport() {
+        if (recorder && recorder.state !== 'inactive') recorder.stop();      // the rest happens in recorder.onstop
+    }
+    function startExport() {
+        if (!replay || replay.loading || recorder) return;
+        if (!recordingSupported()) {
+            window.alert('Recording a video is not supported in this browser. Chrome, Edge and Firefox can; Safari may not.');
+            return;
+        }
+        const mimeType = chooseVideoMimeType();
+        const stream = canvas.captureStream(30);
+        try {
+            recorder = new MediaRecorder(stream, { mimeType });
+        } catch (error) {
+            recorder = null;
+            window.alert('Recording a video failed to start: ' + error.message);
+            return;
+        }
+        const chunks = [];
+        recorder.ondataavailable = event => { if (event.data && event.data.size) chunks.push(event.data); };
+        recorder.onstop = () => {
+            stream.getTracks().forEach(track => track.stop());
+            recorder = null;
+            $m('replayExport').textContent = 'Export video';
+            if (!chunks.length) return;
+            const blob = new Blob(chunks, { type: mimeType.split(';')[0] });
+            lastExportBlob = blob;                     // for the test: a real download is not observable in a headless browser
+            const url = URL.createObjectURL(blob);
+            const day = new Date(replay.startMs).toISOString().slice(0, 10);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `marathon-${rink.name.replace(/[^A-Za-z0-9]+/g, '-')}-${day}.webm`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
+        };
+        replay.at = replay.fromMs;                    // record from the chosen start, not from wherever the clock happens to be
+        replay.playing = true;
+        replay.tick = performance.now();
+        syncReplayBar();
+        dirty = true;
+        recorder.start(250);                          // a chunk every 250 ms, so stopping early still keeps what was recorded
+        $m('replayExport').textContent = 'Recording… (stop)';
+    }
+    $m('replayExport').addEventListener('click', () => (recorder ? stopExport() : startExport()));
 
     $m('replayLoad').addEventListener('click', () => startReplay(replayInput.value));
     replayInput.addEventListener('keydown', event => { if (event.key === 'Enter') startReplay(replayInput.value); });
@@ -855,7 +913,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function frame(now) {
         if (replay && !replay.loading && replay.playing) {
             replay.at = Math.min(replay.endMs, replay.at + (now - replay.tick) * replay.speed);
-            if (replay.at >= replay.endMs) { replay.playing = false; syncReplayBar(); }
+            if (replay.at >= replay.endMs) { replay.playing = false; syncReplayBar(); if (recorder) stopExport(); }
             $m('replayTime').value = String(Math.round((replay.at - replay.fromMs) / 1000));
         }
         if (replay) replay.tick = now;
@@ -875,5 +933,5 @@ document.addEventListener('DOMContentLoaded', () => {
     requestAnimationFrame(frame);
 
     // for the browser test: a way to see the state
-    window.__live = { states: () => states, rink: () => rink, pollNow: poll, requests: () => requestsThisMinute.length, namesPending: () => [...riders.values()].filter(r => !nameOfUser.has(userKey(r.activity))).length, selected: () => selectedId, colours: () => Object.fromEntries(colourSlot), colourTest: () => { for (let id = 1; id <= 11; id++) { colourSlot.delete(id); addColour(id); } }, compared: () => compareId, marathon: () => marathonResult, replay: () => replay, startReplay, marathonOrder: () => marathonOrder, lapGraph: () => lapGraph.info() };
+    window.__live = { states: () => states, rink: () => rink, pollNow: poll, requests: () => requestsThisMinute.length, namesPending: () => [...riders.values()].filter(r => !nameOfUser.has(userKey(r.activity))).length, selected: () => selectedId, colours: () => Object.fromEntries(colourSlot), colourTest: () => { for (let id = 1; id <= 11; id++) { colourSlot.delete(id); addColour(id); } }, compared: () => compareId, marathon: () => marathonResult, replay: () => replay, startReplay, marathonOrder: () => marathonOrder, lapGraph: () => lapGraph.info(), recording: () => !!recorder, lastExportSize: () => (lastExportBlob ? lastExportBlob.size : null), lastExportType: () => (lastExportBlob ? lastExportBlob.type : null) };
 });

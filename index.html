@@ -133,7 +133,44 @@
 
     </div>
 
-    <!-- 04 Together: who was on the ice with you -->
+    <!-- 04 Records: personal bests, remembered in this browser -->
+    <section class="dash hidden" id="dashRecords" data-title="Records">
+        <div class="dash-inner">
+            <header class="dash-head"><h2>Records</h2><p class="dash-sub">Your personal bests</p></header>
+            <p id="recordsMismatch" class="muted-note hidden">This browser already remembers the history of transponder <strong id="recordsMismatchChip"></strong>. To remember this transponder instead, change it below (this forgets the other transponder's history).
+                <button type="button" id="recordsChangeOwnerBtn" class="secondary-btn">Change my transponder</button></p>
+            <div class="records-toolbar">
+                <button id="loadHistoryBtn">Load full history</button>
+                <span id="recordsProgress" class="muted-note"></span>
+            </div>
+            <p id="recordsEmpty" class="muted-note">No sessions remembered yet for this transponder. Fetch a session's laps, or press "Load full history" to fetch every finished session at once.</p>
+            <div id="recordsBody" class="hidden">
+                <div id="recordsSummary" class="stat-grid"></div>
+                <div class="analysis-grid">
+                    <div>
+                        <h3>Best lap over time</h3>
+                        <div class="chart-container" id="recordsChartContainer">
+                            <canvas id="recordsChart"></canvas>
+                        </div>
+                        <h3>Fast laps per season <small>(the fastest 20% of that season's laps, and their average)</small></h3>
+                        <div class="chart-container" id="recordsFastChartContainer">
+                            <canvas id="recordsFastChart"></canvas>
+                        </div>
+                    </div>
+                    <div>
+                        <h3>Best lap per season</h3>
+                        <div id="recordsPerSeason"></div>
+                    </div>
+                </div>
+                <details id="recordsSessionsDetails" class="records-sessions-details">
+                    <summary>Stored sessions <span id="recordsSessionsCount" class="muted-note"></span> <small>(exclude or delete sessions or single laps that were not really you, or a mistimed lap)</small></summary>
+                    <div id="recordsSessionsTable"></div>
+                </details>
+            </div>
+        </div>
+    </section>
+
+    <!-- 05 Together: who was on the ice with you -->
     <section class="dash hidden" id="overlappingSessions" data-title="Together">
         <div class="dash-inner">
             <header class="dash-head"><h2>Together</h2><p class="dash-sub">Everyone who was on the ice during this session</p></header>
@@ -152,12 +189,15 @@
     <script src="utils.js"></script>
     <script src="gpx-generator.js"></script>
     <script src="api.js"></script>
+    <script src="history-store.js"></script>
     <script src="chart-factory.js"></script>
     <script src="stats.js"></script>
     <script src="replay-track.js"></script>
     <script src="replay-model.js"></script>
+    <script src="records.js"></script>
     <script src="live-model.js"></script>
     <script src="fetch_overlapping_sessions.js"></script>
+    <script src="records-ui.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

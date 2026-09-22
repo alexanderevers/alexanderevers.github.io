@@ -25,7 +25,7 @@ needs the real MYLAPS API, a Cloudflare account or a personal transponder.
 Run from the repository root (the folder that contains `package.json` and `index.html`):
 
 ```bash
-npm test               # unit tests            -> expect 248 tests, 57 suites, 0 failures  (~1.5 s)
+npm test               # unit tests            -> expect 281 tests, 69 suites, 0 failures  (~1.5 s)
 npm run test:worker    # Cloudflare Worker     -> expect the last line "ALL PASS"           (~2 s)
 npm run test:e2e       # real browser          -> expect the last line "ALL PASSED"         (~11 s)
 npm run test:all       # unit + worker (does not start a browser)
@@ -108,7 +108,9 @@ Which source file is covered by which test:
 | `replay-track.js` | geometry of the oblong ice track, distances along it | `unit/replay-track.test.js` |
 | `replay-model.js` | laps to positions over time, "skated together", "in your group" | `unit/replay-model.test.js` |
 | `api.js` | calls to the proxy, retries, paging through a rink's activities | `unit/api.test.js` |
-| `fetch_overlapping_sessions.js` (sorting only) | the order of the overlapping riders | `unit/overlap-sort.test.js` |
+| `fetch_overlapping_sessions.js` (sorting only) | the order of the overlapping riders, `marathonAddress` | `unit/overlap-sort.test.js` |
+| `history-store.js` | remembering, excluding and deleting local session history; one owner transponder at a time | `unit/history-store.test.js` |
+| `records.js` | personal bests, and fastest 20 % of laps per **season** (Sept-Apr, e.g. "25/26"), from the remembered history | `unit/records.test.js` |
 | `gpx-generator.js` | GPX file for Strava, which rink gets which track file | `unit/gpx-generator.test.js` |
 | `cloudflare-worker/src/index.js` | the proxy: routing, validation, CORS, caching rules | `cloudflare-worker/test/handler.test.mjs` |
 | `script.js`, `fetch_overlapping_sessions.js`, `replay.js`, `chart-factory.js`, `theme.js`, `style.css`, the HTML pages | user interface | `e2e/replay-flow.e2e.js` |

@@ -184,7 +184,7 @@ body.dashboards-page {
 .dash-dot-label b { font-weight: 800; }
 
 .dash-nav:hover .dash-dot-label,
-.dash-nav .dash-dot.active .dash-dot-label,
+.dash-nav.is-scrolling .dash-dot.active .dash-dot-label,
 .dash-nav .dash-dot:focus-visible .dash-dot-label { opacity: 1; transform: none; }
 
 .dash-dot-mark {
@@ -671,7 +671,7 @@ body.dashboards-page {
 }
 
 /* The live and the marathon page use more of the screen: the table has many columns and should fit without scrolling sideways */
-#dashLive .dash-inner { max-width: min(1760px, 100%); padding-left: 20px; }
+#dashLive .dash-inner, #dashRecords .dash-inner { max-width: min(1760px, 100%); padding-left: 20px; }
 .live-grid {
     flex: 1 1 0;
     min-height: 0;

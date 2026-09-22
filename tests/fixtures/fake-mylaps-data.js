@@ -121,7 +121,14 @@ function buildFakeData() {
         activities[rider.id] = activityOf(rider);
         lapsById[rider.id] = lapsResponseOf(rider);
     });
-    historyActivities().forEach(activity => { activities[activity.id] = activity; });   // no laps needed: they are only listed
+    const history = historyActivities();
+    history.forEach(activity => { activities[activity.id] = activity; });   // no laps needed: they are only listed
+    // Except the first one: give it real laps too, so a test can prove that an older, already-stored session can
+    // still be fetched again (for example from the Records dashboard's "Fetch laps" button).
+    const first = history[0];
+    lapsById[first.id] = lapsResponseOf({
+        id: first.id, pace: 34, startMin: (Date.parse(first.startTime) - T0) / MINUTE, endMin: (Date.parse(first.endTime) - T0) / MINUTE
+    });
     activities[OLD_SESSION.id] = {
         id: OLD_SESSION.id, chipCode: OLD_SESSION.chip, startTime: OLD_SESSION.startTime, endTime: OLD_SESSION.endTime, location: { ...LOCATION }
     };

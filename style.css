@@ -138,6 +138,47 @@ h3 small {
     color: var(--text-muted);
 }
 
+/* Its own bounded, independently scrolling box (like #lapsTableContainer): the sticky <th> below sticks relative
+   to the nearest scrolling ancestor, and the whole-page scroll of .dash-inner is not a reliable one to stick
+   against (it also carries the summary tiles and both charts above the table). Without its own scrollport, a row
+   that should be hidden behind the sticky header can instead keep showing above it while the page scrolls. */
+#recordsSessionsTable {
+    max-height: calc(100dvh - 160px);  /* as tall as the screen allows (minus the top bar and some room to breathe) */
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.records-sessions-details summary {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    cursor: pointer;
+    list-style: revert;
+}
+.records-sessions-details summary small { font-weight: 400; color: var(--text-muted); }
+.records-sessions-details[open] summary { margin-bottom: 12px; }
+
+/* One <details> per season inside the sessions list: closed by default, so a long history opens one season at a
+   time instead of dumping every stored session on screen at once. */
+.records-season-details {
+    border-bottom: 1px solid var(--border);
+}
+.records-season-details:last-child { border-bottom: none; }
+.records-season-details summary {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 10px 12px;
+    font-weight: 600;
+    cursor: pointer;
+    list-style: revert;
+}
+.records-season-details summary .muted-note { font-weight: 400; }
+.records-season-details[open] summary { border-bottom: 1px solid var(--border); }
+.records-season-details .laps-table { border-radius: 0; }
+
 a {
     color: var(--accent-text, var(--accent));
 }
@@ -439,6 +480,8 @@ button:disabled {
 }
 
 #distributionChartContainer { height: 260px; }
+#recordsChartContainer, #recordsFastChartContainer { height: 260px; }
+#recordsChartContainer { margin-bottom: 20px; }
 
 .table-and-context-section {
     border-top: 1px solid var(--border);
@@ -467,7 +510,10 @@ button:disabled {
 
 .laps-table {
     width: 100%;
-    border-collapse: collapse;
+    /* "separate" (not "collapse"): with collapsed borders, a sticky <th>'s background does not quite reach the
+       collapsed border, so a sliver of the row scrolling underneath keeps peeking out above the sticky header. */
+    border-collapse: separate;
+    border-spacing: 0;
     font-size: 0.82em;
     font-variant-numeric: tabular-nums;
 }
@@ -643,13 +689,39 @@ button:disabled {
 
 .subtitle { text-align: center; margin-top: -12px; }
 
-.replay-toolbar {
+.replay-toolbar, .records-toolbar {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 10px;
     margin-bottom: 14px;
 }
+
+.records-session-row.excluded { opacity: 0.5; }
+.records-session-row.flash { animation: records-flash 1.5s ease-out; }
+@keyframes records-flash {
+    0%, 30% { background: color-mix(in srgb, var(--accent) 25%, transparent); }
+    100% { background: transparent; }
+}
+.records-goto { cursor: pointer; }
+.records-goto:hover td { background-color: var(--surface-2); }
+.records-session-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; white-space: nowrap; }
+.records-exclude { display: inline-flex; align-items: center; gap: 4px; font-size: 0.85em; color: var(--text-secondary); cursor: pointer; }
+.records-lap-row td { padding: 6px 8px 12px; }
+.records-lap-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.records-lap {
+    min-width: 2em;
+    padding: 3px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.78rem;
+    cursor: pointer;
+}
+.records-lap:hover { background: var(--grid); }
+.records-lap.excluded { background: transparent; border-style: dashed; color: var(--text-muted); text-decoration: line-through; }
 
 .secondary-btn {
     background-color: var(--surface-2);

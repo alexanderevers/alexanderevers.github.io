@@ -384,7 +384,39 @@ async function step(name, run) {
             await page.evaluate('document.getElementById("replayPlay").click()');
             assert.ok(await page.evaluate('window.__live.replay().at - window.__live.replay().fromMs < 30000'), 'play did not start again from the chosen start');
             await page.evaluate('document.getElementById("replayPlay").click()');
-            // back to live
+        });
+
+        await step('live: export the marathon replay as a video (canvas.captureStream + MediaRecorder), from the chosen start, with a manual or an automatic stop', async () => {
+            const set = (id, value, event) => page.evaluate('(() => { const e = document.getElementById(' + JSON.stringify(id) + '); e.value = ' + JSON.stringify(value) + '; e.dispatchEvent(new Event(' + JSON.stringify(event) + ')); })()');
+            assert.equal(await page.evaluate('typeof document.getElementById("liveTrack").captureStream === "function" && typeof MediaRecorder === "function"'), true);
+            assert.equal(await page.evaluate('window.__live.recording()'), false);
+            await page.evaluate('document.getElementById("replayExport").click()');
+            await page.waitFor('window.__live.recording() === true', 'the recording to start');
+            assert.match(await text('#replayExport'), /Recording/);
+            assert.equal(await page.evaluate('window.__live.replay().playing'), true);            // exporting plays the replay
+            assert.ok(await page.evaluate('window.__live.replay().at - window.__live.replay().fromMs < 2000'), 'the recording did not start from the chosen start');
+            await page.sleep(1200);
+            await page.evaluate('document.getElementById("replayExport").click()');                // stop early
+            await page.waitFor('window.__live.recording() === false', 'the recording to stop');
+            assert.match(await text('#replayExport'), /^Export video$/);
+            assert.ok((await page.evaluate('window.__live.lastExportSize()')) > 0, 'no video was recorded');
+            assert.equal(await page.evaluate('window.__live.lastExportType()'), 'video/webm');
+
+            // it also stops on its own, with a video, once the replay reaches the end
+            await set('replaySpeed', '30', 'change');
+            await page.evaluate('document.getElementById("replayExport").click()');
+            await page.waitFor('window.__live.recording() === true', 'recording again');
+            await page.waitFor('window.__live.recording() === false', 'the recording to stop by itself once the replay ends', 20000);
+            assert.equal(await page.evaluate('window.__live.replay().playing'), false);
+            assert.equal(await page.evaluate('window.__live.replay().at === window.__live.replay().endMs'), true);
+            assert.ok((await page.evaluate('window.__live.lastExportSize()')) > 0);
+            assert.match(await text('#replayExport'), /^Export video$/);
+        });
+
+        await step('live: back to live after a replay', async () => {
+            const hidden = id => page.evaluate('document.getElementById(' + JSON.stringify(id) + ').classList.contains("hidden")');
+            // recording (and the rest of the replay) never asked for live data; going back to live does
+            const before = await page.evaluate('window.__liveRequests.length');
             await page.evaluate('document.getElementById("replayLive").click()');
             await page.waitFor('window.__live.replay() === null && window.__live.states().length >= 4 && window.__liveRequests.length > ' + before, 'live again');
             assert.equal(await hidden('replayBar'), true);
