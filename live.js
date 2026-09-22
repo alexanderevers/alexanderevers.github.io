@@ -705,12 +705,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const slots = colourSlots();
-        // Every currently coloured rider stays on top of the list too, in its own group (up to MAX_SELECTED_SHOWN, most recently pressed
-        // first); he is still listed in his normal place below as well, the same as one pinned rider always was.
+        // Every currently coloured rider stays on top of the list, in its own group (up to MAX_SELECTED_SHOWN, most recently pressed first); the
+        // others are sorted below him, the same as one pinned rider always was (live.html has never repeated a row; marathon.html always has,
+        // see marathonHtml() below, and still does now that more than one rider can be pinned there).
         const selected = selectedIdsShown().map(id => states.find(s => s.id === id)).filter(Boolean);
-        const onIce = onIceStates();
-        const resting = sortLiveRiders(states.filter(s => s.status === 'resting' && !s.isPrivate), 'recent');
-        const isPrivate = states.filter(s => s.isPrivate);
+        const selectedSet = new Set(selected.map(s => s.id));
+        const onIce = onIceStates().filter(s => !selectedSet.has(s.id));
+        const resting = sortLiveRiders(states.filter(s => s.status === 'resting' && !s.isPrivate), 'recent').filter(s => !selectedSet.has(s.id));
+        const isPrivate = states.filter(s => s.isPrivate).filter(s => !selectedSet.has(s.id));
         const head = '<thead><tr><th>Rider</th><th>Started</th><th>Duration</th><th>Laps</th><th>Last lap</th><th>Best lap</th><th>Since</th></tr></thead>';
         const group = (title, count, rows) => `<tr class="live-group"><th colspan="7">${title} <small>(${count})</small></th></tr>${rows}`;
         let body = '';
