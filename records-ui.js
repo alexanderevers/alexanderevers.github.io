@@ -67,10 +67,13 @@ function setupRecordsEventListeners(getChipCode) {
         // A plain category axis with ready-made labels: Chart.js's own "time" scale needs a date adapter that is not
         // loaded here (like the rest of the charts on this page, which use lap numbers instead of a time scale).
         const dateLabel = ms => new Date(ms).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' });
+        const yearOf = point => new Date(Date.parse(point.startTime)).getFullYear();
         try {
             recordsChart = new Chart(chartCanvas, {
                 type: 'line',
                 data: {
+                    // The full date (day, month, year) is still the label Chart.js shows in the tooltip; only the
+                    // x-axis itself is decluttered below to just the year, and only where a new year starts.
                     labels: timeline.map(point => dateLabel(Date.parse(point.startTime))),
                     datasets: [{
                         label: 'Best lap', data: timeline.map(point => point.durMs / 1000),
@@ -84,7 +87,32 @@ function setupRecordsEventListeners(getChipCode) {
                     onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; },
                     plugins: { legend: { display: false }, tooltip: { callbacks: { label: item => recordsLapLabel(item.parsed.y * 1000) } } },
                     scales: {
-                        x: { grid: { color: t.grid }, border: { color: t.axis }, ticks: { color: t.muted, maxRotation: 0, autoSkip: true } },
+                        x: {
+                            grid: { color: t.grid }, border: { color: t.axis },
+                            ticks: {
+                                color: t.muted, minRotation: 40, maxRotation: 50,
+                                // autoSkip stays on: afterBuildTicks below narrows the ticks down to one per year
+                                // already, but on a narrow chart or with several years close together even those can
+                                // still overlap once rotated, so autoSkip is left free to thin an early year out.
+                                autoSkip: true,
+                                // "value" here is the category index (what afterBuildTicks put in scale.ticks below),
+                                // not the tick's position within this (already filtered) list of ticks - using the
+                                // wrong one silently mislabels every tick after the first.
+                                callback: value => { const point = timeline[value]; return point ? String(yearOf(point)) : ''; }
+                            },
+                            // Only one tick per year, placed at that year's first point: Chart.js's own autoSkip
+                            // picks evenly-spaced ticks by index, not by what they mean, so it cannot be trusted to
+                            // land exactly on every year's first point (and would still draw the rest unlabelled).
+                            afterBuildTicks: scale => {
+                                const ticks = [];
+                                let lastYear = null;
+                                timeline.forEach((point, index) => {
+                                    const year = yearOf(point);
+                                    if (year !== lastYear) { ticks.push({ value: index }); lastYear = year; }
+                                });
+                                scale.ticks = ticks;
+                            }
+                        },
                         y: timeAxis(t, 'left', { reverse: false, ticks: { color: t.muted, callback: value => recordsLapLabel(value * 1000) } })
                     }
                 }
@@ -98,11 +126,13 @@ function setupRecordsEventListeners(getChipCode) {
     }
 
     /**
-     * "Fast laps per season": a bar per season (how many of that season's laps were among its fastest 20 %) with a
-     * line of their average time (right-hand axis), so a busy season with many fast laps and a quiet season with
-     * few are both readable, and the trend line shows whether that average is getting faster over the seasons.
+     * "Fast laps per season": a bar per season (how many of that season's laps beat the one shared pace bar,
+     * records.js: fastLapThresholdMs) with a line of their average time (right-hand axis). The pace bar is fixed
+     * across every season (not recomputed per season), so the bar heights genuinely say how much fast skating a
+     * season had - a season with a lot more fast laps than another visibly shows it, instead of every season
+     * always ending up at roughly the same share of its own laps.
      */
-    function drawFastLapsChart(fastLapsPerSeason) {
+    function drawFastLapsChart(fastLapsPerSeason, fastLapThresholdMs) {
         if (typeof Chart === 'undefined' || !fastChartCanvas) return;
         if (recordsFastChart) { recordsFastChart.destroy(); recordsFastChart = null; }
         const orphan = Chart.getChart && Chart.getChart(fastChartCanvas);
@@ -119,7 +149,7 @@ function setupRecordsEventListeners(getChipCode) {
                             backgroundColor: withAlpha(t.fast, 0.35), yAxisID: 'count', maxBarThickness: 40
                         },
                         {
-                            type: 'line', label: 'Average fast lap', data: fastLapsPerSeason.map(season => season.avgFastMs / 1000),
+                            type: 'line', label: 'Average fast lap', data: fastLapsPerSeason.map(season => season.avgFastMs === null ? null : season.avgFastMs / 1000),
                             borderColor: t.avg, backgroundColor: t.avg, pointBackgroundColor: t.avg,
                             tension: 0.25, pointRadius: 3, yAxisID: 'time'
                         }
@@ -133,7 +163,7 @@ function setupRecordsEventListeners(getChipCode) {
                             callbacks: {
                                 label: item => (item.dataset.yAxisID === 'time'
                                     ? `Average fast lap: ${recordsLapLabel(item.parsed.y * 1000)}`
-                                    : `${item.parsed.y} fast lap${item.parsed.y === 1 ? '' : 's'} (of ${fastLapsPerSeason[item.dataIndex].totalLaps})`)
+                                    : `${item.parsed.y} fast lap${item.parsed.y === 1 ? '' : 's'} (of ${fastLapsPerSeason[item.dataIndex].totalLaps}), under ${recordsLapLabel(fastLapThresholdMs)}`)
                             }
                         }
                     },
@@ -230,7 +260,7 @@ function setupRecordsEventListeners(getChipCode) {
             : '<p class="muted-note">Not enough data yet.</p>';
 
         drawChart(records.timeline);
-        drawFastLapsChart(records.fastLapsPerSeason);
+        drawFastLapsChart(records.fastLapsPerSeason, records.fastLapThresholdMs);
         sessionsCountEl.textContent = `(${sessions.length})`;
         const groups = groupSessionsBySeason(sessions);
         sessionsEl.innerHTML = [...groups.entries()].map(([label, group]) => `

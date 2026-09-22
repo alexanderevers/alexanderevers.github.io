@@ -62,13 +62,49 @@ describe('computePersonalRecords: totals, the best lap ever, and per season', ()
         assert.equal(result.best.durMs, 25000);
         assert.equal(result.skatingLapCount, 3);
     });
-    it('the timeline has one point per session (its best lap), oldest first', () => {
+    it('the timeline has one point per session when there are few enough of them, oldest first', () => {
         const sessions = [
-            session(1, '2025-03-01T10:00:00Z', laps(3, 32)),
-            session(2, '2025-01-10T10:00:00Z', laps(3, 30))
+            session(1, '2025-03-01T10:00:00Z', laps(3, 32)),               // season 24/25
+            session(2, '2025-11-10T10:00:00Z', laps(3, 30))                // season 25/26: a different bucket
         ];
         const result = computePersonalRecords(sessions);
-        assert.deepEqual(hostCopy(result.timeline.map(t => [t.sessionId, t.durMs])), [[2, 30000], [1, 32000]]);
+        assert.deepEqual(hostCopy(result.timeline.map(t => [t.sessionId, t.durMs])), [[1, 32000], [2, 30000]]);
+    });
+});
+
+describe('computePersonalRecords: "Best lap over time" is thinned per season (fastest 5 %, at least 1, capped at 10)', () => {
+    const hourIso = (baseIso, hours) => new Date(Date.parse(baseIso) + hours * 3600 * 1000).toISOString();
+
+    it('a small season keeps only its single fastest session (rounds down to at least one)', () => {
+        const sessions = [
+            session(1, '2025-01-05T10:00:00Z', laps(1, 40)),
+            session(2, '2025-01-10T10:00:00Z', laps(1, 30)),               // the fastest
+            session(3, '2025-01-15T10:00:00Z', laps(1, 35))
+        ];
+        const result = computePersonalRecords(sessions);
+        assert.deepEqual(hostCopy(result.timeline.map(t => t.sessionId)), [2]);
+    });
+    it('keeps the fastest 5 % of a bigger season, rounded, still ordered oldest first', () => {
+        // 40 sessions, all in season 24/25 (an hour apart), one lap each; later sessions are faster
+        const sessions = Array.from({ length: 40 }, (_, i) => session(i + 1, hourIso('2025-01-01T00:00:00Z', i), laps(1, 60 - i)));
+        const result = computePersonalRecords(sessions);
+        // 5 % of 40 = 2: session 40 (21 s) and session 39 (22 s) are the fastest, session 39 came first
+        assert.deepEqual(hostCopy(result.timeline.map(t => t.sessionId)), [39, 40]);
+    });
+    it('caps at 10 points even for a very busy season', () => {
+        // durations stay well under the skating-speed threshold for every session, so all 300 make the timeline
+        const sessions = Array.from({ length: 300 }, (_, i) => session(i + 1, hourIso('2025-01-01T00:00:00Z', i), laps(1, 40 - i * 0.05)));
+        const result = computePersonalRecords(sessions);
+        assert.equal(result.timeline.length, 10);
+    });
+    it('off-season sessions are bucketed by calendar year, independently of the season buckets', () => {
+        const sessions = [
+            session(1, '2025-06-01T10:00:00Z', laps(1, 40)),               // off-season 2025
+            session(2, '2025-06-10T10:00:00Z', laps(1, 30)),               // off-season 2025, faster
+            session(3, '2026-06-01T10:00:00Z', laps(1, 20))                // off-season 2026: a different bucket
+        ];
+        const result = computePersonalRecords(sessions);
+        assert.deepEqual(hostCopy(result.timeline.map(t => t.sessionId)), [2, 3]);
     });
 });
 
@@ -108,44 +144,56 @@ describe('computePersonalRecords: only real skating laps count', () => {
     });
 });
 
-describe('computePersonalRecords: fast laps per season (the fastest 20 % of that season, and their average)', () => {
-    it('finds the fastest 20 % of a season and their average, oldest season first', () => {
-        // season 24/25: 10 laps of 30 s except one of 20 s -> the fastest 20 % is 2 laps: 20 s and 30 s
-        const lapsSeason1 = [...laps(9, 30), { nr: 10, startMs: 9 * 30 * SECOND, durMs: 20 * SECOND }];
-        // season 25/26: 5 laps, all 40 s -> the fastest 20 % is still at least 1 lap
-        const sessions = [session(1, '2025-01-10T10:00:00Z', lapsSeason1), session(2, '2026-01-10T10:00:00Z', laps(5, 40))];
+describe('computePersonalRecords: fast laps per season, judged against one shared pace bar (not a per-season one)', () => {
+    it('the same threshold applies to every season, so a season with genuinely more fast laps shows more of them', () => {
+        // 10 laps at 20 s (season 24/25) and 10 laps at 40 s (season 25/26): combined, the fastest 20 % (4 laps)
+        // are all from the 20 s group, so the shared threshold is 20 s - and then every one of its ten 20 s laps
+        // qualifies as "fast" against that bar, while none of the 40 s laps do.
+        const sessions = [
+            session(1, '2025-01-10T10:00:00Z', laps(10, 20)),              // season 24/25
+            session(2, '2026-01-10T10:00:00Z', laps(10, 40))               // season 25/26
+        ];
         const result = computePersonalRecords(sessions);
-        assert.deepEqual(hostCopy(result.fastLapsPerSeason.map(r => r.season)), ['24/25', '25/26']);   // oldest first
-        const season1 = result.fastLapsPerSeason[0];
-        assert.equal(season1.totalLaps, 10);
-        assert.equal(season1.fastCount, 2);
-        assert.equal(season1.thresholdMs, 30000);
-        assert.equal(season1.avgFastMs, 25000);                           // (20000 + 30000) / 2
-        const season2 = result.fastLapsPerSeason[1];
-        assert.equal(season2.totalLaps, 5);
-        assert.equal(season2.fastCount, 1);                               // rounded up from 20 % of 5 = 1
-        assert.equal(season2.avgFastMs, 40000);
+        assert.equal(result.fastLapThresholdMs, 20000);
+        const season1 = result.fastLapsPerSeason.find(r => r.season === '24/25');
+        const season2 = result.fastLapsPerSeason.find(r => r.season === '25/26');
+        assert.equal(season1.fastCount, 10);
+        assert.equal(season1.avgFastMs, 20000);
+        assert.equal(season2.fastCount, 0);
+        assert.equal(season2.avgFastMs, null);
     });
-    it('every season has its own threshold: a slow season is not judged against a fast season', () => {
-        const sessions = [session(1, '2025-01-10T10:00:00Z', laps(10, 60)), session(2, '2026-01-10T10:00:00Z', laps(10, 30))];
+    it('a season only counts its own laps that beat the shared bar, not a fixed share of its own total', () => {
+        // combined pool: 5 laps at 15 s (season A) and 15 laps at 50 s (season B); the fastest 20 % (4 of 20) are
+        // all from the 15 s group, so season A's fastCount (5, ALL its own laps) is well above 20 % of its own
+        // total, and season B's (0) is well below - unlike a per-season 20 % share, which always lands both at
+        // roughly the same proportion of their own laps.
+        const sessions = [
+            session(1, '2025-01-10T10:00:00Z', laps(5, 15)),
+            session(2, '2026-01-10T10:00:00Z', laps(15, 50))
+        ];
         const result = computePersonalRecords(sessions);
-        assert.equal(result.fastLapsPerSeason.find(r => r.season === '24/25').avgFastMs, 60000);
-        assert.equal(result.fastLapsPerSeason.find(r => r.season === '25/26').avgFastMs, 30000);
+        assert.equal(result.fastLapsPerSeason.find(r => r.season === '24/25').fastCount, 5);
+        assert.equal(result.fastLapsPerSeason.find(r => r.season === '25/26').fastCount, 0);
     });
-    it('excluded sessions and excluded laps do not count towards the fast laps of a season either', () => {
+    it('excluded sessions and excluded laps are left out of the shared threshold, and of every season\'s count', () => {
         const fast = laps(3, 20);
         const slow = laps(10, 40).map(lap => ({ ...lap, nr: lap.nr + 3, startMs: lap.startMs + 100 * SECOND }));
         const sessions = [session(1, '2025-01-10T10:00:00Z', [...fast, ...slow], { excludedLaps: [1, 2, 3] })];   // the fast laps are excluded
         const result = computePersonalRecords(sessions);
         assert.equal(result.fastLapsPerSeason[0].totalLaps, 10);
+        // with the fast laps excluded, only the 40 s laps feed the shared threshold, so they all qualify against it
+        assert.equal(result.fastLapsPerSeason[0].fastCount, 10);
         assert.equal(result.fastLapsPerSeason[0].avgFastMs, 40000);
     });
-    it('a session in the May-August off-season does not add a fast-laps entry either', () => {
+    it('a session in the May-August off-season does not add a fast-laps entry, or feed the shared threshold', () => {
         const sessions = [session(1, '2025-06-15T10:00:00Z', laps(10, 30))];
-        assert.deepEqual(hostCopy(computePersonalRecords(sessions).fastLapsPerSeason), []);
+        const result = computePersonalRecords(sessions);
+        assert.deepEqual(hostCopy(result.fastLapsPerSeason), []);
+        assert.equal(result.fastLapThresholdMs, null);
     });
     it('is empty without any skating laps', () => {
         assert.deepEqual(hostCopy(computePersonalRecords([]).fastLapsPerSeason), []);
+        assert.equal(computePersonalRecords([]).fastLapThresholdMs, null);
         const noSkating = [session(1, '2025-01-10T10:00:00Z', [{ nr: 1, startMs: 0, durMs: 300 * SECOND }])];   // a break, not a lap
         assert.deepEqual(hostCopy(computePersonalRecords(noSkating).fastLapsPerSeason), []);
     });

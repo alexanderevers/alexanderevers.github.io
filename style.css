@@ -706,7 +706,6 @@ button:disabled {
 .records-goto { cursor: pointer; }
 .records-goto:hover td { background-color: var(--surface-2); }
 .records-session-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; white-space: nowrap; }
-.records-exclude { display: inline-flex; align-items: center; gap: 4px; font-size: 0.85em; color: var(--text-secondary); cursor: pointer; }
 .records-lap-row td { padding: 6px 8px 12px; }
 .records-lap-grid { display: flex; flex-wrap: wrap; gap: 6px; }
 .records-lap {

@@ -227,7 +227,7 @@ function skip(name, reason) {
                 assert.ok(Number(await page.evaluate('parseFloat(getComputedStyle(document.querySelector("#sessionSummary .stat-card:nth-child(2) .value")).fontSize)')) >= 48, 'the best lap is not a hero figure (48 px or more)');
                 assert.match(await text('#sessionSummary .stat-card:nth-child(2) .label'), /Best Lap/);
             });
-            await step('records: the fetched session is remembered locally, and can be excluded, have a lap excluded, or be deleted', async () => {
+            await step('records: the fetched session is remembered locally, and can be excluded (session or a single lap)', async () => {
                 const recordsHidden = () => page.evaluate('document.getElementById("recordsBody").classList.contains("hidden")');
                 const emptyHidden = () => page.evaluate('document.getElementById("recordsEmpty").classList.contains("hidden")');
                 await page.waitFor('!document.getElementById("recordsBody").classList.contains("hidden")', 'the Records dashboard to show the fetched session');
@@ -245,14 +245,19 @@ function skip(name, reason) {
                 assert.equal((await text('#recordsSummary .stat-card:nth-child(1) .value')).trim(), sessionBest);
                 assert.equal((await text('#recordsSummary .stat-card:nth-child(2) .value')).trim(), '1');   // one session remembered
 
-                // excluding the session removes it from the personal records, but it stays in the list (dimmed)
-                await click('.records-exclude-toggle');
+                // "Delete" does not forget the session (its data is kept): it excludes it from the personal records,
+                // greyed out, but still listed; pressing the same button again ("Restore") brings it back
+                assert.equal((await text('.records-delete')).trim(), 'Delete');
+                await click('.records-delete');
                 await page.waitFor('document.querySelectorAll("#recordsSummary .stat-card")[1].querySelector(".value").textContent.trim() === "0"', 'the excluded session to drop out of the totals');
                 assert.equal((await text('#recordsSummary .stat-card:nth-child(1) .value')).trim(), '–');
                 assert.equal(await page.evaluate('document.querySelector(".records-session-row").classList.contains("excluded")'), true);
-                assert.equal(await count('.records-session-row'), 1);           // still listed, just excluded
-                await click('.records-exclude-toggle');
+                assert.equal(await count('.records-session-row'), 1);           // still listed, just excluded and greyed out
+                assert.equal((await text('.records-delete')).trim(), 'Restore');
+                await click('.records-delete');
                 await page.waitFor('document.querySelectorAll("#recordsSummary .stat-card")[1].querySelector(".value").textContent.trim() === "1"', 'back in the totals');
+                assert.equal(await page.evaluate('document.querySelector(".records-session-row").classList.contains("excluded")'), false);
+                assert.equal((await text('.records-delete')).trim(), 'Delete');
 
                 // excluding one lap lowers the count of skating laps by one, without removing the session
                 await click('.records-edit-laps');
@@ -265,15 +270,7 @@ function skip(name, reason) {
                 await click('.records-lap');                                     // bring it back
                 await page.waitFor('!document.querySelector(".records-lap").classList.contains("excluded")', 'the lap brought back');
 
-                // deleting the session forgets it entirely: the dashboard goes back to its empty state
-                await page.evaluate('window.confirm = () => true');
-                await click('.records-delete');
-                await page.waitFor('!document.getElementById("recordsEmpty").classList.contains("hidden")', 'the empty state after deleting the only session');
-                assert.equal(await count('.records-session-row'), 0);
-
-                // fetching the laps again brings it back (records.remember), and history survives a full reload of the page
-                await click('#fetchLapsBtn');
-                await page.waitFor('!document.getElementById("recordsBody").classList.contains("hidden")', 'the session remembered again');
+                // history survives a full reload of the page (it lives in localStorage, not just in memory)
                 await page.navigate(`${base}/index.html?transponder=${data.referenceChip}`);
                 await page.waitFor('document.getElementById("activitySelect").options.length > 1', 'the page to reload');
                 await page.waitFor('!document.getElementById("recordsBody").classList.contains("hidden")', 'history to survive a page reload (localStorage)');
@@ -295,7 +292,7 @@ function skip(name, reason) {
                 // clicking a dot of "Best lap over time" does the same
                 await page.evaluate('document.getElementById("recordsSessionsDetails").open = false');
                 await page.evaluate('document.getElementById("recordsChart").scrollIntoView({ block: "center" })');
-                await page.sleep(200);
+                await page.sleep(500);   // let the smooth scroll (and the chart's own resize/redraw) fully settle first
                 const dot = await page.evaluate(`(() => {
                     const c = document.getElementById('recordsChart');
                     const points = Chart.getChart(c).getDatasetMeta(0).data;
