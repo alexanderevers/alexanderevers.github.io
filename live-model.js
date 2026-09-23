@@ -331,6 +331,10 @@ function marathonDetect(entries, referenceId) {
 
 // The riders are selected from this long before the start time: what they are doing then is their first lap.
 const MARATHON_BEFORE_START_MS = 20 * 1000;
+// A rider who is one lap behind keeps a real chance to still cross the line (status "coming") for this long after the winner crosses the
+// finish line, even once the race already counts as finished (the race laps are reached): a mass finish spreads over several seconds, and
+// a rider should not be shoved off to "lapped" the instant the winner is over the line while he is still genuinely racing for the finish.
+const MARATHON_FINISH_GRACE_MS = 30 * 1000;
 
 /**
  * The list of a lap of the race. The race starts at an absolute START TIME (for example 21:00:00). From 20 seconds before it all riders
@@ -463,10 +467,14 @@ function marathonStandings(entries, options = {}) {
     }));
 
     const listed = new Set(rows.map(r => r.id));
+    // A rider one lap behind still counts as "coming" (still racing, could cross any moment) for a grace period after the winner crosses
+    // the finish line, even once the race is otherwise finished - a mass finish takes a few seconds, it is not over the instant the winner
+    // is over the line.
+    const finishGraceOver = finished && nowMs - firstAt > MARATHON_FINISH_GRACE_MS;
     const pending = !latest ? [] : inRace.filter(r => !listed.has(r.id))
         .map(r => {
             const behind = lapNr - r.lastLap;
-            return { id: r.id, label: r.label, laps: r.lastLap, behind, status: behind === 1 && !finished ? 'coming' : 'lapped', lastEndMs: r.byLap.get(r.lastLap).endMs };
+            return { id: r.id, label: r.label, laps: r.lastLap, behind, status: behind === 1 && !finishGraceOver ? 'coming' : 'lapped', lastEndMs: r.byLap.get(r.lastLap).endMs };
         })
         .sort((x, y) => y.laps - x.laps || x.lastEndMs - y.lastEndMs);
     // the place of one rider in the list of every lap (for the graph): [{ lapNr, place, endMs, riders (in that list) }]

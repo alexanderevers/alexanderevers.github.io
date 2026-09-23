@@ -702,9 +702,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         body += `<tr class="live-group"><th colspan="8">${title} <small>(${result.rows.length})</small></th></tr>`;
         body += result.rows.map(row => rowOf(row, `${row.place === 1 ? ' first' : ''}${mark(row.id)}`)).join('');
-        if (result.pending.length) {
-            body += `<tr class="live-group"><th colspan="8">Still to cross the line <small>(${result.pending.length})</small></th></tr>`;
-            body += result.pending.map(p => pendingOf(p, mark(p.id))).join('');
+        // A rider who is only one lap behind and could still cross any moment ("coming") stays with the group, still to cross the line. A
+        // rider who has fallen further behind ("lapped") is no longer really racing for this lap: he moves out of the positions list
+        // entirely, to his own group at the bottom, with the riders who are off the ice (greyed out on the track too, see drawTrack).
+        const coming = result.pending.filter(p => p.status === 'coming');
+        const lapped = result.pending.filter(p => p.status === 'lapped');
+        if (coming.length) {
+            body += `<tr class="live-group"><th colspan="8">Still to cross the line <small>(${coming.length})</small></th></tr>`;
+            body += coming.map(p => pendingOf(p, mark(p.id))).join('');
+        }
+        if (lapped.length) {
+            body += `<tr class="live-group"><th colspan="8">Off the ice <small>(${lapped.length})</small></th></tr>`;
+            body += lapped.map(p => pendingOf(p, `${mark(p.id)} lapped`)).join('');
         }
         return `<table class="laps-table live-table">${head}<tbody>${body}</tbody></table>`;
     }
@@ -844,6 +853,11 @@ document.addEventListener('DOMContentLoaded', () => {
             else shown.clear();                                       // paused or moved by hand: the dots are where they are
         }
         const slots = colourSlots();
+        // Marathon: a rider more than a lap behind (the same "lapped" riders moved to "Off the ice" in the list) is drawn at half
+        // opacity on the track too, instead of at full strength like the riders who are still really racing.
+        const lappedIds = marathon && marathonResult
+            ? new Set(marathonResult.pending.filter(p => p.status === 'lapped').map(p => p.id))
+            : null;
         const skating = states.filter(s => s.status === 'skating' && s.progress !== null)
             .sort((a, b) => Number(slots.has(a.id)) - Number(slots.has(b.id)));          // the coloured dots on top
         skating.forEach((state, index) => {
@@ -853,6 +867,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const labelled = slot !== undefined;
             const radius = labelled ? 10 : 4;
             const fill = labelled ? colors.series[slot] : colors.series[0];
+            ctx.globalAlpha = lappedIds && lappedIds.has(state.id) ? 0.5 : 1;
             ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
             ctx.fillStyle = fill; ctx.fill();
             ctx.lineWidth = state.id === selectedId ? 3 : 2;
@@ -861,6 +876,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.fillStyle = inkFor(fill); ctx.font = '600 10px system-ui, sans-serif';
                 ctx.fillText(liveInitials(state), p.x, p.y + 0.5);
             }
+            ctx.globalAlpha = 1;
             hitTargets.push({ state, x: p.x, y: p.y, radius });
         });
     }

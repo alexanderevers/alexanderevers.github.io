@@ -709,6 +709,7 @@ body.dashboards-page {
 .live-row.compared td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
 .live-row.resting td { color: var(--text-secondary); }
 .live-row.private td, .live-row.waiting td { color: var(--text-muted); }
+.live-row.lapped { opacity: 0.5; }         /* marathon: a rider more than a lap behind, moved to "Off the ice" - dimmed the same as on the track */
 .live-group th {
     background: var(--surface-2);
     color: var(--text);

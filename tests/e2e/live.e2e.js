@@ -271,6 +271,14 @@ async function step(name, run) {
             assert.equal(cells[3][6], '10.000');
             assert.match(cells[0][7], /^[0-9]+:[0-9.]+$/);      // the time of the laps from the start
             assert.equal(Number(cells[0][2]), newest.lapNr);   // the number of laps
+            // Fay (12 s laps) has fallen more than a lap behind: she is "lapped", not in the per-lap list at all any more, dimmed
+            // to 50 % in her own "Off the ice" group at the bottom (and, the same, as a dot on the track)
+            const fay = newest.pending.find(p => p.label === 'Fay');
+            assert.equal(fay.status, 'lapped');
+            assert.match(await page.evaluate('[...document.querySelectorAll(".live-group th")].map(t => t.textContent).find(t => t.startsWith("Off the ice")) || ""'), /^Off the ice/);
+            const fayRow = await page.evaluate('[...document.querySelectorAll(".live-row")].find(r => r.textContent.includes("Fay")).className');
+            assert.match(fayRow, /\blapped\b/);
+            assert.equal(await page.evaluate('[...document.querySelectorAll(".marathon-row")].some(r => r.cells[1].textContent.includes("Fay") && !r.className.includes("lapped"))'), false);
             // the sliders show real times, and the start and the finish are flags in the lap graph
             assert.match(await text('#marathonFinishValue'), /follows\) · [0-9]{2}:[0-9]{2}:[0-9]{2}$/);
             assert.match(await text('#marathonStartValue'), /^[0-9]{2}:[0-9]{2}:[0-9]{2} [(]auto[)]$/);         // the program chose the start time

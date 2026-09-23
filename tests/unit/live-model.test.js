@@ -356,6 +356,20 @@ describe('marathon mode: the crossings of the race and the list of a lap', () =>
         assert.deepEqual(hostCopy(result.rows.map(r => r.label)), ['Anna', 'Ben']);
         assert.equal(marathonStandings(entries, { raceLaps: 8, nowMs: RACE_START + 200 * SECOND }).finished, false);
     });
+    it('a rider one lap behind still counts as "coming" for a grace period after the winner crosses the finish line, even once the race already counts as finished', () => {
+        const group = [rider(1, 'Anna', cross(0, 6, 30)), rider(2, 'Ben', cross(0, 6, 30).map(t => t + 1))];
+        const behind = rider(3, 'Behind', cross(0, 5, 30));            // one lap behind throughout: 5 laps when the group has 6
+        // Anna (the winner) crosses the finish line of the 6th (and last) lap at 180 s: the race counts as finished from that moment
+        const soonAfter = marathonStandings([...group, behind], { raceLaps: 6, nowMs: RACE_START + 181 * SECOND });
+        assert.equal(soonAfter.finished, true);
+        assert.deepEqual(hostCopy(soonAfter.pending.map(p => [p.label, p.status])), [['Behind', 'coming']]);
+        // still within 30 s of Anna's finish: still "coming", not shoved off to "lapped" the instant the winner is over the line
+        const stillGrace = marathonStandings([...group, behind], { raceLaps: 6, nowMs: RACE_START + 209 * SECOND });
+        assert.deepEqual(hostCopy(stillGrace.pending.map(p => [p.label, p.status])), [['Behind', 'coming']]);
+        // 30 s after Anna's finish (180 s + 30 s): the grace period is over, he is "lapped"
+        const graceOver = marathonStandings([...group, behind], { raceLaps: 6, nowMs: RACE_START + 211 * SECOND });
+        assert.deepEqual(hostCopy(graceOver.pending.map(p => [p.label, p.status])), [['Behind', 'lapped']]);
+    });
     it('without a number of laps, the lap to skate out after the last (fast) lap does not count', () => {
         // four riders: eight racing laps of 30 s, then a slow lap of 70 s to skate out
         const group = extra => ['Anna', 'Ben', 'Cor', 'Dan'].map((name, i) => rider(i + 1, name, [...cross(0, 8, 30).map(t => t + i * 0.5), ...extra.map(t => t + i * 0.5)]));
