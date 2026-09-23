@@ -106,7 +106,7 @@ describe('marathon mode: the crossings of the race and the list of a lap', () =>
         assert.deepEqual(hostCopy(result.rows.map(r => r.label)), ['Anna', 'Ben']);
         assert.equal(marathonStandings(entries, { raceLaps: 8, nowMs: RACE_START + 200 * SECOND }).finished, false);
     });
-    it('once the race is finished, a rider one lap behind counts for the result when his own last lap was close to the winner\'s finish - the finish is decided over about a minute, not by whoever happens to cross before or after the winner', () => {
+    it('once the race is finished, a rider one lap behind counts for the result when his own last lap was close to the winner\'s finish - the finish is decided over a window around the winner\'s finish, not by whoever happens to cross before or after him', () => {
         const group = [rider(1, 'Anna', cross(0, 6, 30)), rider(2, 'Ben', cross(0, 6, 30).map(t => t + 1))];
         const close = rider(3, 'Close', cross(0, 5, 30));               // his own last (5th) lap ends at 150 s, 30 s before Anna's finish
         const far = { id: 4, label: 'Far', laps: [20, 40, 60, 80, 100].map((end, i, a) => ({ nr: i + 1, startMs: RACE_START + (i === 0 ? 0 : a[i - 1]) * SECOND, durMs: (end - (i === 0 ? 0 : a[i - 1])) * SECOND })) };  // his last lap ends at 100 s, 80 s before Anna's finish: really too long ago to be part of the same finish
@@ -127,6 +127,26 @@ describe('marathon mode: the crossings of the race and the list of a lap', () =>
         assert.equal(stillLive.finished, false);
         assert.deepEqual(hostCopy(stillLive.rows.map(r => r.label)), ['Anna', 'Ben']);
         assert.deepEqual(hostCopy(stillLive.pending.map(p => [p.label, p.status])), [['Far', 'coming'], ['Close', 'coming']]);
+    });
+    it('the finish closes 40 seconds after the winner: a crossing after that does not count for the result any more, his previous lap stays his last one, and he is placed at the bottom in the order of that last crossing', () => {
+        const group = [rider(1, 'Anna', cross(0, 6, 30)), rider(2, 'Ben', cross(0, 6, 30).map(t => t + 1))];
+        // Late's own 6th lap (matching Anna and Ben's) ends at 230 s - 50 s after Anna's finish (180 s), past the 40 s window - so it
+        // does not count: without this, his own byLap(6) would always have been trusted, however late it really arrived. His 5th lap,
+        // at 150 s, stays his result instead.
+        const late = rider(3, 'Late', [30, 60, 90, 120, 150, 230]);
+        // Later's own 6th lap ends even further outside the window (240 s) too, but his 5th (155 s) is still within it, so he is
+        // closed out one lap behind as well, just a little later than Late
+        const later = rider(4, 'Later', [30, 60, 90, 120, 155, 240]);
+        // Latest never even gets that far: his own 5th lap (250 s) is also outside the window, so his frozen result falls back to his
+        // 4th lap (135 s) - two laps behind, genuinely lapped rather than closed out
+        const latest = rider(5, 'Latest', [30, 60, 90, 135, 250]);
+        const nowMs = RACE_START + 260 * SECOND;
+        const result = marathonStandings([...group, late, later, latest], { raceLaps: 6, nowMs, trackLengthM: 400 });
+        assert.equal(result.finished, true);
+        // Anna and Ben first (6 laps each, real finishers), then Late and Later (5 laps each, closed out at 150 s and 155 s - in the
+        // order of that last crossing); Latest is lapped (4 laps, two behind), not just closed out one lap short
+        assert.deepEqual(hostCopy(result.rows.map(r => [r.label, r.laps])), [['Anna', 6], ['Ben', 6], ['Late', 5], ['Later', 5]]);
+        assert.deepEqual(hostCopy(result.pending.map(p => [p.label, p.status, p.laps])), [['Latest', 'lapped', 4]]);
     });
     it('without a number of laps, the lap to skate out after the last (fast) lap does not count', () => {
         // four riders: eight racing laps of 30 s, then a slow lap of 70 s to skate out

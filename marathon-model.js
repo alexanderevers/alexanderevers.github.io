@@ -128,12 +128,13 @@ function marathonDetect(entries, referenceId) {
 
 // The riders are selected from this long before the start time: what they are doing then is their first lap.
 const MARATHON_BEFORE_START_MS = 20 * 1000;
-// The finish is decided over about this long, not at the instant the winner crosses the line: a rider one lap behind still counts for
-// the result (with his own, lower number of laps) when his own last lap ended within this long of the winner's finish, before or after
-// it, and keeps a real chance to still cross the line (status "coming") for this long after it even once the race already counts as
-// finished (the race laps reached) - a real mass finish spreads out over close to a minute, it is not over the instant the winner is
-// over the line, and it is not decided by whoever happens to cross a fraction of a second before or after him.
-const MARATHON_FINISH_GRACE_MS = 60 * 1000;
+// The finish closes this long after the winner crosses the line: a rider one lap behind still counts for the result (with his own,
+// lower number of laps) when he was still that close at the moment the finish closed, and keeps a real chance to still cross the line
+// (status "coming") until then, even once the race already counts as finished (the race laps reached) - a real mass finish is not over
+// the instant the winner is over the line, and it is not decided by whoever happens to cross a fraction of a second before or after
+// him. But it does not stay open forever either: a crossing after the finish has closed does not count for the result any more,
+// whatever lap it was really for - a rider's previous (already real) crossing stays his final one.
+const MARATHON_FINISH_GRACE_MS = 40 * 1000;
 
 /**
  * The list of a lap of the race. The race starts at an absolute START TIME (for example 21:00:00). From 20 seconds before it all riders
@@ -263,6 +264,20 @@ function marathonStandings(entries, options = {}) {
     };
     // everybody who comes in during the finish lap: from the moment the first rider finishes it until the first rider finishes the next lap
     const firstAt = firstOf(lapNr) ?? timeOfLap(lapNr);
+    // The finish closes this long after the winner (whoever has the most laps) crosses the line: a crossing after that does not count
+    // for the result any more, whatever lap it was really for - a rider's previous (already real) crossing stays his final one. This is
+    // worked out from the winner's own crossing (leaderCount), not from firstAt: an older lap can be queried on its own (the finish
+    // slider, or placesOf below stepping through every lap) without the finish of a different, later lap closing early.
+    const winnerFinishAt = firstOf(leaderCount) ?? timeOfLap(leaderCount);
+    const finishCloseAt = winnerFinishAt + MARATHON_FINISH_GRACE_MS;
+    // A rider's crossing once the finish has closed: his last real crossing at or before that moment - once the race is actually
+    // finished. While it is still going every real crossing still counts as usual (nothing has closed yet).
+    const atClose = r => {
+        if (!finished) return r.byLap.get(r.lastLap);
+        let last = null;
+        for (const c of r.crossings) { if (c.endMs > finishCloseAt) break; last = c; }
+        return last || r.crossings[0];
+    };
     // the riders who came in during lap n, in the order of the list: most laps first, then the time of crossing. A rider's own lap n (his
     // n-th real crossing, r.byLap.get(n)) always counts as lap n, even when he crossed it a moment after the front of the group already
     // crossed lap n + 1: in a big, tightly bunched group the spread from front to back within one lap can be bigger than the gap between
@@ -275,15 +290,19 @@ function marathonStandings(entries, options = {}) {
         const from = firstOf(n) ?? timeOfLap(n);
         const to = n >= leaderCount ? Infinity : (firstOf(n + 1) ?? timeOfLap(n + 1));
         return inRace.map(r => {
+            // The finish lap, once the race is finished: everybody's result is his crossing at the moment the finish closed (above),
+            // not necessarily his own lap n - a rider one lap behind still counts, with his own, lower number of laps, but only when he
+            // was still that close within the same window: a crossing well before the winner's finish is not really part of this
+            // finish either (he had, by then, already fallen far enough behind in time that his next lap is not a photo finish, just a
+            // lap that happened to be one short). A rider more than one lap behind, or too far outside the window, is genuinely lapped,
+            // not part of this result (see pending below).
+            if (n >= leaderCount && finished) {
+                const at = atClose(r);
+                const inWindow = leaderCount - at.lapNo <= 1 && at.endMs >= winnerFinishAt - MARATHON_FINISH_GRACE_MS;
+                return inWindow ? { rider: r, at } : { rider: r, at: null };
+            }
             const own = r.byLap.get(n);
             if (own) return { rider: r, at: own };
-            // Once the race is finished, a rider one lap behind still counts for the result of the finish when his own last lap ended
-            // within the grace period of the winner's finish, even a moment before the window above officially opens: a mass finish is
-            // decided over about a minute, not by whoever happens to cross a fraction of a second before or after the winner himself.
-            if (n >= leaderCount && finished && n - r.lastLap === 1) {
-                const last = r.crossings[r.crossings.length - 1];
-                if (last && last.endMs >= from - MARATHON_FINISH_GRACE_MS) return { rider: r, at: last };
-            }
             return { rider: r, at: r.crossings.find(c => c.endMs >= from && c.endMs < to) };
         }).filter(c => c.at)
             .sort((x, y) => y.at.lapNo - x.at.lapNo || x.at.endMs - y.at.endMs);
@@ -296,13 +315,15 @@ function marathonStandings(entries, options = {}) {
 
     const listed = new Set(rows.map(r => r.id));
     // A rider one lap behind still counts as "coming" (still racing, could cross any moment) as long as the race is not finished yet.
-    // Once it is finished, crossedIn above has already moved everyone whose own last lap was close enough to the winner's finish into
-    // rows (with his own, lower number of laps); anyone one lap behind still left here really is too far behind to be part of the
-    // finish, so he is "lapped" straight away, not after some further wait.
+    // Once it is finished, crossedIn above has already moved everyone whose crossing at the moment the finish closed was one lap behind
+    // or better into rows (with his own, lower number of laps); anyone one lap behind still left here really is too far behind to be
+    // part of the finish, so he is "lapped" straight away, not after some further wait. His laps and last crossing are his state at the
+    // moment the finish closed too, once the race is finished - a later real crossing of his does not change his result any more.
     const pending = !latest ? [] : inRace.filter(r => !listed.has(r.id))
         .map(r => {
-            const behind = lapNr - r.lastLap;
-            return { id: r.id, label: r.label, laps: r.lastLap, behind, status: behind === 1 && !finished ? 'coming' : 'lapped', lastEndMs: r.byLap.get(r.lastLap).endMs };
+            const at = atClose(r);
+            const behind = lapNr - at.lapNo;
+            return { id: r.id, label: r.label, laps: at.lapNo, behind, status: behind === 1 && !finished ? 'coming' : 'lapped', lastEndMs: at.endMs };
         })
         .sort((x, y) => y.laps - x.laps || x.lastEndMs - y.lastEndMs);
     // the place of one rider in the list of every lap (for the graph): [{ lapNr, place, endMs, riders (in that list) }]
