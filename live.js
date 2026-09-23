@@ -778,9 +778,17 @@ document.addEventListener('DOMContentLoaded', () => {
             return `<table class="laps-table live-table">${head}<tbody><tr class="live-group"><th colspan="8">Lap ${result.lapNr}</th></tr><tr class="live-empty"><td colspan="8">Nobody was registered at the finish line in this lap (the timing mat missed the riders).</td></tr></tbody></table>`;
         }
         const title = `Lap ${result.lapNr}${raceLaps ? ` of ${raceLaps}` : ''} · first rider: ${escapeHtml(result.first.label)}${result.finished && result.latest ? ' · finished' : ''}`;
-        const rowOf = (row, cls) => `<tr class="live-row marathon-row${cls}" data-id="${row.id}">
+        const rowOf = (row, cls) => {
+            // A rider whose own laps are fewer than this lap's number is behind by laps, not by time (the finish window can even give
+            // him a crossing that is, on the clock, before the first rider's - he still did fewer laps): "+1 lap" says that plainly,
+            // instead of a gap time or "first" that would only be misleading for him. The same number pendingOf below uses for "behind".
+            const behind = result.lapNr - row.laps;
+            const gap = behind > 0 ? `+${behind} lap${behind === 1 ? '' : 's'}` : gapText(row.gapMs);
+            const distance = behind > 0 ? '' : distanceText(row.gapMs, row.distanceM);
+            return `<tr class="live-row marathon-row${cls}" data-id="${row.id}">
             <td>${row.place}</td><td>${dotOf(row.id)}${escapeHtml(row.label)}</td><td class="laps">${row.laps}</td><td>${timeOfDay(row.endMs)}</td>
-            <td class="gap">${gapText(row.gapMs)}</td><td class="gap">${distanceText(row.gapMs, row.distanceM)}</td><td>${seconds(row.lapMs)}</td><td class="gap">${raceTimeText(row.segmentMs)}</td></tr>`;
+            <td class="gap">${gap}</td><td class="gap">${distance}</td><td>${seconds(row.lapMs)}</td><td class="gap">${raceTimeText(row.segmentMs)}</td></tr>`;
+        };
         const pendingOf = (p, cls) => `<tr class="live-row marathon-row waiting${cls}" data-id="${p.id}"><td>–</td><td>${dotOf(p.id)}${escapeHtml(p.label)}</td><td class="laps">${p.laps}</td>
                 <td colspan="5" class="muted-note">${p.status === 'coming' ? 'on the way' : `${p.behind} lap${p.behind === 1 ? '' : 's'} behind`}</td></tr>`;
         let body = '';
