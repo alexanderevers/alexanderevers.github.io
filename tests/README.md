@@ -116,6 +116,7 @@ Which source file is covered by which test:
 | `script.js`, `fetch_overlapping_sessions.js`, `replay.js`, `chart-factory.js`, `theme.js`, `style.css`, the HTML pages | user interface | `e2e/replay-flow.e2e.js` |
 | `live.html`, `marathon.html`, `live.js`, `live-graph.js` | live page and marathon page | `e2e/live.e2e.js` |
 | `live-model.js` | 15 min / 2 min rules, start and duration, fetch timing, graph window | `unit/live-model.test.js` |
+| `marathon-model.js` | lap counting from the start time, the list of a lap, the finish window, marathon detection | `unit/marathon-model.test.js` |
 | `search_user.*`, `strava.js` | name search page, unfinished Strava upload | not covered (see 13) |
 
 ## 4. The three suites

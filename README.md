@@ -36,7 +36,8 @@ index.html  script.js  chart-factory.js  stats.js  gpx-generator.js   main page 
 fetch_overlapping_sessions.js                                        overlapping riders, sorting, "Open replay", marathon detection
 history-store.js  records.js  records-ui.js                          Records dashboard: local session history and personal bests
 replay.html  replay.js  replay-model.js  replay-track.js             race replay, lap model, track geometry
-live.html  marathon.html  live.js  live-model.js  live-graph.js      live page (rink, riders on the ice, lap graph) and the marathon page (same code); "Live" and "Marathon" in the menu of the main page
+live.html  marathon.html  live.js  live-model.js  marathon-model.js  live page (rink, riders on the ice, lap graph) and the marathon page (same code); "Live" and "Marathon" in the menu of the main page
+live-graph.js                                                        the lap-time graph, shared by the live and the marathon page
 dashboards.js  dashboards.css                                        the full-screen dashboards: snap scrolling, navigation, racing look
 manifest.webmanifest  sw.js  pwa.js  icons/                          installable app: manifest, service worker, install button, app icons
 tools/generate-icons.js                                              draws the app icons (icons/*.png)

@@ -2,7 +2,7 @@
  * Live page: who is on the ice at a rink right now.
  * Every few seconds it asks for the newest activities of the rink (proxy ?live=1, kept only one second), loads the laps
  * of the riders that changed, and shows them as a list and as dots on the oblong track.
- * Depends on utils.js, api.js, replay-track.js, replay-model.js and live-model.js.
+ * Depends on utils.js, api.js, replay-track.js, replay-model.js, live-model.js and marathon-model.js.
  */
 document.addEventListener('DOMContentLoaded', () => {
     // The Dutch rinks (see ijsbanen_list.txt). A rink whose length MYLAPS does not know is taken as 400 m.
@@ -718,7 +718,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <td class="best">${seconds(state.bestMs)}</td><td>${sinceText(state.sinceMs)}</td></tr>`;
     }
 
-    // ---------- Marathon mode: the list of a lap (see marathonStandings in live-model.js) ----------
+    // ---------- Marathon mode: the list of a lap (see marathonStandings in marathon-model.js) ----------
     const gapText = ms => (ms <= 0 ? 'first' : `+${(ms / 1000).toFixed(ms < 10000 ? 2 : 1)} s`);
     const distanceText = (ms, metres) => (ms <= 0 ? '' : metres < 1 ? '< 1 m' : `${Math.round(metres)} m`);
     const timeOfDay = ms => new Date(ms).toLocaleTimeString('en-GB');

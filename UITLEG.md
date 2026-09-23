@@ -9,14 +9,15 @@ Voor uitleg van wat de site doet en hoe alles samenhangt: zie [README.md](README
 1. [Tests draaien](#1-tests-draaien)
 2. [Eén testbestand of één test draaien](#2-één-testbestand-of-één-test-draaien)
 3. [Wat te doen als een instelling niet meer klopt met een test](#3-wat-te-doen-als-een-instelling-niet-meer-klopt-met-een-test)
-4. [Instelbare waarden: live- en marathonpagina (`live-model.js`)](#4-instelbare-waarden-live--en-marathonpagina-live-modeljs)
-5. [Instelbare waarden: live- en marathonpagina, weergave (`live.js`)](#5-instelbare-waarden-live--en-marathonpagina-weergave-livejs)
-6. [Instelbare waarden: replay-pagina (`replay-model.js`)](#6-instelbare-waarden-replay-pagina-replay-modeljs)
-7. [Instelbare waarden: ophalen van data (`api.js`)](#7-instelbare-waarden-ophalen-van-data-apijs)
-8. [Instelbare waarden: persoonlijke records (`records.js`, `history-store.js`)](#8-instelbare-waarden-persoonlijke-records-recordsjs-history-storejs)
-9. [Instelbare waarden: het tussenstation bij Cloudflare (`cloudflare-worker/src/index.js`)](#9-instelbare-waarden-het-tussenstation-bij-cloudflare-cloudflare-workersrcindexjs)
-10. [Instelbare waarden: installeerbare app (`sw.js`)](#10-instelbare-waarden-installeerbare-app-swjs)
-11. [Iets aanpassen: het hele stappenplan](#11-iets-aanpassen-het-hele-stappenplan)
+4. [Instelbare waarden: live-pagina (`live-model.js`)](#4-instelbare-waarden-live-pagina-live-modeljs)
+5. [Instelbare waarden: marathonpagina (`marathon-model.js`)](#5-instelbare-waarden-marathonpagina-marathon-modeljs)
+6. [Instelbare waarden: live- en marathonpagina, weergave (`live.js`)](#6-instelbare-waarden-live--en-marathonpagina-weergave-livejs)
+7. [Instelbare waarden: replay-pagina (`replay-model.js`)](#7-instelbare-waarden-replay-pagina-replay-modeljs)
+8. [Instelbare waarden: ophalen van data (`api.js`)](#8-instelbare-waarden-ophalen-van-data-apijs)
+9. [Instelbare waarden: persoonlijke records (`records.js`, `history-store.js`)](#9-instelbare-waarden-persoonlijke-records-recordsjs-history-storejs)
+10. [Instelbare waarden: het tussenstation bij Cloudflare (`cloudflare-worker/src/index.js`)](#10-instelbare-waarden-het-tussenstation-bij-cloudflare-cloudflare-workersrcindexjs)
+11. [Instelbare waarden: installeerbare app (`sw.js`)](#11-instelbare-waarden-installeerbare-app-swjs)
+12. [Iets aanpassen: het hele stappenplan](#12-iets-aanpassen-het-hele-stappenplan)
 
 ---
 
@@ -91,9 +92,9 @@ node --test tests/unit/live-model.test.js
 
 **Alleen controles waarvan de naam een bepaald woord bevat** (Node's ingebouwde testrunner ondersteunt dit):
 ```
-node --test --test-name-pattern="marathon" tests/unit/live-model.test.js
+node --test --test-name-pattern="finish" tests/unit/marathon-model.test.js
 ```
-Dit draait alleen de controles waarvan de beschrijving "marathon" bevat.
+Dit draait alleen de controles waarvan de beschrijving "finish" bevat.
 
 **Eén browsertest-bestand:**
 ```
@@ -113,58 +114,63 @@ Twee manieren om hiermee om te gaan:
 - **De makkelijke weg:** vertel mij (Claude) welke waarde je wilt veranderen en naar wat. Ik pas de instelling aan, werk de bijbehorende tests bij, draai alle controles opnieuw, en meld je of het nog steeds klopt.
 - **Zelf proberen:** verander het getal, draai `npm test`, en lees bij een `FAIL`-melding de tekst die eronder staat — die noemt meestal het bestand, de regel, en wat er verwacht werd tegenover wat er nu uitkwam. Je hoeft de test zelf niet te begrijpen; als het antwoord logisch klinkt bij je nieuwe instelling, mag je de verwachte waarde in het testbestand aanpassen aan de nieuwe.
 
-## 4. Instelbare waarden: live- en marathonpagina (`live-model.js`)
+## 4. Instelbare waarden: live-pagina (`live-model.js`)
 
-Dit bestand bevat de rekenregels achter de Live-pagina en de Marathon-pagina (niet de opmaak — dat staat in `live.js`, zie hoofdstuk 5). Zoek in het bestand op de naam in **vet** om de regel te vinden.
+Dit bestand bevat de rekenregels achter de Live-pagina (niet de opmaak — dat staat in `live.js`, zie hoofdstuk 6). De marathonpagina bouwt hierop voort maar heeft zijn eigen bestand, `marathon-model.js` (hoofdstuk 5). Zoek in het bestand op de naam in **vet** om de regel te vinden.
 
 ### Wanneer verdwijnt iemand uit de lijst, wanneer telt hij als "op het ijs"
 
 | Naam | Rond regel | Huidige waarde | Wat hij doet |
 |---|---|---|---|
-| **`LIVE_WINDOW_MS`** | 10 | 15 minuten | Zolang iemands laatste rondje minder lang dan dit geleden was, blijft hij ergens in de lijst staan (op het ijs of "recent op het ijs"). Daarna verdwijnt hij helemaal. |
-| **`LIVE_ACTIVE_MS`** | 12 | 2 minuten | Zolang iemands laatste rondje korter dan dit geleden is, staat hij bij "op het ijs" met een bewegend stipje. Duurt het langer, dan gaat hij naar "recent op het ijs". |
+| **`LIVE_WINDOW_MS`** | 13 | 15 minuten | Zolang iemands laatste rondje minder lang dan dit geleden was, blijft hij ergens in de lijst staan (op het ijs of "recent op het ijs"). Daarna verdwijnt hij helemaal. Deze waarde wordt ook door `marathon-model.js` gebruikt. |
+| **`LIVE_ACTIVE_MS`** | 15 | 2 minuten | Zolang iemands laatste rondje korter dan dit geleden is, staat hij bij "op het ijs" met een bewegend stipje. Duurt het langer, dan gaat hij naar "recent op het ijs". |
 
 ### Hoe vaak nieuwe rondetijden opgehaald worden
 
 | Naam | Rond regel | Huidige waarde | Wat hij doet |
 |---|---|---|---|
-| **`LIVE_SAFETY_REFRESH_MS`** | 119 | 30 seconden | Ook als er niets bijzonders aan de hand is, wordt elke 30 s toch opnieuw gekeken of er een nieuwe ronde is (voor de zekerheid). |
-| **`LIVE_RESTING_REFRESH_MS`** | 121 | 20 seconden | Hoe vaak iemand die stilstaat (rust) opnieuw gecontroleerd wordt. |
-| **`LIVE_WAITING_REFRESH_MS`** | 123 | 3 seconden | Hoe vaak iemand die net begonnen is (nog geen eerste rondje) opnieuw gecontroleerd wordt. |
-| **`LIVE_DUE_AFTER_MS`** | 126 | 1 seconde | Hoelang er gewacht wordt ná het moment dat een nieuwe rondetijd verwacht wordt, voordat er echt gevraagd wordt (de data van MYLAPS komt met een kleine vertraging binnen). |
-| **`LIVE_RETRY_MIN_MS`** / **`LIVE_RETRY_MAX_MS`** | 127-128 | 1,5 - 8 seconden | Als een verwachte rondetijd uitblijft, wordt steeds opnieuw geprobeerd, met een wachttijd die tussen deze twee grenzen ligt. |
+| **`LIVE_SAFETY_REFRESH_MS`** | 115 | 30 seconden | Ook als er niets bijzonders aan de hand is, wordt elke 30 s toch opnieuw gekeken of er een nieuwe ronde is (voor de zekerheid). |
+| **`LIVE_RESTING_REFRESH_MS`** | 117 | 20 seconden | Hoe vaak iemand die stilstaat (rust) opnieuw gecontroleerd wordt. |
+| **`LIVE_WAITING_REFRESH_MS`** | 119 | 3 seconden | Hoe vaak iemand die net begonnen is (nog geen eerste rondje) opnieuw gecontroleerd wordt. |
+| **`LIVE_DUE_AFTER_MS`** | 122 | 1 seconde | Hoelang er gewacht wordt ná het moment dat een nieuwe rondetijd verwacht wordt, voordat er echt gevraagd wordt (de data van MYLAPS komt met een kleine vertraging binnen). |
+| **`LIVE_RETRY_MIN_MS`** / **`LIVE_RETRY_MAX_MS`** | 123-124 | 1,5 - 8 seconden | Als een verwachte rondetijd uitblijft, wordt steeds opnieuw geprobeerd, met een wachttijd die tussen deze twee grenzen ligt. |
+
+## 5. Instelbare waarden: marathonpagina (`marathon-model.js`)
+
+Dit bestand bevat de rekenregels achter de lijst per ronde van een marathon (wie won, wie is hoeveel ronden achter) en de "was dit een marathon?"-herkenning op de hoofdpagina. Het bouwt voort op `live-model.js` (hoofdstuk 4): daarvandaan komt bijvoorbeeld `LIVE_WINDOW_MS`, en de stipjes op de baan worden getekend met `live-model.js`'s `riderLive`/`liveShownStep`, alleen ingesteld met de waarden hieronder.
 
 ### Wanneer wordt een activiteit als marathon herkend (bij "Marathon analysis" op de hoofdpagina)
 
 | Naam | Rond regel | Huidige waarde | Wat hij doet |
 |---|---|---|---|
-| **`MARATHON_DETECT_BREAK_MS`** | 275 | 2,5 minuut | Een renner telt alleen mee als hij vóór de start minstens zo lang heeft stilgestaan/gewacht. |
-| **`MARATHON_DETECT_WINDOW_MS`** | 277 | 5 minuten | Renners die niet binnen dit tijdvenster van elkaar zijn gestart, horen niet bij dezelfde marathon. |
-| **`MARATHON_DETECT_MIN_RIDERS`** | 279 | 15 | Minimum aantal renners dat samen moet starten voordat het als marathon telt. |
-| **`MARATHON_DETECT_MIN_BREAK_SHARE`** | 281 | 0,3 (30%) | Minimaal dit aandeel van de groep moet zo'n pauze (zie `MARATHON_DETECT_BREAK_MS`) hebben gehad, anders wordt een drukke trainingsavond ten onrechte als marathon gezien. |
-| **`MARATHON_DETECT_NEXT_SHARE`** | 284 | 0,75 (75%) | Minimaal dit aandeel van de groep moet één ronde later opnieuw gezamenlijk over de finish komen ("de loze ronde"). |
-| **`MARATHON_DETECT_NEXT_WINDOW_MS`** | 285 | 30 seconden | Hoe dicht bij elkaar die renners een ronde later over de finish moeten komen om nog als "samen" te tellen. |
+| **`MARATHON_DETECT_BREAK_MS`** | 72 | 2,5 minuut | Een renner telt alleen mee als hij vóór de start minstens zo lang heeft stilgestaan/gewacht. |
+| **`MARATHON_DETECT_WINDOW_MS`** | 74 | 5 minuten | Renners die niet binnen dit tijdvenster van elkaar zijn gestart, horen niet bij dezelfde marathon. |
+| **`MARATHON_DETECT_MIN_RIDERS`** | 76 | 15 | Minimum aantal renners dat samen moet starten voordat het als marathon telt. |
+| **`MARATHON_DETECT_MIN_BREAK_SHARE`** | 78 | 0,3 (30%) | Minimaal dit aandeel van de groep moet zo'n pauze (zie `MARATHON_DETECT_BREAK_MS`) hebben gehad, anders wordt een drukke trainingsavond ten onrechte als marathon gezien. |
+| **`MARATHON_DETECT_NEXT_SHARE`** | 81 | 0,75 (75%) | Minimaal dit aandeel van de groep moet één ronde later opnieuw gezamenlijk over de finish komen ("de loze ronde"). |
+| **`MARATHON_DETECT_NEXT_WINDOW_MS`** | 82 | 30 seconden | Hoe dicht bij elkaar die renners een ronde later over de finish moeten komen om nog als "samen" te tellen. |
 
 ### Rekenregels van de marathon-uitslag zelf (de lijst per ronde)
 
 | Naam | Rond regel | Huidige waarde | Wat hij doet |
 |---|---|---|---|
-| **`MARATHON_GAP_MS`** | 220 | 5 minuten | Een pauze van minstens zo lang scheidt "opwarmen" van de echte wedstrijd. |
-| **`MARATHON_QUIET_MS`** | 222 | 90 seconden | Komt er zo lang niemand meer over de finish, dan wordt de wedstrijd als afgelopen beschouwd. |
-| **`MARATHON_SKATE_OUT`** | 225 | 1,3× | Een ronde die minstens dit veel langzamer is dan gebruikelijk, aan het eind van de wedstrijd, wordt gezien als "uitrijden" en telt niet mee als laatste ronde. |
-| **`MARATHON_MIN_CROSSINGS`** / **`MARATHON_MIN_LAPS`** | 227-228 | 3 / 5 | Ondergrenzen om te bepalen of een trage slotronde echt "uitrijden" is (te weinig renners of te weinig ronden telt niet). |
-| **`MARATHON_MISSED`** | 243 | 1,7× | Een ronde die minstens dit veel langer duurde dan gebruikelijk, wordt gezien als "de tijdmeting heeft deze renner één keer gemist" in plaats van als een hele trage ronde. |
-| **`MARATHON_LAP_SHARE`** | 246 | 0,75 | Bepaalt wanneer een nieuwe rondenummer van de hele groep begint (een groepsronde). |
-| **`MARATHON_BEFORE_START_MS`** | 333 | 20 seconden | Renners die tot dit lang vóór de starttijd al over de finish kwamen, tellen nog mee als "aan de start". |
+| **`MARATHON_GAP_MS`** | 17 | 5 minuten | Een pauze van minstens zo lang scheidt "opwarmen" van de echte wedstrijd. |
+| **`MARATHON_QUIET_MS`** | 19 | 90 seconden | Komt er zo lang niemand meer over de finish, dan wordt de wedstrijd als afgelopen beschouwd. |
+| **`MARATHON_SKATE_OUT`** | 22 | 1,3× | Een ronde die minstens dit veel langzamer is dan gebruikelijk, aan het eind van de wedstrijd, wordt gezien als "uitrijden" en telt niet mee als laatste ronde. |
+| **`MARATHON_MIN_CROSSINGS`** / **`MARATHON_MIN_LAPS`** | 24-25 | 3 / 5 | Ondergrenzen om te bepalen of een trage slotronde echt "uitrijden" is (te weinig renners of te weinig ronden telt niet). |
+| **`MARATHON_MISSED`** | 40 | 1,7× | Een ronde die minstens dit veel langer duurde dan gebruikelijk, telt niet als een normale ronde: is het de allereerste doorkomst van een renner sinds de start, dan wordt hij helemaal niet meegeteld (de "startronde": wachten bij de lijn duurt soms net zo lang als een gemiste ronde). Later in de wedstrijd telt zo'n lange doorkomst gewoon als "de volgende ronde" — er wordt niet meer gegokt hoeveel ronden de tijdmeting gemist zou kunnen hebben, dat gaf eerder onmogelijke uitslagen (iemand die "voor" de echte winnaar leek te finishen). |
+| **`MARATHON_LAP_SHARE`** | 43 | 0,75 | Bepaalt wanneer een nieuwe rondenummer van de hele groep begint (een groepsronde); wordt alleen nog gebruikt om de automatische starttijd te kiezen. |
+| **`MARATHON_BEFORE_START_MS`** | 130 | 20 seconden | Renners die tot dit lang vóór de starttijd al over de finish kwamen, tellen nog mee als "aan de start". |
+| **`MARATHON_FINISH_GRACE_MS`** | 136 | 1 minuut | Een renner die één ronde achter zit, telt tóch mee in de uitslag (met zijn eigen, lagere aantal ronden) zodra de wedstrijd voorbij is en zijn eigen laatste ronde binnen deze tijd van de finish van de winnaar eindigde — vóór of ná dat moment. Een massasprint is niet in één klap voorbij: dit voorkomt dat iemand die een fractie van een seconde eerder over de finish kwam dan de winnaar zelf, onterecht als "gelapt" wordt weggezet. |
 
 ### Nauwkeurigheid van de bewegende stipjes op de marathonpagina
 
 | Naam | Rond regel | Huidige waarde | Wat hij doet |
 |---|---|---|---|
-| **`MARATHON_ESTIMATE_OPTIONS`** | 63 | laatste ronde, geen "afremregel" | Hoe de positie van een stipje tussen twee rondes door geschat wordt, alleen op de marathonpagina (de Live-pagina gebruikt andere, minder scherp afgestelde instellingen). Zie de toelichting direct boven deze regel in het bestand: hier is met echte marathondata uitgerekend welke instelling het dichtst bij de werkelijkheid zit. |
-| **`MARATHON_SHOWN_OPTIONS`** | 64 | snel bijsturen (5% van een ronde), snelheid 0,2-3× | Hoe snel een stipje op het scherm zijn geschatte positie "inhaalt" als er een nieuwe, echte rondetijd binnenkomt. |
+| **`MARATHON_ESTIMATE_OPTIONS`** | 12 | laatste ronde, geen "afremregel" | Hoe de positie van een stipje tussen twee rondes door geschat wordt, alleen op de marathonpagina (de Live-pagina gebruikt andere, minder scherp afgestelde instellingen uit `live-model.js`). Zie de toelichting direct boven deze regel in het bestand: hier is met echte marathondata uitgerekend welke instelling het dichtst bij de werkelijkheid zit. |
+| **`MARATHON_SHOWN_OPTIONS`** | 13 | snel bijsturen (5% van een ronde), snelheid 0,2-3× | Hoe snel een stipje op het scherm zijn geschatte positie "inhaalt" als er een nieuwe, echte rondetijd binnenkomt. |
 
-## 5. Instelbare waarden: live- en marathonpagina, weergave (`live.js`)
+## 6. Instelbare waarden: live- en marathonpagina, weergave (`live.js`)
 
 Dit bestand tekent de lijst en de baan. De belangrijkste instelbare dingen staan helemaal bovenaan de functie (rond regel 9-35):
 
@@ -176,7 +182,7 @@ Dit bestand tekent de lijst en de baan. De belangrijkste instelbare dingen staan
 | **`LANE_STEP`**, **`LANES`** | Hoe ver stipjes van renners die naast elkaar rijden, uit elkaar getekend worden op de baan (zodat ze niet overlappen). |
 | **`BAND_WIDTH`**, **`MARGIN`** | Tekenafmetingen van de baan zelf (hoe breed de baan getekend wordt, hoeveel ruimte eromheen). |
 
-## 6. Instelbare waarden: replay-pagina (`replay-model.js`)
+## 7. Instelbare waarden: replay-pagina (`replay-model.js`)
 
 | Naam | Rond regel | Huidige waarde | Wat hij doet |
 |---|---|---|---|
@@ -185,16 +191,16 @@ Dit bestand tekent de lijst en de baan. De belangrijkste instelbare dingen staan
 | **`GROUP_GAP_MS`** | 86 | 1 seconde | Hoe dicht twee renners na elkaar over de finish moeten komen om als "in dezelfde groep" te tellen (voor "in your group" op de hoofdpagina). |
 | **`GROUP_WINDOW_SHARE`** | 88 | 0,25 (een kwart ronde) | Hoe ver voor en na jouw eigen rondje nog gekeken wordt om te bepalen wie er "in jouw groep" zat. |
 
-## 7. Instelbare waarden: ophalen van data (`api.js`)
+## 8. Instelbare waarden: ophalen van data (`api.js`)
 
 | Naam | Rond regel | Huidige waarde | Wat hij doet |
 |---|---|---|---|
 | **`PROXY_BASE_URL`** | 6 | `https://mylaps-proxy.iceskater.workers.dev/api/mylaps` | Het adres van het tussenstation bij Cloudflare waar de site al zijn data ophaalt. Verander dit alleen als het tussenstation zelf verhuist. |
 | **`ACTIVITIES_COUNT`** | 9 | 500 | Hoeveel sessies er maximaal per renner worden opgehaald op de hoofdpagina. |
 | **`FETCH_RETRIES`** / **`FETCH_RETRY_DELAY_MS`** | 11-12 | 2 pogingen / 500 ms | Hoe vaak een mislukt verzoek opnieuw geprobeerd wordt, en hoe lang er tussen pogingen gewacht wordt. |
-| **`FINISHED_AFTER_MS`** | 87 | 15 minuten | Een activiteit die minstens dit lang geleden is afgelopen, wordt als "definitief klaar" beschouwd — dat maakt dat het tussenstation de rondetijden lang mag onthouden (zie ook hoofdstuk 8). |
+| **`FINISHED_AFTER_MS`** | 87 | 15 minuten | Een activiteit die minstens dit lang geleden is afgelopen, wordt als "definitief klaar" beschouwd — dat maakt dat het tussenstation de rondetijden lang mag onthouden (zie ook hoofdstuk 9). |
 
-## 8. Instelbare waarden: persoonlijke records (`records.js`, `history-store.js`)
+## 9. Instelbare waarden: persoonlijke records (`records.js`, `history-store.js`)
 
 Deze bestanden horen bij het "Records"-onderdeel op de hoofdpagina (persoonlijke records, lokaal in de browser onthouden). Er is er hier maar één instelling in, maar wel een belangrijk gedrag om te kennen.
 
@@ -206,7 +212,7 @@ Deze bestanden horen bij het "Records"-onderdeel op de hoofdpagina (persoonlijke
 
 **Eén transponder tegelijk per apparaat.** Dit is geen instelbaar getal, maar wel iets om te weten: dit apparaat onthoudt de geschiedenis van maar één transponder tegelijk (`historyOwner` in `history-store.js`). Zoek je op een andere transponder dan degene waarvan al gegevens zijn onthouden, dan verschijnt de knop "Change my transponder" in plaats van de records — die knop wist na een waarschuwing alle opgeslagen gegevens van de vorige transponder. Er is expres geen aparte "wis geschiedenis"-knop meer: wisselen van transponder is de enige manier om opnieuw te beginnen.
 
-## 9. Instelbare waarden: het tussenstation bij Cloudflare (`cloudflare-worker/src/index.js`)
+## 10. Instelbare waarden: het tussenstation bij Cloudflare (`cloudflare-worker/src/index.js`)
 
 Dit bestand is **niet** onderdeel van de website zelf; het is het losse tussenstation-programma. Een wijziging hier moet je apart online zetten met `npx wrangler deploy` (zie [cloudflare-worker/README.md](cloudflare-worker/README.md) en [README.md](README.md#deploy)) — die knop draai ik normaal niet zonder het eerst aan jou te vragen, omdat dit voor alle bezoekers meteen verandert.
 
@@ -218,14 +224,14 @@ Dit bestand is **niet** onderdeel van de website zelf; het is het losse tussenst
 | Bij `activities:` / `chips:` | rond 74-97 | 2 minuten | De activiteitenlijst van een renner wordt kort onthouden, zodat een nieuwe sessie snel zichtbaar wordt. |
 | **`DEFAULT_ALLOWED_ORIGINS`** | 29 | de echte site + `localhost`/`127.0.0.1` op poort 8080 en 5500 | Van welke websites/computers het tussenstation verzoeken accepteert. Test je lokaal op een ander poortnummer, dan moet dat hier (of in `wrangler.toml`) bij, anders krijg je een `403`-foutmelding. |
 
-## 10. Instelbare waarden: installeerbare app (`sw.js`)
+## 11. Instelbare waarden: installeerbare app (`sw.js`)
 
 | Naam | Wat hij doet |
 |---|---|
 | **`VERSION`** | Verhoog dit getal (bijvoorbeeld van `v2` naar `v3`) als je de lijst hieronder (`SHELL`) wijzigt, zodat bezoekers die de app al geïnstalleerd hebben de nieuwe versie krijgen in plaats van een verouderde uit hun eigen opslag. |
 | **`SHELL`** | De volledige lijst van bestanden die de installeerbare app nodig heeft om zonder internetverbinding te kunnen openen. Voeg je een nieuwe pagina of een nieuw script toe aan de site, dan moet die hier ook bij, anders werkt de app-versie niet meer goed offline. (Er is een test die dit controleert: `tests/unit/pwa.test.js`.) |
 
-## 11. Iets aanpassen: het hele stappenplan
+## 12. Iets aanpassen: het hele stappenplan
 
 1. Zoek de naam van de instelling op in dit document, en vind hem terug in het genoemde bestand (Ctrl+F op de naam).
 2. Verander het getal.
