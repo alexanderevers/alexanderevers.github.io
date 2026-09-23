@@ -30,6 +30,26 @@ async function step(name, run) {
     const { server, port } = await startStaticServer(buildLiveStubScript());
     const base = `http://127.0.0.1:${port}`;
     const page = await launchBrowser(browserPath);
+    // Keeps a reference to the offscreen canvas the video export composes the track, the table and the lap graph into (live.js,
+    // drawExportFrame): captureStream is the only hook into it, there is no window.__live accessor for an internal canvas. Installed
+    // once so it also applies after every page.navigate() in this file (a plain page.evaluate would not survive a navigation).
+    await page.send('Page.addScriptToEvaluateOnNewDocument', { source: `(() => {
+        const orig = HTMLCanvasElement.prototype.captureStream;
+        HTMLCanvasElement.prototype.captureStream = function (...args) {
+            if (this.width === 1280 && this.height === 800) window.__exportCanvasRef = this;
+            return orig.apply(this, args);
+        };
+    })();` });
+    // Counts the pixels of one region of the export canvas that are not close to the (light theme) background, as a simple "this part
+    // was actually drawn on, not left blank" check.
+    const inkPixels = (x, y, w, h) => page.evaluate(`(() => {
+        const c = window.__exportCanvasRef;
+        if (!c) return -1;
+        const d = c.getContext('2d').getImageData(${x}, ${y}, ${w}, ${h}).data;
+        let n = 0;
+        for (let i = 0; i < d.length; i += 4) if (d[i] < 235 || d[i + 1] < 235 || d[i + 2] < 235) n++;
+        return n;
+    })()`);
     const text = async selector => page.evaluate(`(document.querySelector(${JSON.stringify(selector)}) || {}).textContent`);
     const count = async selector => page.evaluate(`document.querySelectorAll(${JSON.stringify(selector)}).length`);
     const states = async () => JSON.parse(await page.evaluate('JSON.stringify(window.__live.states())'));
@@ -437,6 +457,14 @@ async function step(name, run) {
             await set('replaySpeed', '30', 'change');
             await page.evaluate('document.getElementById("replayExport").click()');
             await page.waitFor('window.__live.recording() === true', 'recording again');
+            // the exported video is not just the track: the table (with the selected rider on top) and his lap graph are drawn into it
+            // as well, each in their own part of the 1280x800 canvas (drawExportFrame in live.js)
+            await page.waitFor('!!window.__exportCanvasRef', 'the export canvas');
+            await page.waitFor('window.__live.marathon() && window.__live.marathon().rows.length >= 3', 'real laps to draw in the table', 15000);
+            await page.sleep(200);
+            assert.ok((await inkPixels(0, 0, 380, 800)) > 200, 'the table was not drawn into the exported video');
+            assert.ok((await inkPixels(380, 0, 900, 496)) > 50, 'the track was not drawn into the exported video');
+            assert.ok((await inkPixels(380, 496, 900, 304)) > 50, 'the lap graph was not drawn into the exported video');
             await page.waitFor('window.__live.recording() === false', 'the recording to stop by itself once the replay ends', 20000);
             assert.equal(await page.evaluate('window.__live.replay().playing'), false);
             assert.equal(await page.evaluate('window.__live.replay().at === window.__live.replay().endMs'), true);

@@ -53,10 +53,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const ctx = canvas.getContext('2d');
     const trackWrap = $('liveTrackWrap');
     const tooltip = $('liveTooltip');
+    const lapCanvas = $('liveLapCanvas');           // the same canvas as the lap graph below draws on (also used to compose the exported video)
     // The graph of the lap times of the selected rider (live-graph.js)
     const lapGraph = createLiveLapGraph({
         title: $('liveLapTitle'), readout: $('liveLapReadout'), empty: $('liveLapEmpty'), body: $('liveLapBody'),
-        canvas: $('liveLapCanvas'), slider: $('liveLapMax'), sliderValue: $('liveLapMaxValue'), tooltip: $('liveLapTooltip')
+        canvas: lapCanvas, slider: $('liveLapMax'), sliderValue: $('liveLapMaxValue'), tooltip: $('liveLapTooltip')
     }, { getColors: () => colors, onChange: () => { dirty = true; } });
 
     // ---------- Settings: rink and refresh time come from the address, else from what was chosen last time ----------
@@ -391,14 +392,105 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ---------- Export the replay as a video ----------
-    // Records the track (the canvas the riders move on) while the replay plays, from the chosen start to the end, and downloads
-    // it as a .webm file. Uses canvas.captureStream + MediaRecorder, both built into the browser: nothing is uploaded anywhere.
+    // Records the track, the lap graph and the list together while the replay plays, from the chosen start to the end, and downloads
+    // it as a .webm file. The three are composed into one offscreen canvas every frame (drawExportFrame): canvas.captureStream +
+    // MediaRecorder, both built into the browser, then record that canvas instead of the track alone. Nothing is uploaded anywhere.
+    const EXPORT_W = 1280, EXPORT_H = 800, EXPORT_TABLE_W = 380;           // the composed video, and the width of its table column
+    let exportCanvas = null, exportCtx = null;
     let recorder = null;                      // the MediaRecorder while a recording is running, else null
     let lastExportBlob = null;                // the most recent recording (for the test: a real download cannot be observed headless)
     const recordingSupported = () => typeof canvas.captureStream === 'function' && typeof window.MediaRecorder === 'function';
     function chooseVideoMimeType() {
         const candidates = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
         return candidates.find(type => window.MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(type)) || 'video/webm';
+    }
+    // Draws a source canvas as large as it fits into the given box, keeping its own aspect ratio (letterboxed, centred).
+    function fitCanvasInto(source, x, y, w, h) {
+        if (!source.width || !source.height) return;
+        const scale = Math.min(w / source.width, h / source.height);
+        const dw = source.width * scale, dh = source.height * scale;
+        exportCtx.drawImage(source, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+    }
+    // The riders table, drawn by hand (it is HTML on the page, but the recording only has the canvas): the selected riders on top
+    // (the same rule as the "Selected" group of the list, `selectedIdsShown`), then the riders of the newest lap, as many rows as fit.
+    function drawExportTable(x0, y0, w, h) {
+        const pad = 12, rowH = 22;
+        exportCtx.save();
+        exportCtx.beginPath(); exportCtx.rect(x0, y0, w, h); exportCtx.clip();
+        exportCtx.textBaseline = 'alphabetic';
+        let y = y0 + pad;
+        const cols = { place: x0 + pad, dot: x0 + pad + 22, name: x0 + pad + 32, laps: x0 + w - pad - 118, gap: x0 + w - pad - 66, time: x0 + w - pad };
+        const clip = (text, maxW) => {
+            if (exportCtx.measureText(text).width <= maxW) return text;
+            let cut = text;
+            while (cut.length > 1 && exportCtx.measureText(`${cut}…`).width > maxW) cut = cut.slice(0, -1);
+            return `${cut}…`;
+        };
+        const header = text => {
+            if (y + rowH > y0 + h) return false;
+            exportCtx.font = '600 11px system-ui, sans-serif';
+            exportCtx.fillStyle = colors.muted;
+            exportCtx.textAlign = 'left';
+            exportCtx.fillText(text.toUpperCase(), x0 + pad, y + 11);
+            y += rowH;
+            return true;
+        };
+        const row = ({ place, id, label, laps, gapMs, endMs, bold, muted }) => {
+            if (y + rowH > y0 + h) return false;
+            const slot = colourSlots().get(id);
+            if (slot !== undefined) {
+                exportCtx.fillStyle = colors.series[slot] || colors.series[0];
+                exportCtx.beginPath(); exportCtx.arc(cols.dot, y + rowH / 2 - 4, 4, 0, Math.PI * 2); exportCtx.fill();
+            }
+            exportCtx.font = bold ? '600 12px system-ui, sans-serif' : '12px system-ui, sans-serif';
+            exportCtx.fillStyle = muted ? colors.muted : colors.text;
+            exportCtx.textAlign = 'left';
+            exportCtx.fillText(String(place), x0 + pad, y + rowH - 7);
+            exportCtx.fillText(clip(label, cols.laps - cols.name - 6), cols.name, y + rowH - 7);
+            exportCtx.textAlign = 'right';
+            exportCtx.fillStyle = colors.muted;
+            exportCtx.font = '12px system-ui, sans-serif';
+            if (laps !== undefined) exportCtx.fillText(String(laps), cols.laps, y + rowH - 7);
+            if (gapMs !== undefined) exportCtx.fillText(gapText(gapMs), cols.gap, y + rowH - 7);
+            if (endMs !== undefined) exportCtx.fillText(timeOfDay(endMs), cols.time, y + rowH - 7);
+            y += rowH;
+            return true;
+        };
+        const result = marathonResult;
+        if (!result) {
+            exportCtx.font = '13px system-ui, sans-serif';
+            exportCtx.fillStyle = colors.muted;
+            exportCtx.textAlign = 'left';
+            exportCtx.fillText('Loading…', x0 + pad, y + 13);
+            exportCtx.restore();
+            return;
+        }
+        const selectedIds = selectedIdsShown();
+        selecting: if (selectedIds.length && header('Selected')) {
+            for (const id of selectedIds) {
+                const inRows = result.rows.find(r => r.id === id);
+                const inPending = result.pending.find(p => p.id === id);
+                if (inRows) { if (!row({ place: inRows.place, id, label: inRows.label, laps: inRows.laps, gapMs: inRows.gapMs, endMs: inRows.endMs, bold: true })) break selecting; }
+                else if (inPending) { if (!row({ place: '–', id, label: inPending.label, laps: inPending.laps, bold: true, muted: true })) break selecting; }
+            }
+        }
+        listing: if (header(`Lap ${result.lapNr}${result.finished && result.latest ? ' · finished' : ''}`)) {
+            for (const r of result.rows) if (!row({ place: r.place, id: r.id, label: r.label, laps: r.laps, gapMs: r.gapMs, endMs: r.endMs })) break listing;
+        }
+        exportCtx.restore();
+    }
+    // Composes the track, the lap graph and the table into exportCanvas: what the recording actually captures.
+    function drawExportFrame() {
+        if (!exportCtx) return;
+        exportCtx.fillStyle = colors.surface;
+        exportCtx.fillRect(0, 0, EXPORT_W, EXPORT_H);
+        drawExportTable(0, 0, EXPORT_TABLE_W, EXPORT_H);
+        exportCtx.strokeStyle = colors.edge;
+        exportCtx.lineWidth = 1;
+        exportCtx.beginPath(); exportCtx.moveTo(EXPORT_TABLE_W + 0.5, 0); exportCtx.lineTo(EXPORT_TABLE_W + 0.5, EXPORT_H); exportCtx.stroke();
+        const rightX = EXPORT_TABLE_W, rightW = EXPORT_W - EXPORT_TABLE_W, trackH = Math.round(EXPORT_H * 0.62);
+        fitCanvasInto(canvas, rightX, 0, rightW, trackH);                  // the track
+        fitCanvasInto(lapCanvas, rightX, trackH, rightW, EXPORT_H - trackH);   // the lap graph of the selected rider
     }
     function stopExport() {
         if (recorder && recorder.state !== 'inactive') recorder.stop();      // the rest happens in recorder.onstop
@@ -410,7 +502,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const mimeType = chooseVideoMimeType();
-        const stream = canvas.captureStream(30);
+        if (!exportCanvas) {
+            exportCanvas = document.createElement('canvas');
+            exportCanvas.width = EXPORT_W;
+            exportCanvas.height = EXPORT_H;
+            exportCtx = exportCanvas.getContext('2d');
+        }
+        drawExportFrame();                             // an initial frame, so the recording never opens on a blank canvas
+        const stream = exportCanvas.captureStream(30);
         try {
             recorder = new MediaRecorder(stream, { mimeType });
         } catch (error) {
@@ -958,6 +1057,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const second = Math.floor(clock() / (replay ? 250 : 1000));         // a replay redraws four times per second
         if (dirty || second !== lastSecond) { lastSecond = second; dirty = false; renderAll(); }
         else if (now - lastFrame > 100) { lastFrame = now; refreshStates(); drawTrack(); drawLapPanel(); }   // the dots keep moving between the seconds
+        if (recorder) drawExportFrame();               // compose the recorded video from the track, the graph and the table just drawn
         requestAnimationFrame(frame);
     }
 
