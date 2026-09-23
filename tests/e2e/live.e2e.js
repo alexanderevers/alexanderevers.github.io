@@ -351,6 +351,9 @@ async function step(name, run) {
             await page.navigate(base + '/marathon.html?rink=2040&poll=1&activity=9101');
             await page.waitFor('window.__live && !!window.__live.replay() && window.__live.replay().loading === false && !!window.__live.marathon()', 'the replay', 30000);
             await namesIn();
+            // the rider whose own activity this replay was opened from ("you") starts selected and coloured, the same as the other replay page
+            assert.equal(await page.evaluate('window.__live.selected()'), 9101);
+            assert.deepEqual(await page.evaluate('JSON.stringify(window.__live.colours())').then(JSON.parse), { 9101: 0 });
             assert.equal(await hidden('replayBar'), false);
             assert.equal(await page.evaluate('[...document.querySelectorAll("#replaySpeed option")].map(o => o.value).join(",")'), '1,2,5,10,20,30');
             assert.equal(await hidden('replayLabel'), true);
