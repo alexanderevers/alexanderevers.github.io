@@ -437,6 +437,10 @@ async function step(name, run) {
             await page.evaluate('document.getElementById("replayPlay").click()');
         });
 
+        // The "Export video" button is hidden for now (marathon.html), so this test is disabled rather than deleted: the recording
+        // code it exercises (live.js: startExport, stopExport, drawExportFrame) is still there, just unreachable from the page.
+        // Uncomment together with the button in marathon.html to bring both back.
+        /*
         await step('live: export the marathon replay as a video (canvas.captureStream + MediaRecorder), from the chosen start, with a manual or an automatic stop', async () => {
             const set = (id, value, event) => page.evaluate('(() => { const e = document.getElementById(' + JSON.stringify(id) + '); e.value = ' + JSON.stringify(value) + '; e.dispatchEvent(new Event(' + JSON.stringify(event) + ')); })()');
             assert.equal(await page.evaluate('typeof document.getElementById("liveTrack").captureStream === "function" && typeof MediaRecorder === "function"'), true);
@@ -471,6 +475,7 @@ async function step(name, run) {
             assert.ok((await page.evaluate('window.__live.lastExportSize()')) > 0);
             assert.match(await text('#replayExport'), /^Export video$/);
         });
+        */
 
         await step('live: back to live after a replay', async () => {
             const hidden = id => page.evaluate('document.getElementById(' + JSON.stringify(id) + ').classList.contains("hidden")');
