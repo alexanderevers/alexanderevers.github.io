@@ -91,16 +91,15 @@ function skip(name, reason) {
             assert.equal(await page.evaluate('document.getElementById("activitySelect").value'), String(REFERENCE.id));
             await chooseYear('2025');
             assert.equal(await page.evaluate('document.getElementById("activitySelect").value'), '');
-            assert.equal(await page.evaluate('document.getElementById("fetchLapsBtn").disabled'), true);
             await chooseYear('all');
         });
 
         await page.evaluate(`(() => { const s = document.getElementById("activitySelect"); s.value = "${REFERENCE.id}"; s.dispatchEvent(new Event("change")); })()`);
 
-        await step('dashboards: before Fetch Laps only Start and Records are there, with two dots of navigation', async () => {
-            assert.deepEqual(await page.evaluate('Dashboards.available()'), ['dashStart', 'dashRecords']);   // Records shows up once the transponder's activities are known
+        await step('dashboards: before Fetch Laps only Start, Records and Season are there, with three dots of navigation', async () => {
+            assert.deepEqual(await page.evaluate('Dashboards.available()'), ['dashStart', 'dashRecords', 'dashSeason']);   // Records and Season show up once the transponder's activities are known
             assert.equal(await visible('#dashNav'), true);
-            assert.equal(await page.evaluate('document.querySelectorAll("#dashNav .dash-dot").length'), 2);
+            assert.equal(await page.evaluate('document.querySelectorAll("#dashNav .dash-dot").length'), 3);
             assert.equal(await page.evaluate('getComputedStyle(document.documentElement).scrollSnapType'), 'y mandatory');
         });
 
@@ -182,7 +181,7 @@ function skip(name, reason) {
         if (!chartAvailable) {
             skip('main page: lap table, statistics and GPX download', 'Chart.js could not be loaded from the CDN (offline?)');
         } else {
-            await click('#fetchLapsBtn');
+            // selecting the activity (line 97) already fetched its laps by itself
             await page.waitFor('!document.getElementById("lapsData").classList.contains("hidden")', 'the laps section');
 
             await step('main page: session summary cards', async () => {
@@ -214,13 +213,14 @@ function skip(name, reason) {
                 assert.match(gpx, /<trkpt lat="52\.348051" lon="4\.945358">/);           // first point of the Amsterdam master track
             });
             const atTop = id => `Math.abs(document.getElementById("${id}").getBoundingClientRect().top) < 3`;
-            await step('dashboards: Fetch Laps adds the session dashboards, lists them in the navigation and scrolls to Session', async () => {
-                assert.deepEqual(await page.evaluate('Dashboards.available()'), ['dashStart', 'dashSession', 'speedAnalysis', 'dashRecords']);
-                await page.waitFor(atTop('dashSession'), 'the page to scroll to the Session dashboard');
-                await page.waitFor('document.querySelectorAll("#dashNav .dash-dot").length === 4', 'the navigation');
+            await step('dashboards: selecting an activity adds the session dashboards and lists them in the navigation, without scrolling away from Start', async () => {
+                assert.deepEqual(await page.evaluate('Dashboards.available()'), ['dashStart', 'dashSession', 'speedAnalysis', 'dashRecords', 'dashSeason']);
+                await page.waitFor('document.querySelectorAll("#dashNav .dash-dot").length === 5', 'the navigation');
                 const labels = JSON.parse(await page.evaluate('JSON.stringify([...document.querySelectorAll("#dashNav .dash-dot")].map(d => d.getAttribute("aria-label")))'));
-                assert.deepEqual(labels, ['Start', 'Session', 'Speed laps', 'Records']);
-                assert.equal(await page.evaluate('document.querySelector("#dashNav .dash-dot.active").dataset.target'), 'dashSession');
+                assert.deepEqual(labels, ['Start', 'Session', 'Speed laps', 'Records', 'Season']);
+                // still on Start: picking an activity from the dropdown must not scroll it away, so "Find Overlapping
+                // Sessions" and the GPX download (both on Start) stay reachable without hunting the page back down
+                assert.equal(await page.evaluate('document.querySelector("#dashNav .dash-dot.active").dataset.target'), 'dashStart');
                 // every dashboard fills exactly one screen
                 assert.ok(await page.evaluate('[...document.querySelectorAll(".dash")].filter(d => d.getClientRects().length).every(d => Math.round(d.getBoundingClientRect().height) === innerHeight)'));
                 // the hero figure is the best lap
@@ -278,8 +278,7 @@ function skip(name, reason) {
 
                 // fetch a second, older session (one of the history activities, id 101), so there is something to click on
                 await page.evaluate('(() => { const f = document.getElementById("yearFilter"); f.value = "all"; f.dispatchEvent(new Event("change")); })()');
-                await page.evaluate('(() => { const s = document.getElementById("activitySelect"); s.value = "101"; s.dispatchEvent(new Event("change")); })()');
-                await click('#fetchLapsBtn');
+                await page.evaluate('(() => { const s = document.getElementById("activitySelect"); s.value = "101"; s.dispatchEvent(new Event("change")); })()');   // fetches its laps by itself
                 await page.waitFor('document.querySelectorAll(".records-session-row").length === 2', 'the older session remembered too');
 
                 // clicking a row of "Best lap per season" opens the stored sessions (even when closed) and scrolls to, and briefly
@@ -333,8 +332,7 @@ function skip(name, reason) {
                 await page.evaluate(`(() => { document.getElementById("transponderInput").value = "${data.referenceChip}"; })()`);
                 await click('#fetchActivitiesBtn');
                 await page.waitFor('document.getElementById("activitySelect").options.length > 1', 'the reference transponder to load');
-                await page.evaluate(`(() => { const s = document.getElementById("activitySelect"); s.value = "${REFERENCE.id}"; s.dispatchEvent(new Event("change")); })()`);
-                await click('#fetchLapsBtn');
+                await page.evaluate(`window.openActivityOnSessionDashboard("${REFERENCE.id}")`);
                 await page.waitFor('!document.getElementById("lapsData").classList.contains("hidden")', 'the laps section, back after switching transponders');
                 await page.waitFor(atTop('dashSession'), 'back on the Session dashboard');
             });

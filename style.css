@@ -8,6 +8,7 @@
     --text-secondary: #52514e;
     --text-muted: #898781;
     --grid: #e1e0d9;
+    --chart-grid: #e1e0d9;
     --axis: #c3c2b7;
     --border: rgba(11, 11, 11, 0.10);
     --series-1: #2a78d6;
@@ -39,6 +40,7 @@
         --text-secondary: #c3c2b7;
         --text-muted: #898781;
         --grid: #30303f;
+        --chart-grid: #242430;
         --axis: #45455a;
         --border: rgba(255, 255, 255, 0.10);
         --series-1: #3987e5;
@@ -65,6 +67,7 @@
     --text-secondary: #c3c2b7;
     --text-muted: #898781;
     --grid: #30303f;
+    --chart-grid: #242430;
     --axis: #45455a;
     --border: rgba(255, 255, 255, 0.10);
     --series-1: #3987e5;
@@ -482,6 +485,21 @@ button:disabled {
 #distributionChartContainer { height: 260px; }
 #recordsChartContainer, #recordsFastChartContainer { height: 260px; }
 #recordsChartContainer { margin-bottom: 20px; }
+#seasonDistanceChartContainer, #seasonFastLapsChartContainer, #seasonDistributionChartContainer { height: 260px; }
+#seasonDistanceChartContainer, #seasonFastLapsChartContainer { margin-bottom: 20px; }
+
+.season-compare { max-width: 260px; margin-bottom: 20px; }
+
+.chart-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.chart-header h3 { margin-bottom: 0; }
+.chart-metric-select {
+    padding: 2px 6px;
+    font-size: 0.78rem;
+    border-radius: 4px;
+    border: 1px solid var(--axis);
+    background-color: var(--surface);
+    color: var(--text-secondary);
+}
 
 .table-and-context-section {
     border-top: 1px solid var(--border);

@@ -77,7 +77,6 @@
                                 <option value="">Select an activity</option>
                             </select>
                             <div> <!-- Wrapper voor de knoppen -->
-                                <button id="fetchLapsBtn" disabled>Fetch Laps</button>
                                 <button id="fetchOverlappingBtn" class="hidden">Find Overlapping Sessions</button>
                                 <button id="downloadGpxBtn" class="hidden">Download GPX for Strava</button>
                             </div>
@@ -170,7 +169,42 @@
         </div>
     </section>
 
-    <!-- 05 Together: who was on the ice with you -->
+    <!-- 05 Season: this season's build-up, session by session, with an optional comparison season -->
+    <section class="dash hidden" id="dashSeason" data-title="Season">
+        <div class="dash-inner">
+            <header class="dash-head"><h2>Season</h2><p class="dash-sub">This season's build-up, session by session</p></header>
+            <p id="seasonEmpty" class="muted-note">No sessions remembered yet for this transponder.</p>
+            <div id="seasonBody" class="hidden">
+                <div class="input-group season-compare">
+                    <label for="seasonCompareSelect">Compare to</label>
+                    <select id="seasonCompareSelect"><option value="">None</option></select>
+                </div>
+                <h3>Distance</h3>
+                <div class="chart-container" id="seasonDistanceChartContainer">
+                    <canvas id="seasonDistanceChart"></canvas>
+                </div>
+                <div class="chart-header">
+                    <h3>Fastest laps</h3>
+                    <select id="seasonFastLapMetricSelect" class="chart-metric-select" title="Which lap time to plot per session"></select>
+                </div>
+                <div class="chart-container" id="seasonFastLapsChartContainer">
+                    <canvas id="seasonFastLapsChart"></canvas>
+                </div>
+                <div class="chart-header">
+                    <h3>Lap time distribution</h3>
+                    <select id="seasonDistributionModeSelect" class="chart-metric-select" title="Absolute lap counts, or each bin's share of the season's laps">
+                        <option value="relative">Relative</option>
+                        <option value="absolute">Absolute</option>
+                    </select>
+                </div>
+                <div class="chart-container" id="seasonDistributionChartContainer">
+                    <canvas id="seasonDistributionChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 06 Together: who was on the ice with you -->
     <section class="dash hidden" id="overlappingSessions" data-title="Together">
         <div class="dash-inner">
             <header class="dash-head"><h2>Together</h2><p class="dash-sub">Everyone who was on the ice during this session</p></header>
@@ -199,6 +233,7 @@
     <script src="marathon-model.js"></script>
     <script src="fetch_overlapping_sessions.js"></script>
     <script src="records-ui.js"></script>
+    <script src="season-ui.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
