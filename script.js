@@ -163,7 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateMainLapChart(lapData) {
         const analysis = analyzeSpeedLaps(currentLapData, MAX_FAST_LAP_TIME_SECONDS, currentTrackLength);
         if (mainLapChart) mainLapChart.destroy();
-        mainLapChart = new Chart(mainLapChartCanvas, buildOverviewChartConfig(lapData, MAX_FAST_LAP_TIME_SECONDS, analysis?.avg));
+        mainLapChart = new Chart(mainLapChartCanvas, buildOverviewChartConfig(lapData, MAX_FAST_LAP_TIME_SECONDS, analysis?.avg, analysis?.blocks));
     }
 
     function displayProfileInfo(account, userId) {

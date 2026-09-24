@@ -44,6 +44,44 @@ describe('the tooltip of the session chart lists each lap once', () => {
     });
 });
 
+describe('linearFit: the least-squares line through values at x = 0, 1, 2, ...', () => {
+    it('is flat (slope 0) through constant values, at their common value', () => {
+        assert.deepEqual(hostCopy(app.linearFit([25, 25, 25])), { slope: 0, intercept: 25 });
+    });
+    it('fits an exactly linear rise (fading: later values are larger) precisely', () => {
+        assert.deepEqual(hostCopy(app.linearFit([20, 25, 30])), { slope: 5, intercept: 20 });
+    });
+    it('fits an exactly linear fall (speeding up: later values are smaller) precisely', () => {
+        assert.deepEqual(hostCopy(app.linearFit([30, 25, 20])), { slope: -5, intercept: 30 });
+    });
+    it('passes exactly through two points (the only line that can)', () => {
+        assert.deepEqual(hostCopy(app.linearFit([24, 26])), { slope: 2, intercept: 24 });
+    });
+});
+
+describe('buildOverviewChartConfig: speed blocks (stats.js: analyzeSpeedLaps.blocks) on the session chart', () => {
+    const lapAt = (nr, duration) => ({ nr, duration, dateTimeStart: '2026-09-01T18:00:00Z', speed: { kph: 37.4 }, sessionDuration: '10:00', status: 'FASTER' });
+    // laps 1..6: a 3-lap block at 2-4 fading in a perfectly straight line (20, 25, 30), lap 6 excluded (nr 7,
+    // so array index != lap number - 1)
+    const laps = [lapAt(1, '30.000'), lapAt(2, '20.000'), lapAt(3, '25.000'), lapAt(4, '30.000'), lapAt(5, '30.000'), lapAt(7, '20.000')];
+    const block = { firstLap: 2, lastLap: 4, count: 3, avg: 25, best: 20, totalSeconds: 75 };
+
+    it('adds a dashed "Block trend" line: the least-squares fit through the block\'s own lap times, not a flat average', () => {
+        const config = app.buildOverviewChartConfig(laps, 60, null, [block]);
+        const blockDataset = config.data.datasets.find(d => d.label === 'Block trend');
+        assert.ok(blockDataset, 'no Block trend dataset was added');
+        // a perfectly straight 20/25/30 fades exactly onto itself, not the flat average (25) at every point
+        assert.deepEqual(hostCopy(blockDataset.data), [null, 20, 25, 30, null, null]);
+        assert.equal(blockDataset.isAverage, true);   // kept out of the tooltip the same way the overall average line is
+    });
+    it('adds no "Block trend" line when there are no blocks', () => {
+        const config = app.buildOverviewChartConfig(laps, 60, null, []);
+        assert.equal(config.data.datasets.some(d => d.label === 'Block trend'), false);
+        const configNoArg = app.buildOverviewChartConfig(laps, 60, null);   // blocks defaults to []
+        assert.equal(configNoArg.data.datasets.some(d => d.label === 'Block trend'), false);
+    });
+});
+
 describe('seasonAxisTicks: month ticks for the Season dashboard\'s day-of-season axis', () => {
     it('runs Oct..Mar (the graph itself is narrower than the full Sept-April season), strictly increasing', () => {
         const ticks = hostCopy(app.seasonAxisTicks(2025));

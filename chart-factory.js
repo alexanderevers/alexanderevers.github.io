@@ -62,10 +62,30 @@ function overviewTooltipFilter(item, index, items) {
 }
 
 /**
- * Lap times over the session: speed laps as a line, slower laps as muted dots,
- * plus a reference line at the average speed-lap time.
+ * The straight least-squares fit (y = slope*x + intercept) through `values`, treated as y at x = 0, 1, 2, ...
+ * Used for a speed block's trend line: unlike a flat average, its slope shows whether the block sped up
+ * (negative: later laps take less time) or faded (positive) across its own laps.
  */
-function buildOverviewChartConfig(lapData, maxFastTime, avgFastTime) {
+function linearFit(values) {
+    const n = values.length;
+    const xMean = (n - 1) / 2;
+    const yMean = values.reduce((sum, y) => sum + y, 0) / n;
+    let num = 0;
+    let den = 0;
+    values.forEach((y, x) => { num += (x - xMean) * (y - yMean); den += (x - xMean) ** 2; });
+    const slope = den ? num / den : 0;
+    const intercept = yMean - slope * xMean;
+    return { slope, intercept };
+}
+
+/**
+ * Lap times over the session: speed laps as a line, slower laps as muted dots, plus a reference line at the
+ * average speed-lap time. `blocks` (stats.js: analyzeSpeedLaps' blocks, runs of consecutive speed laps - one
+ * interval effort) each also get a short trend line: the least-squares fit through that block's own lap times
+ * (linearFit), not just its flat average, so a block that sped up or faded across its own laps shows a
+ * genuine slope instead of a flat line.
+ */
+function buildOverviewChartConfig(lapData, maxFastTime, avgFastTime, blocks = []) {
     const t = applyChartDefaults();
     const times = lapData.map(lap => parseDurationToSeconds(lap.duration));
     const validTimes = times.filter(x => !isNaN(x));
@@ -76,6 +96,17 @@ function buildOverviewChartConfig(lapData, maxFastTime, avgFastTime) {
     // Real values are kept: laps slower than the window are drawn as bars that run off the top of the axis.
     const slowData = times.map(x => (x >= maxFastTime ? x : null));
     const barStyle = { type: 'bar', grouped: false, borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: 'bottom', maxBarThickness: 24 };
+
+    // Lap number -> array index (lap.nr does not always equal index+1, e.g. an excluded lap in between).
+    const indexByLapNr = new Map(lapData.map((lap, i) => [lap.nr, i]));
+    const blockTrendData = lapData.map(() => null);
+    blocks.forEach(block => {
+        const start = indexByLapNr.get(block.firstLap);
+        const end = indexByLapNr.get(block.lastLap);
+        if (start === undefined || end === undefined) return;
+        const { slope, intercept } = linearFit(times.slice(start, end + 1));
+        for (let i = start; i <= end; i++) blockTrendData[i] = slope * (i - start) + intercept;
+    });
 
     const datasets = [
         { ...barStyle, label: 'Speed laps', data: fastData, backgroundColor: withAlpha(t.fast, 0.35) },
@@ -95,6 +126,20 @@ function buildOverviewChartConfig(lapData, maxFastTime, avgFastTime) {
             pointBorderWidth: 2
         }
     ];
+    if (blocks.length > 0) {
+        datasets.push({
+            type: 'line',
+            label: 'Block trend',
+            isAverage: true,
+            data: blockTrendData,
+            borderColor: t.compare,
+            borderWidth: 2,
+            borderDash: [4, 3],
+            spanGaps: false,
+            pointRadius: 0,
+            pointHoverRadius: 0
+        });
+    }
     if (avgFastTime) {
         datasets.push({
             type: 'line',
