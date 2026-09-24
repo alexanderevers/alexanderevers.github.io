@@ -48,7 +48,16 @@ function setupSeasonEventListeners(getChipCode) {
         });
         if (!distanceCanvas || !fastLapsCanvas || !distributionCanvas) return;
         const metric = LAP_TIME_METRICS.find(m => m.key === metricSelect?.value) || LAP_TIME_METRICS[1];
-        const withMetric = points => points.map(p => ({ ...p, lineMs: lapTimeStat(p.lapDurationsMs, metric.n) }));
+        // "Average lap time" mixes in slower (non-speed) laps, so one session with a lot of resting/slow skating
+        // can average out well above what the rest of a season looks like and stretch the chart's scale; capped
+        // at 1:30 (90 s) so that one session does not dominate it. The other metrics only average genuinely fast
+        // laps, so they never approach this and are left alone.
+        const AVERAGE_LAP_CAP_MS = 90000;
+        const withMetric = points => points.map(p => {
+            let lineMs = lapTimeStat(p.lapDurationsMs, metric.n);
+            if (metric.key === 'avg' && lineMs !== null && lineMs > AVERAGE_LAP_CAP_MS) lineMs = AVERAGE_LAP_CAP_MS;
+            return { ...p, lineMs };
+        });
         try {
             distanceChart = new Chart(distanceCanvas, buildSeasonDistanceChartConfig(current, compare, currentLabel, compareLabel, startYear));
             fastLapsChart = new Chart(fastLapsCanvas, buildSeasonFastLapsChartConfig(
