@@ -297,16 +297,11 @@ function setupRecordsEventListeners(getChipCode) {
     }
 
     // "Fetch laps" on a stored session: select it (across every year, not just the one the year filter shows) and
-    // fetch it on the main dashboards, exactly like picking it from the activity list by hand.
+    // open it on the Session dashboard, once its laps (fetched by script.js's openActivityOnSessionDashboard) land.
     function openSession(sessionId) {
         const yearFilter = document.getElementById('yearFilter');
         if (yearFilter && yearFilter.value !== 'all') { yearFilter.value = 'all'; yearFilter.dispatchEvent(new Event('change')); }
-        const select = document.getElementById('activitySelect');
-        const fetchBtn = document.getElementById('fetchLapsBtn');
-        if (!select || !fetchBtn || ![...select.options].some(option => option.value === String(sessionId))) return;
-        select.value = String(sessionId);
-        select.dispatchEvent(new Event('change'));
-        fetchBtn.click();
+        if (typeof window.openActivityOnSessionDashboard === 'function') window.openActivityOnSessionDashboard(sessionId);
     }
 
     perSeasonEl?.addEventListener('click', event => {

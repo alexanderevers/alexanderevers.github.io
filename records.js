@@ -141,6 +141,117 @@ function computePersonalRecords(sessions) {
     };
 }
 
+/**
+ * Distinct ice-skating seasons found among the (non-excluded) sessions, newest first - for example to offer as
+ * "compare to" choices, or to pick the most recent one as "the current season" (the data itself is a more useful
+ * and deterministic notion of "current" than today's calendar date: a device whose owner has not skated yet this
+ * season would otherwise default to an empty view).
+ * @returns {Array<{ label: string, startYear: number }>}
+ */
+function seasonsPresent(sessions) {
+    const seen = new Map();
+    (sessions || []).filter(session => !session.excluded).forEach(session => {
+        const season = seasonOf(Date.parse(session.startTime));
+        if (season && !seen.has(season.label)) seen.set(season.label, season);
+    });
+    return [...seen.values()].sort((a, b) => b.startYear - a.startYear);
+}
+
+function sessionsInSeason(sessions, startYear) {
+    return (sessions || []).filter(session => {
+        if (session.excluded) return false;
+        const season = seasonOf(Date.parse(session.startTime));
+        return season && season.startYear === startYear;
+    });
+}
+
+/**
+ * One season's sessions, oldest first, each with how much it added to the season so far - for a "how is this
+ * season building up" trend chart. Only sessions whose seasonOf(...) matches startYear are included; other
+ * seasons and excluded sessions/laps are left out, the same way computePersonalRecords filters them.
+ * @param {Array} sessions        as historySessions() returns them
+ * @param {number} startYear      the season's startYear (seasonOf(...).startYear), e.g. 2025 for "25/26"
+ * @param {number|null} fastLapThresholdMs  the shared pace bar (computePersonalRecords' fastLapThresholdMs), so
+ *   "fast" means the same thing here as on "Fast laps per season"
+ * @returns {Array<{ sessionId, startTime, dayOfSeason, distanceKm, cumulativeDistanceKm, lapDurationsMs, fastCount, totalLaps }>}
+ *   dayOfSeason: days since 1 September of startYear (0 = that day itself), in local time (matching seasonOf's
+ *   own local-time month/year handling) - the x-axis a chart can line up two different seasons on.
+ *   lapDurationsMs: that session's skating lap times, sorted fastest first (feeds lapTimeStat, for whichever lap
+ *   time metric a chart chooses to show).
+ */
+function seasonBreakdown(sessions, startYear, fastLapThresholdMs) {
+    const seasonStart = new Date(startYear, 8, 1).getTime();          // 1 September, local time
+    const included = sessionsInSeason(sessions, startYear);
+    included.sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime));
+
+    let cumulativeDistanceKm = 0;
+    return included.map(session => {
+        const trackLengthM = session.trackLengthM || 400;
+        const excludedLaps = new Set(session.excludedLaps || []);
+        const laps = (session.laps || [])
+            .filter(lap => !excludedLaps.has(lap.nr))
+            .filter(lap => recordsIsSkatingLap(lap, trackLengthM));
+        const distanceKm = laps.length * trackLengthM / 1000;
+        cumulativeDistanceKm += distanceKm;
+        const lapDurationsMs = laps.map(lap => lap.durMs).sort((a, b) => a - b);
+        const fastCount = fastLapThresholdMs === null ? 0 : laps.filter(lap => lap.durMs <= fastLapThresholdMs).length;
+        const dayOfSeason = Math.round((Date.parse(session.startTime) - seasonStart) / 86400000);
+        return {
+            sessionId: session.id, startTime: session.startTime, dayOfSeason,
+            distanceKm, cumulativeDistanceKm, lapDurationsMs, fastCount, totalLaps: laps.length
+        };
+    });
+}
+
+/**
+ * The lap time metrics the "Fastest laps" chart on the Season dashboard lets you pick between, in menu order.
+ * `n` is how many of a session's fastest laps to average (lapTimeStat); `n: 0` means every lap (the session's
+ * own average), not just its fastest ones.
+ */
+const LAP_TIME_METRICS = [
+    { key: 'avg', label: 'Average lap time', n: 0 },
+    { key: 'fastest-1', label: 'Fastest lap', n: 1 },
+    { key: 'fastest-2', label: 'Fastest-2', n: 2 },
+    { key: 'fastest-5', label: 'Fastest-5', n: 5 },
+    { key: 'fastest-10', label: 'Fastest-10', n: 10 },
+    { key: 'fastest-20', label: 'Fastest-20', n: 20 },
+    { key: 'fastest-50', label: 'Fastest-50', n: 50 }
+];
+
+/**
+ * The average lap time (ms) of a session's `n` fastest laps, or every lap when `n` is 0 (falsy) - for example
+ * to turn `seasonBreakdown`'s `lapDurationsMs` into whichever LAP_TIME_METRICS entry a chart wants to show.
+ * A session with fewer than `n` laps averages however many it has. Null when it has none at all.
+ * @param {number[]} sortedAscendingMs  a session's lap times, fastest first (seasonBreakdown's lapDurationsMs)
+ */
+function lapTimeStat(sortedAscendingMs, n) {
+    if (!sortedAscendingMs || sortedAscendingMs.length === 0) return null;
+    const slice = n ? sortedAscendingMs.slice(0, n) : sortedAscendingMs;
+    return slice.reduce((sum, ms) => sum + ms, 0) / slice.length;
+}
+
+/**
+ * Every skating lap time of one season, in seconds, across all its sessions - for a "how are my lap times
+ * distributed this season" chart. Same session/lap filtering as seasonBreakdown (excluded sessions/laps left
+ * out, only real skating laps count); unordered.
+ * @returns {number[]}
+ */
+function seasonLapTimes(sessions, startYear) {
+    const times = [];
+    sessionsInSeason(sessions, startYear).forEach(session => {
+        const trackLengthM = session.trackLengthM || 400;
+        const excludedLaps = new Set(session.excludedLaps || []);
+        (session.laps || [])
+            .filter(lap => !excludedLaps.has(lap.nr))
+            .filter(lap => recordsIsSkatingLap(lap, trackLengthM))
+            .forEach(lap => times.push(lap.durMs / 1000));
+    });
+    return times;
+}
+
 if (typeof module !== 'undefined') {
-    module.exports = { computePersonalRecords, recordsIsSkatingLap, seasonOf };
+    module.exports = {
+        computePersonalRecords, recordsIsSkatingLap, seasonOf, seasonsPresent, seasonBreakdown, seasonLapTimes,
+        LAP_TIME_METRICS, lapTimeStat
+    };
 }

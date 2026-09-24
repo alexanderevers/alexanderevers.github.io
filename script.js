@@ -5,7 +5,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const errorDiv = document.getElementById('error');
     const activitiesListDiv = document.getElementById('activitiesList');
     const activitySelect = document.getElementById('activitySelect');
-    const fetchLapsBtn = document.getElementById('fetchLapsBtn');
     const downloadGpxBtn = document.getElementById('downloadGpxBtn');
     const sessionSummaryContainer = document.getElementById('sessionSummary');
     const lapsDataDiv = document.getElementById('lapsData');
@@ -49,6 +48,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let MAX_FAST_LAP_TIME_SECONDS = parseFloat(maxFastLapSlider.value);
     let generatedGpxFilename = 'training_session.gpx'; // Variabele voor de bestandsnaam
     let showOnlySpeedLaps = false;
+    // Selecting an activity fetches its laps by itself (see loadActivityLaps), without jumping to the Session
+    // dashboard - so "Find Overlapping Sessions" and the GPX download, both on the Start dashboard, stay
+    // reachable. Some callers (a deep link, records-ui.js's "Fetch laps" on a stored session) do want that jump,
+    // once the fetch they triggered actually lands; this one-shot flag is how they ask for it.
+    let scrollToSessionOnNextFetch = false;
     // The page is a row of full-screen dashboards; after loading something, go to the dashboard that shows it.
     const goToDashboard = id => { if (typeof Dashboards !== 'undefined') Dashboards.goTo(id); };
     // A shared link (?transponder=XX-12345&activity=123) opens straight on that session.
@@ -93,7 +97,6 @@ document.addEventListener('DOMContentLoaded', () => {
         hide(yearFilterWrap);
         yearFilter.innerHTML = '';
         activitySelect.innerHTML = '<option value="">Select an activity</option>';
-        fetchLapsBtn.disabled = true;
         fetchOverlappingBtn.disabled = true;
         sessionSummaryContainer.innerHTML = '';
         activityInfoTable.innerHTML = '';
@@ -224,7 +227,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (previous) {
             activitySelect.dispatchEvent(new Event('change'));              // it is not: clear laps, charts and buttons
         }
-        fetchLapsBtn.disabled = !activitySelect.value;
     }
     yearFilter.addEventListener('change', fillActivitySelect);
 
@@ -253,14 +255,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 fillYearFilter();
                 fillActivitySelect();
                 show(activitiesListDiv);
-                fetchLapsBtn.disabled = !activitySelect.value;
                 records.refresh(userActivities);
+                season.refresh(userActivities);
                 if (pendingActivityId) {
                     const wanted = [...activitySelect.options].find(option => option.value === pendingActivityId);
                     if (wanted) {
-                        activitySelect.value = pendingActivityId;
-                        activitySelect.dispatchEvent(new Event('change'));
-                        fetchLapsBtn.click();
+                        window.openActivityOnSessionDashboard(pendingActivityId);
                     } else {
                         errorDiv.textContent = `Activity ${pendingActivityId} was not found for this transponder.`;
                         show(errorDiv);
@@ -281,19 +281,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    fetchLapsBtn.addEventListener('click', async () => {
+    // Fetches and shows one activity's laps; called automatically whenever the activity dropdown changes.
+    async function loadActivityLaps(selectedActivityId) {
         hide(lapsDataDiv); hide(errorDiv); hide(maxFastLapControls);
         hide(sessionSummaryContainer);
         sessionSummaryContainer.innerHTML = '';
         resetGpxState(downloadGpxBtn);
         generatedGpxFilename = 'training_session.gpx';
 
-        const selectedActivityId = activitySelect.value;
-        if (!selectedActivityId) {
-            errorDiv.textContent = "Please select an activity from the list.";
-            show(errorDiv);
-            return;
-        }
+        if (!selectedActivityId) return;
         show(loadingDiv);
         try {
             const selectedActivity = userActivities.find(act => act.id === parseInt(selectedActivityId));
@@ -373,7 +369,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 generateAndPrepareGpxDownload(currentLapData, downloadGpxBtn, selectedActivity?.location);
                 if (selectedActivity) records.remember(selectedActivity, normalizeLaps(fullSessionData));
-                goToDashboard('dashSession');
+                if (selectedActivity) season.remember(selectedActivity, normalizeLaps(fullSessionData));
+                if (scrollToSessionOnNextFetch) { scrollToSessionOnNextFetch = false; goToDashboard('dashSession'); }
             } else {
                 hide(lapsDataDiv);
                 errorDiv.textContent = 'No lap data found for the selected activity.';
@@ -386,7 +383,17 @@ document.addEventListener('DOMContentLoaded', () => {
             show(errorDiv);
             hide(lapsDataDiv);
         }
-    });
+    }
+
+    // Selects an activity by id and fetches its laps (loadActivityLaps, triggered by the change listener below),
+    // opening the Session dashboard once they land. Exposed globally so records-ui.js's "Fetch laps" on a stored
+    // session can reuse it, the same way picking the activity from the dropdown by hand already works.
+    window.openActivityOnSessionDashboard = activityId => {
+        if (![...activitySelect.options].some(option => option.value === String(activityId))) return;
+        scrollToSessionOnNextFetch = true;
+        activitySelect.value = String(activityId);
+        activitySelect.dispatchEvent(new Event('change'));
+    };
 
     downloadGpxBtn.addEventListener('click', () => {
         handleGpxDownload(generatedGpxFilename);
@@ -396,7 +403,6 @@ document.addEventListener('DOMContentLoaded', () => {
         hide(lapsDataDiv); hide(errorDiv); hide(maxFastLapControls);
         hide(sessionSummaryContainer); hide(overlappingSessions);
         const hasSelection = !!activitySelect.value;
-        fetchLapsBtn.disabled = !hasSelection;
         fetchOverlappingBtn.disabled = !hasSelection;
         if (hasSelection) {
             show(fetchOverlappingBtn);
@@ -420,6 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </table>`;
                 show(activityInfoPanel);
             }
+            loadActivityLaps(selectedActivityId);
         } else {
             hide(activityInfoPanel);
             activityInfoTable.innerHTML = '';
@@ -516,4 +523,5 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     setupOverlappingSessionsEventListeners(() => userActivities, getReferenceRider);
     const records = setupRecordsEventListeners(() => transponderInput.value.trim().toUpperCase());
+    const season = setupSeasonEventListeners(() => transponderInput.value.trim().toUpperCase());
 });

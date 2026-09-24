@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const { loadBrowserScripts, hostCopy } = require('../helpers/browser-scripts');
 
 const app = loadBrowserScripts(['utils.js', 'replay-track.js', 'replay-model.js', 'records.js']);
-const { computePersonalRecords, seasonOf } = app.sandbox;
+const { computePersonalRecords, seasonOf, seasonsPresent, seasonBreakdown, seasonLapTimes, lapTimeStat } = app.sandbox;
+const LAP_TIME_METRICS = app.get('LAP_TIME_METRICS');   // a const is not a property of the sandbox
 
 const SECOND = 1000;
 // Back-to-back laps of `seconds` starting at `startS` seconds into the session.
@@ -208,5 +209,141 @@ describe('computePersonalRecords: nothing stored yet', () => {
         assert.deepEqual(hostCopy(result.perSeason), []);
         assert.deepEqual(hostCopy(result.timeline), []);
         assert.deepEqual(hostCopy(computePersonalRecords(undefined)), hostCopy(result));
+    });
+});
+
+describe('seasonsPresent: which seasons have stored data, for the Season dashboard', () => {
+    it('lists the distinct seasons, newest first', () => {
+        const sessions = [
+            session(1, '2024-01-10T10:00:00Z', laps(1, 30)),               // 23/24
+            session(2, '2025-11-10T10:00:00Z', laps(1, 30)),               // 25/26
+            session(3, '2025-01-10T10:00:00Z', laps(1, 30))                // 24/25
+        ];
+        assert.deepEqual(hostCopy(seasonsPresent(sessions).map(s => s.label)), ['25/26', '24/25', '23/24']);
+    });
+    it('lists a season once, no matter how many sessions fall in it', () => {
+        const sessions = [session(1, '2025-01-10T10:00:00Z', laps(1, 30)), session(2, '2025-02-10T10:00:00Z', laps(1, 30))];
+        assert.deepEqual(hostCopy(seasonsPresent(sessions).map(s => s.label)), ['24/25']);
+    });
+    it('leaves out an excluded session\'s season entirely, and the May-August off-season', () => {
+        const sessions = [
+            session(1, '2025-01-10T10:00:00Z', laps(1, 30), { excluded: true }),
+            session(2, '2025-06-15T10:00:00Z', laps(1, 30))                // off-season
+        ];
+        assert.deepEqual(hostCopy(seasonsPresent(sessions)), []);
+    });
+});
+
+describe('seasonBreakdown: one season\'s sessions, for the "how is this season building up" chart', () => {
+    it('is sorted oldest first, regardless of the input order', () => {
+        const sessions = [
+            session(1, '2025-11-10T10:00:00Z', laps(1, 30)),
+            session(2, '2025-10-01T10:00:00Z', laps(1, 30))
+        ];
+        assert.deepEqual(hostCopy(seasonBreakdown(sessions, 2025, null).map(p => p.sessionId)), [2, 1]);
+    });
+    it('leaves out sessions from any other season', () => {
+        const sessions = [
+            session(1, '2025-10-01T10:00:00Z', laps(1, 30)),               // 25/26
+            session(2, '2025-01-10T10:00:00Z', laps(1, 30))                // 24/25
+        ];
+        assert.deepEqual(hostCopy(seasonBreakdown(sessions, 2025, null).map(p => p.sessionId)), [1]);
+    });
+    it('adds up distance session by session (400 m track), keeping each session\'s own distance too', () => {
+        const sessions = [
+            session(1, '2025-09-05T10:00:00Z', laps(5, 30)),               // 5 laps: 2 km
+            session(2, '2025-09-12T10:00:00Z', laps(3, 30))                // 3 laps: 1.2 km
+        ];
+        const [first, second] = seasonBreakdown(sessions, 2025, null);
+        assert.ok(Math.abs(first.distanceKm - 2) < 1e-9);
+        assert.ok(Math.abs(first.cumulativeDistanceKm - 2) < 1e-9);
+        assert.ok(Math.abs(second.distanceKm - 1.2) < 1e-9);
+        assert.ok(Math.abs(second.cumulativeDistanceKm - 3.2) < 1e-9);
+    });
+    it('dayOfSeason counts days since 1 September, local time', () => {
+        // just after local midnight, so the day difference lands on a whole number regardless of the machine's
+        // time zone (a UTC-anchored time like noon would round to the wrong local day in some time zones)
+        const localIso = (y, m, d) => new Date(y, m, d, 0, 0, 1).toISOString();
+        const sessions = [
+            session(1, localIso(2025, 8, 1), laps(1, 30)),                 // 1 September
+            session(2, localIso(2025, 11, 15), laps(1, 30))                // 15 December
+        ];
+        const [first, second] = seasonBreakdown(sessions, 2025, null);
+        assert.equal(first.dayOfSeason, 0);
+        assert.equal(second.dayOfSeason, 105);                            // 29 (Sep) + 31 (Oct) + 30 (Nov) + 15
+    });
+    it('lapDurationsMs lists the session\'s skating lap times, fastest first, empty when it has none', () => {
+        const sessions = [
+            session(1, '2025-09-05T10:00:00Z', [{ nr: 1, startMs: 0, durMs: 32000 }, { nr: 2, startMs: 32000, durMs: 28000 }]),
+            session(2, '2025-09-12T10:00:00Z', [{ nr: 1, startMs: 0, durMs: 300 * SECOND }])   // a break, not a lap
+        ];
+        const [first, second] = seasonBreakdown(sessions, 2025, null);
+        assert.deepEqual(hostCopy(first.lapDurationsMs), [28000, 32000]);
+        assert.deepEqual(hostCopy(second.lapDurationsMs), []);
+    });
+    it('fastCount is judged against the given threshold, the same one "Fast laps per season" uses', () => {
+        const sessions = [session(1, '2025-09-05T10:00:00Z', [...laps(2, 20), ...laps(3, 40)])];
+        const [point] = seasonBreakdown(sessions, 2025, 25000);
+        assert.equal(point.fastCount, 2);
+        assert.equal(point.totalLaps, 5);
+    });
+    it('excluded sessions and excluded laps are left out, same as computePersonalRecords', () => {
+        const sessions = [
+            session(1, '2025-09-05T10:00:00Z', laps(3, 30), { excluded: true }),
+            session(2, '2025-09-12T10:00:00Z', laps(3, 30), { excludedLaps: [1] })
+        ];
+        const points = seasonBreakdown(sessions, 2025, null);
+        assert.equal(points.length, 1);
+        assert.equal(points[0].totalLaps, 2);
+    });
+});
+
+describe('seasonLapTimes: every skating lap time of one season, in seconds, for the distribution chart', () => {
+    it('collects lap times across every session of the season, in seconds', () => {
+        const sessions = [
+            session(1, '2025-09-05T10:00:00Z', laps(2, 20)),
+            session(2, '2025-09-12T10:00:00Z', laps(3, 30))
+        ];
+        assert.deepEqual(hostCopy(seasonLapTimes(sessions, 2025)), [20, 20, 30, 30, 30]);
+    });
+    it('leaves out any other season', () => {
+        const sessions = [session(1, '2025-01-10T10:00:00Z', laps(2, 20))];             // 24/25
+        assert.deepEqual(hostCopy(seasonLapTimes(sessions, 2025)), []);
+    });
+    it('only counts real skating laps, and honours exclusions', () => {
+        const sessions = [
+            session(1, '2025-09-05T10:00:00Z', [...laps(2, 20), { nr: 3, startMs: 40000, durMs: 300 * SECOND }]),   // a break, not a lap
+            session(2, '2025-09-12T10:00:00Z', laps(2, 25), { excludedLaps: [1] }),
+            session(3, '2025-09-19T10:00:00Z', laps(2, 35), { excluded: true })
+        ];
+        assert.deepEqual(hostCopy(seasonLapTimes(sessions, 2025)), [20, 20, 25]);
+    });
+});
+
+describe('lapTimeStat: the average of a session\'s n fastest laps, for the "Fastest laps" chart\'s metric picker', () => {
+    const sorted = [20000, 22000, 24000, 26000, 28000];   // fastest first, as seasonBreakdown's lapDurationsMs is
+
+    it('averages every lap when n is 0 (falsy): the "Average lap time" metric', () => {
+        assert.equal(lapTimeStat(sorted, 0), 24000);
+    });
+    it('is just the fastest lap when n is 1', () => {
+        assert.equal(lapTimeStat(sorted, 1), 20000);
+    });
+    it('averages the n fastest laps for n > 1', () => {
+        assert.equal(lapTimeStat(sorted, 2), 21000);
+    });
+    it('averages however many laps it has when there are fewer than n', () => {
+        assert.equal(lapTimeStat(sorted, 50), 24000);
+    });
+    it('is null for a session with no skating laps at all', () => {
+        assert.equal(lapTimeStat([], 5), null);
+        assert.equal(lapTimeStat([], 0), null);
+    });
+});
+
+describe('LAP_TIME_METRICS: the menu the "Fastest laps" chart\'s picker is built from', () => {
+    it('lists average, then fastest, then fastest-2 through fastest-50, each with a distinct key', () => {
+        assert.deepEqual(hostCopy(LAP_TIME_METRICS.map(m => m.key)), ['avg', 'fastest-1', 'fastest-2', 'fastest-5', 'fastest-10', 'fastest-20', 'fastest-50']);
+        assert.equal(new Set(LAP_TIME_METRICS.map(m => m.key)).size, LAP_TIME_METRICS.length);
     });
 });
